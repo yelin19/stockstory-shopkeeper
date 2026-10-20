@@ -14,13 +14,304 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      messenger_sessions: {
+        Row: {
+          data: Json
+          owner_id: string
+          pin_verified: boolean
+          psid: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          data?: Json
+          owner_id: string
+          pin_verified?: boolean
+          psid: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          data?: Json
+          owner_id?: string
+          pin_verified?: boolean
+          psid?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          address: string
+          category: string
+          created_at: string
+          customer_name: string
+          id: string
+          note: string | null
+          order_no: number
+          owner_id: string
+          phone: string
+          product_code: string
+          product_id: string | null
+          product_name: string
+          psid: string | null
+          quantity: number
+          sent: boolean
+          sent_at: string | null
+          status: string
+          total: number
+          township: string
+          unit_price: number
+        }
+        Insert: {
+          address: string
+          category: string
+          created_at?: string
+          customer_name: string
+          id?: string
+          note?: string | null
+          order_no?: number
+          owner_id: string
+          phone: string
+          product_code: string
+          product_id?: string | null
+          product_name: string
+          psid?: string | null
+          quantity: number
+          sent?: boolean
+          sent_at?: string | null
+          status?: string
+          total: number
+          township: string
+          unit_price: number
+        }
+        Update: {
+          address?: string
+          category?: string
+          created_at?: string
+          customer_name?: string
+          id?: string
+          note?: string | null
+          order_no?: number
+          owner_id?: string
+          phone?: string
+          product_code?: string
+          product_id?: string | null
+          product_name?: string
+          psid?: string | null
+          quantity?: number
+          sent?: boolean
+          sent_at?: string | null
+          status?: string
+          total?: number
+          township?: string
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          category: string
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          name: string
+          owner_id: string
+          price: number
+          stock: number
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name: string
+          owner_id?: string
+          price: number
+          stock?: number
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          name?: string
+          owner_id?: string
+          price?: number
+          stock?: number
+        }
+        Relationships: []
+      }
+      shop_settings: {
+        Row: {
+          fb_page_id: string | null
+          low_stock_threshold: number
+          messenger_username: string | null
+          owner_id: string
+          pin_hash: string | null
+          shop_name: string
+          updated_at: string
+        }
+        Insert: {
+          fb_page_id?: string | null
+          low_stock_threshold?: number
+          messenger_username?: string | null
+          owner_id: string
+          pin_hash?: string | null
+          shop_name?: string
+          updated_at?: string
+        }
+        Update: {
+          fb_page_id?: string | null
+          low_stock_threshold?: number
+          messenger_username?: string | null
+          owner_id?: string
+          pin_hash?: string | null
+          shop_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stock_history: {
+        Row: {
+          balance: number
+          change: number
+          created_at: string
+          id: string
+          note: string | null
+          order_id: string | null
+          owner_id: string
+          product_code: string
+          product_id: string | null
+          reason: string
+        }
+        Insert: {
+          balance: number
+          change: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id?: string | null
+          owner_id: string
+          product_code: string
+          product_id?: string | null
+          reason: string
+        }
+        Update: {
+          balance?: number
+          change?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          order_id?: string | null
+          owner_id?: string
+          product_code?: string
+          product_id?: string | null
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cancel_order: { Args: { _order_id: string }; Returns: undefined }
+      change_stock: {
+        Args: {
+          _delta: number
+          _note: string
+          _product_id: string
+          _reason: string
+        }
+        Returns: number
+      }
+      get_public_product: {
+        Args: { _code: string }
+        Returns: {
+          category: string
+          code: string
+          description: string
+          image_url: string
+          messenger_username: string
+          name: string
+          price: number
+          shop_name: string
+          stock: number
+        }[]
+      }
+      place_order: {
+        Args: {
+          _address: string
+          _name: string
+          _note: string
+          _owner: string
+          _phone: string
+          _product_id: string
+          _psid: string
+          _qty: number
+          _township: string
+        }
+        Returns: {
+          address: string
+          category: string
+          created_at: string
+          customer_name: string
+          id: string
+          note: string | null
+          order_no: number
+          owner_id: string
+          phone: string
+          product_code: string
+          product_id: string | null
+          product_name: string
+          psid: string | null
+          quantity: number
+          sent: boolean
+          sent_at: string | null
+          status: string
+          total: number
+          township: string
+          unit_price: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_shop_pin: { Args: { _pin: string }; Returns: undefined }
+      verify_shop_pin: {
+        Args: { _owner: string; _pin: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
