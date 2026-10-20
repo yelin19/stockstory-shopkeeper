@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// Serves the image of an ACTIVE product only (read-only, no private data).
+// Serves a product image by code (read-only, no private data).
 export const Route = createFileRoute("/api/public/product-image/$code")({
   server: {
     handlers: {
