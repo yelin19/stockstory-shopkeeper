@@ -53,7 +53,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, "Order cancelled. Send a product code any time.");
   }
 
-  const d = s.data as Record<string, string | number>;
+  type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; note?: string };
+  const d = s.data as Draft;
   const next = async (state: string, data: Record<string, unknown>, prompt: string) => {
     await save({ state, data });
     return text(psid, prompt);
@@ -70,7 +71,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     case "ask_address":
       return next("ask_note", { ...d, address: msg.trim().slice(0, 500) }, "📝 Any note? (send - to skip)");
     case "ask_note": {
-      const nd = { ...d, note: msg.trim() === "-" ? "" : msg.trim().slice(0, 300) };
+      const nd: Draft = { ...d, note: msg.trim() === "-" ? "" : msg.trim().slice(0, 300) };
       const total = Number(nd.price) * Number(nd.qty);
       return next(
         "confirm",
