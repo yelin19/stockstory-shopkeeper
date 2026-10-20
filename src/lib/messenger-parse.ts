@@ -4,7 +4,7 @@ export function parseProductRequest(text: string): { code: string; qty: number |
   if (!m) return null;
   const qty = m[2] ? parseInt(m[2], 10) : null;
   if (qty !== null && qty <= 0) return null;
-  return { code: m[1], qty };
+  return { code: m[1]!, qty };
 }
 
 export function usernameToEmail(username: string) {

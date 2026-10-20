@@ -36,14 +36,14 @@ function SettingsPage() {
       low_stock_threshold: Math.max(0, parseInt(f.low_stock_threshold, 10) || 0),
       updated_at: new Date().toISOString(),
     });
-    if (error) return toast.error(error.code === "23505" ? "That Facebook Page is already linked to another shop" : error.message);
+    if (error) return void toast.error(error.code === "23505" ? "That Facebook Page is already linked to another shop" : error.message);
     toast.success("Settings saved");
     qc.invalidateQueries({ queryKey: ["settings"] });
   }
   async function savePin(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await supabase.rpc("set_shop_pin", { _pin: pin });
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     setPin("");
     toast.success("Shop PIN updated. Customers must enter the new PIN.");
     qc.invalidateQueries({ queryKey: ["settings"] });

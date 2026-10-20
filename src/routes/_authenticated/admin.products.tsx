@@ -82,9 +82,9 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
     e.preventDefault();
     const price = Number(f.price);
     const stock = parseInt(f.stock, 10);
-    if (!/^[A-Za-z0-9_-]{1,32}$/.test(f.code)) return toast.error("Code: letters/numbers only, no spaces");
-    if (!f.name.trim() || !(price >= 0)) return toast.error("Name and a valid price are required");
-    if (!product && !(stock >= 0)) return toast.error("Stock cannot be negative");
+    if (!/^[A-Za-z0-9_-]{1,32}$/.test(f.code)) return void toast.error("Code: letters/numbers only, no spaces");
+    if (!f.name.trim() || !(price >= 0)) return void toast.error("Name and a valid price are required");
+    if (!product && !(stock >= 0)) return void toast.error("Stock cannot be negative");
     setBusy(true);
     try {
       let image_url = product?.image_url ?? null;
@@ -137,9 +137,9 @@ function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adj
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const n = parseInt(qty, 10);
-    if (!n || (mode === "increase" && n <= 0)) return toast.error("Enter a valid quantity");
-    const { error } = await supabase.rpc("change_stock", { _product_id: p.id, _delta: n, _reason: mode, _note: note || null });
-    if (error) return toast.error(error.message);
+    if (!n || (mode === "increase" && n <= 0)) return void toast.error("Enter a valid quantity");
+    const { error } = await supabase.rpc("change_stock", { _product_id: p.id, _delta: n, _reason: mode, _note: note });
+    if (error) return void toast.error(error.message);
     toast.success("Stock updated");
     qc.invalidateQueries();
     onClose();

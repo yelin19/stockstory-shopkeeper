@@ -12,7 +12,7 @@ function download(blob: Blob, filename: string) {
 
 export function exportCsv(rows: Row[], filename: string) {
   if (!rows.length) return;
-  const headers = Object.keys(rows[0]);
+  const headers = Object.keys(rows[0] ?? {});
   const esc = (v: unknown) => {
     const s = v == null ? "" : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

@@ -59,10 +59,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   async function markSent() {
     const ids = filtered.filter((o) => !o.sent && o.status !== "cancelled").map((o) => o.id);
-    if (!ids.length) return toast.info("No unsent orders in this list");
+    if (!ids.length) return void toast.info("No unsent orders in this list");
     if (!confirm(`Mark ${ids.length} order(s) as sent? They will be excluded from the default export.`)) return;
     const { error } = await supabase.from("orders").update({ sent: true, sent_at: new Date().toISOString() }).in("id", ids);
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     toast.success(`${ids.length} marked as sent`);
     qc.invalidateQueries();
   }
@@ -73,7 +73,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
         : action === "sent"
           ? await supabase.from("orders").update({ sent: !o.sent, sent_at: o.sent ? null : new Date().toISOString() }).eq("id", o.id)
           : await supabase.from("orders").update({ status: "delivered" }).eq("id", o.id);
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     qc.invalidateQueries();
   }
 

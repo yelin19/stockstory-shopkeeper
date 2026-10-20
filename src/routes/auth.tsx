@@ -30,8 +30,8 @@ function AuthPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!/^[a-zA-Z0-9._-]{3,30}$/.test(username.trim())) return toast.error("Username: 3-30 letters, numbers, . _ -");
-    if (password.length < 8) return toast.error("Password must be at least 8 characters");
+    if (!/^[a-zA-Z0-9._-]{3,30}$/.test(username.trim())) return void toast.error("Username: 3-30 letters, numbers, . _ -");
+    if (password.length < 8) return void toast.error("Password must be at least 8 characters");
     setBusy(true);
     const email = usernameToEmail(username);
     const { error } =
@@ -39,7 +39,7 @@ function AuthPage() {
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password, options: { data: { username: username.trim() } } });
     setBusy(false);
-    if (error) return toast.error(mode === "in" ? "Wrong username or password" : error.message);
+    if (error) return void toast.error(mode === "in" ? "Wrong username or password" : error.message);
     nav({ to: "/admin" });
   }
 

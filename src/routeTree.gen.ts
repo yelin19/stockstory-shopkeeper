@@ -20,6 +20,7 @@ import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminStockRouteImport } from './routes/_authenticated/admin.stock'
+import { Route as ApiPublicShopMessengerRouteImport } from './routes/api/public/shop-messenger'
 import { Route as ApiPublicProductImageCodeRouteImport } from './routes/api/public/product-image.$code'
 
 const IndexRoute = IndexRouteImport.update({
@@ -80,6 +81,11 @@ const AuthenticatedAdminStockRoute = AuthenticatedAdminStockRouteImport.update({
   path: '/stock',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const ApiPublicShopMessengerRoute = ApiPublicShopMessengerRouteImport.update({
+  id: '/api/public/shop-messenger',
+  path: '/api/public/shop-messenger',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicProductImageCodeRoute =
   ApiPublicProductImageCodeRouteImport.update({
     id: '/api/public/product-image/$code',
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/product-image/$code': typeof ApiPublicProductImageCodeRoute
 }
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/product-image/$code': typeof ApiPublicProductImageCodeRoute
 }
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/product-image/$code': typeof ApiPublicProductImageCodeRoute
 }
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/settings'
     | '/admin/stock'
+    | '/api/public/shop-messenger'
     | '/admin/'
     | '/api/public/product-image/$code'
   fileRoutesByTo: FileRoutesByTo
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/settings'
     | '/admin/stock'
+    | '/api/public/shop-messenger'
     | '/admin'
     | '/api/public/product-image/$code'
   id:
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/stock'
+    | '/api/public/shop-messenger'
     | '/_authenticated/admin/'
     | '/api/public/product-image/$code'
   fileRoutesById: FileRoutesById
@@ -174,6 +186,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ShopCodeRoute: typeof ShopCodeRoute
+  ApiPublicShopMessengerRoute: typeof ApiPublicShopMessengerRoute
   ApiPublicProductImageCodeRoute: typeof ApiPublicProductImageCodeRoute
 }
 
@@ -256,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminStockRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/public/shop-messenger': {
+      id: '/api/public/shop-messenger'
+      path: '/api/public/shop-messenger'
+      fullPath: '/api/public/shop-messenger'
+      preLoaderRoute: typeof ApiPublicShopMessengerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/product-image/$code': {
       id: '/api/public/product-image/$code'
       path: '/api/public/product-image/$code'
@@ -303,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ShopCodeRoute: ShopCodeRoute,
+  ApiPublicShopMessengerRoute: ApiPublicShopMessengerRoute,
   ApiPublicProductImageCodeRoute: ApiPublicProductImageCodeRoute,
 }
 export const routeTree = rootRouteImport
