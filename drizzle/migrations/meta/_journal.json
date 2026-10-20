@@ -8,6 +8,13 @@
       "when": 1792490361629,
       "tag": "0000_shop_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792490393760,
+      "tag": "0001_image_policy_fix",
+      "breakpoints": true
     }
   ]
 }
