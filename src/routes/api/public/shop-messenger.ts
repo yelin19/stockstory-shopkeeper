@@ -8,7 +8,6 @@ const envFirst = (...names: string[]) => names.map((name) => process.env[name]).
 
 type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
-type MessengerAttachment = { type?: string; payload?: { url?: string } };
 
 async function verifySignature(body: string, header: string | null) {
   const secret = envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET");
@@ -57,13 +56,6 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, "❌ အော်ဒါကို ပယ်ဖျက်လိုက်ပါပြီ။ ပစ္စည်း Code နှင့် အရေအတွက်ကို ထပ်ပို့နိုင်ပါတယ်။");
   }
 
-  const proofRequest = msg.trim().match(/^(?:proof|ဖြတ်ပိုင်း|အထောက်အထား)\s*#?(\d+)$/i);
-  if (proofRequest) {
-    const { data: order } = await db.from("orders").select("id, order_no").eq("owner_id", owner).eq("psid", psid).eq("order_no", Number(proofRequest[1])).maybeSingle();
-    if (!order) return text(psid, `ဝယ်ယူမှု ID #${proofRequest[1]} ကို မတွေ့ပါ။`);
-    await save({ state: "awaiting_proof", data: { order_id: order.id, order_no: order.order_no } });
-    return text(psid, `ဝယ်ယူမှု ID #${order.order_no} အတွက် ဖြတ်ပိုင်း/အထောက်အထားပုံကို ဒီနေရာမှာ ပို့ပါ။`);
-  }
 
   type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; note?: string };
   const d = s.data as Draft;
@@ -130,7 +122,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
       POST: async ({ request }) => {
         const body = await request.text();
         if (!(await verifySignature(body, request.headers.get("x-hub-signature-256")))) return new Response("Invalid signature", { status: 401 });
-        const payload = JSON.parse(body) as { object?: string; entry?: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; attachments?: MessengerAttachment[] }; postback?: { payload?: string } }[] }[] };
+        const payload = JSON.parse(body) as { object?: string; entry?: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean }; postback?: { payload?: string } }[] }[] };
         if (payload.object !== "page") return new Response("ok");
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
@@ -138,38 +130,6 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id, messenger_username").eq("fb_page_id", entry.id).maybeSingle();
           if (!shop) continue;
           for (const ev of entry.messaging ?? []) {
-            const image = ev.message?.attachments?.find((a) => a.type === "image" && a.payload?.url);
-            if (image?.payload?.url) {
-              try {
-                const { data: session } = await supabaseAdmin.from("messenger_sessions").select("*").eq("owner_id", shop.owner_id).eq("psid", ev.sender.id).maybeSingle();
-                const sessionData = (session?.data ?? {}) as Record<string, unknown>;
-                const selectedOrderId = session?.state === "awaiting_proof" ? String(sessionData.order_id ?? "") : "";
-                const orderQuery = supabaseAdmin.from("orders").select("id, order_no").eq("owner_id", shop.owner_id).eq("psid", ev.sender.id);
-                const { data: order } = selectedOrderId
-                  ? await orderQuery.eq("id", selectedOrderId).maybeSingle()
-                  : await orderQuery.order("created_at", { ascending: false }).limit(1).maybeSingle();
-                if (!order) {
-                  await text(ev.sender.id, "အော်ဒါမတွေ့ပါ။ အရင်ဆုံး proof #ဝယ်ယူမှုID လို့ ပို့ပြီး အထောက်အထားပုံကို ထပ်ပို့ပါ။");
-                  continue;
-                }
-                const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
-                const imageResponse = await fetch(image.payload.url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
-                if (!imageResponse.ok) throw new Error(`Messenger image download failed: ${imageResponse.status}`);
-                const bytes = await imageResponse.arrayBuffer();
-                const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
-                const path = `customer/${shop.owner_id}/${order.id}-${crypto.randomUUID()}.${contentType.split("/")[1] || "jpg"}`;
-                const { error: uploadError } = await supabaseAdmin.storage.from("order-proofs").upload(path, bytes, { contentType, upsert: false });
-                if (uploadError) throw uploadError;
-                const proofUrl = supabaseAdmin.storage.from("order-proofs").getPublicUrl(path).data.publicUrl;
-                await supabaseAdmin.from("orders").update({ proof_image_url: proofUrl, proof_uploaded_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", order.id);
-                await supabaseAdmin.from("messenger_sessions").update({ state: "idle", data: {}, updated_at: new Date().toISOString() }).eq("owner_id", shop.owner_id).eq("psid", ev.sender.id);
-                await text(ev.sender.id, `✅ ဝယ်ယူမှု ID #${order.order_no} အတွက် ဖြတ်ပိုင်း/အထောက်အထားပုံ ရရှိပါပြီ။ Admin က စစ်ဆေးပေးပါမယ်။`);
-              } catch (e) {
-                console.error("shop-messenger proof upload error", (e as Error).message);
-                await text(ev.sender.id, "အထောက်အထားပုံ သိမ်းမရသေးပါ။ ခဏနေပြီး ထပ်ပို့ပါ။");
-              }
-              continue;
-            }
             const t = ev.message?.is_echo ? undefined : (ev.message?.text ?? ev.postback?.payload);
             if (!t) continue;
             try {

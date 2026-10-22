@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileDown, FileSpreadsheet, Printer, Send, XCircle, CheckCircle2, Truck, Upload, ExternalLink } from "lucide-react";
+import { FileDown, FileSpreadsheet, Printer, Send, XCircle, CheckCircle2, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
 import { exportCsv, exportXlsx, money, type Row } from "@/lib/export";
@@ -52,12 +52,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
           Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address, Note: o.note ?? "",
           Status: o.status, Sent: o.sent ? "yes" : "no",
-          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "", "Proof image": o.proof_image_url ?? "",
+          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         }
       : {
           "ဝယ်ယူမှု ID": `#${o.order_no}`, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
-          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "", "Proof image": o.proof_image_url ?? "",
+          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         },
   );
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
@@ -195,27 +195,15 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
   const [deliveryStatus, setDeliveryStatus] = useState(order.delivery_status || "confirmed");
   const [trackingNumber, setTrackingNumber] = useState(order.tracking_number ?? "");
   const [trackingUrl, setTrackingUrl] = useState(order.tracking_url ?? "");
-  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     try {
-      let proofImageUrl = order.proof_image_url;
-      if (file) {
-        const { data: u } = await supabase.auth.getUser();
-        if (!u.user) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
-        const path = `${u.user.id}/${order.id}-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
-        const { error: uploadError } = await supabase.storage.from("order-proofs").upload(path, file, { contentType: file.type, upsert: false });
-        if (uploadError) throw uploadError;
-        proofImageUrl = supabase.storage.from("order-proofs").getPublicUrl(path).data.publicUrl;
-      }
       const { error } = await supabase.from("orders").update({
         delivery_status: deliveryStatus,
         tracking_number: trackingNumber.trim() || null,
         tracking_url: trackingUrl.trim() || null,
-        proof_image_url: proofImageUrl,
-        proof_uploaded_at: file ? new Date().toISOString() : order.proof_uploaded_at,
         updated_at: new Date().toISOString(),
         status: deliveryStatus === "delivered" ? "delivered" : order.status,
       }).eq("id", order.id);
@@ -237,11 +225,6 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       </select>
       <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking number" />
       <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (https://...)" />
-      <label className="flex items-center gap-2 rounded border bg-card px-2 py-2">
-        <Upload className="size-4" /> ဖြတ်ပိုင်း/အထောက်အထားပုံ Upload
-        <input className="min-w-0 flex-1" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      </label>
-      {order.proof_image_url && <a className="inline-flex items-center gap-1 text-primary underline" href={order.proof_image_url} target="_blank" rel="noreferrer">လက်ရှိအထောက်အထားပုံ ကြည့်ရန် <ExternalLink className="size-3" /></a>}
       <Button size="sm" disabled={busy} onClick={save}>သိမ်းမည်</Button>
     </div>
   );

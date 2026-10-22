@@ -66,8 +66,6 @@ export type Database = {
           tracking_url: string | null
           township: string
           unit_price: number
-          proof_image_url: string | null
-          proof_uploaded_at: string | null
           updated_at: string
         }
         Insert: {
@@ -94,8 +92,6 @@ export type Database = {
           tracking_url?: string | null
           township: string
           unit_price: number
-          proof_image_url?: string | null
-          proof_uploaded_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -122,8 +118,6 @@ export type Database = {
           tracking_url?: string | null
           township?: string
           unit_price?: number
-          proof_image_url?: string | null
-          proof_uploaded_at?: string | null
           updated_at?: string
         }
         Relationships: [
