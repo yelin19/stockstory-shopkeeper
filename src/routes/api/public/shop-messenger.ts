@@ -72,11 +72,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return next(
         "confirm",
         nd,
-        `🧾 အော်ဒါစာရင်း\n${nd.code} · ${nd.product}\nအရေအတွက်: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ပါသလား။ မှန်ကန်ရင် “ဟုတ်ကဲ့”၊ ပြင်လိုရင် “မဟုတ်” လို့ ပြန်ပို့ပါ။`,
+        `🧾 အော်ဒါစာရင်း\n${nd.code} · ${nd.product}\nအရေအတွက်: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် “yes”၊ ပြင်လိုရင် “no” လို့ ပြန်ပို့ပါ။`,
       );
     }
     case "confirm": {
-      if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “ဟုတ်ကဲ့” လို့ ပြန်ပို့ပါ။ ပယ်ဖျက်လိုရင် “မဟုတ်” လို့ ပို့ပါ။");
+      if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
       const { data: order, error } = await db.rpc("place_order", {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: String(d.township), _address: String(d.address), _note: String(d.note ?? ""),
