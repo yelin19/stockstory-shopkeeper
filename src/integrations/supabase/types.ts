@@ -47,6 +47,7 @@ export type Database = {
           category: string
           created_at: string
           customer_name: string
+          delivery_status: string
           id: string
           note: string | null
           order_no: number
@@ -61,14 +62,20 @@ export type Database = {
           sent_at: string | null
           status: string
           total: number
+          tracking_number: string | null
+          tracking_url: string | null
           township: string
           unit_price: number
+          proof_image_url: string | null
+          proof_uploaded_at: string | null
+          updated_at: string
         }
         Insert: {
           address: string
           category: string
           created_at?: string
           customer_name: string
+          delivery_status?: string
           id?: string
           note?: string | null
           order_no?: number
@@ -83,14 +90,20 @@ export type Database = {
           sent_at?: string | null
           status?: string
           total: number
+          tracking_number?: string | null
+          tracking_url?: string | null
           township: string
           unit_price: number
+          proof_image_url?: string | null
+          proof_uploaded_at?: string | null
+          updated_at?: string
         }
         Update: {
           address?: string
           category?: string
           created_at?: string
           customer_name?: string
+          delivery_status?: string
           id?: string
           note?: string | null
           order_no?: number
@@ -105,8 +118,13 @@ export type Database = {
           sent_at?: string | null
           status?: string
           total?: number
+          tracking_number?: string | null
+          tracking_url?: string | null
           township?: string
           unit_price?: number
+          proof_image_url?: string | null
+          proof_uploaded_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {

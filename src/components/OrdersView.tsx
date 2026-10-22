@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileDown, FileSpreadsheet, Printer, Send, XCircle, CheckCircle2 } from "lucide-react";
+import { FileDown, FileSpreadsheet, Printer, Send, XCircle, CheckCircle2, Truck, Upload, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
 import { exportCsv, exportXlsx, money, type Row } from "@/lib/export";
@@ -24,6 +24,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [township, setTownship] = useState("");
   const [orderNo, setOrderNo] = useState("");
   const [sent, setSent] = useState<"unsent" | "sent" | "all">("unsent");
+  const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
 
   const uniq = (f: (o: Order) => string) => [...new Set(orders.map(f))].sort();
   const filtered = useMemo(
@@ -51,10 +52,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
           Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address, Note: o.note ?? "",
           Status: o.status, Sent: o.sent ? "yes" : "no",
+          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "", "Proof image": o.proof_image_url ?? "",
         }
       : {
           "ဝယ်ယူမှု ID": `#${o.order_no}`, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
+          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "", "Proof image": o.proof_image_url ?? "",
         },
   );
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
@@ -158,8 +161,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
                           <div className="no-print mt-2 flex justify-end gap-1">
                             <Button size="sm" variant="ghost" title="ပို့ပြီး/မပို့ရသေး ပြောင်းမည်" onClick={() => setOrder(o, "sent")}><Send /></Button>
                             {o.status !== "delivered" && <Button size="sm" variant="ghost" title="ပို့ဆောင်ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "delivered")}><CheckCircle2 /></Button>}
+                            <Button size="sm" variant="ghost" title="ပို့ဆောင်ရေးပြင်မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /></Button>
                             <Button size="sm" variant="ghost" title="ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မည်" onClick={() => confirm("ဤအော်ဒါကို ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မလား။") && setOrder(o, "cancel")}><XCircle /></Button>
                           </div>
+                        )}
+                        {editingDeliveryId === o.id && (
+                          <DeliveryEditor order={o} onSaved={() => { setEditingDeliveryId(null); qc.invalidateQueries(); }} />
                         )}
                       </td>
                     </tr>
@@ -171,6 +178,71 @@ export function OrdersView({ mode }: { mode: Mode }) {
         </section>
       ))}
       {!filtered.length && <p className="text-muted-foreground">ဤစစ်ထုတ်မှုများနှင့် ကိုက်ညီသောအော်ဒါ မရှိပါ</p>}
+    </div>
+  );
+}
+
+const deliveryLabels: Record<string, string> = {
+  confirmed: "အော်ဒါလက်ခံပြီး",
+  preparing: "ပစ္စည်းပြင်ဆင်နေသည်",
+  shipped: "ပို့ဆောင်ပြီး",
+  in_transit: "ပို့ဆောင်နေသည်",
+  delivered: "ရောက်ရှိပြီး",
+  cancelled: "ပယ်ဖျက်ပြီး",
+};
+
+function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void }) {
+  const [deliveryStatus, setDeliveryStatus] = useState(order.delivery_status || "confirmed");
+  const [trackingNumber, setTrackingNumber] = useState(order.tracking_number ?? "");
+  const [trackingUrl, setTrackingUrl] = useState(order.tracking_url ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      let proofImageUrl = order.proof_image_url;
+      if (file) {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+        const path = `${u.user.id}/${order.id}-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
+        const { error: uploadError } = await supabase.storage.from("order-proofs").upload(path, file, { contentType: file.type, upsert: false });
+        if (uploadError) throw uploadError;
+        proofImageUrl = supabase.storage.from("order-proofs").getPublicUrl(path).data.publicUrl;
+      }
+      const { error } = await supabase.from("orders").update({
+        delivery_status: deliveryStatus,
+        tracking_number: trackingNumber.trim() || null,
+        tracking_url: trackingUrl.trim() || null,
+        proof_image_url: proofImageUrl,
+        proof_uploaded_at: file ? new Date().toISOString() : order.proof_uploaded_at,
+        updated_at: new Date().toISOString(),
+        status: deliveryStatus === "delivered" ? "delivered" : order.status,
+      }).eq("id", order.id);
+      if (error) throw error;
+      toast.success("ပို့ဆောင်ရေးအချက်အလက် သိမ်းပြီးပါပြီ");
+      onSaved();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-lg border bg-muted p-3 text-left text-xs" onClick={(e) => e.stopPropagation()}>
+      <div className="font-semibold">ဝယ်ယူမှု ID: #{order.order_no} — ပို့ဆောင်ရေးအချက်အလက်</div>
+      <select className={sel} value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
+        {Object.entries(deliveryLabels).filter(([key]) => key !== "cancelled").map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select>
+      <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking number" />
+      <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (https://...)" />
+      <label className="flex items-center gap-2 rounded border bg-card px-2 py-2">
+        <Upload className="size-4" /> ဖြတ်ပိုင်း/အထောက်အထားပုံ Upload
+        <input className="min-w-0 flex-1" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      </label>
+      {order.proof_image_url && <a className="inline-flex items-center gap-1 text-primary underline" href={order.proof_image_url} target="_blank" rel="noreferrer">လက်ရှိအထောက်အထားပုံ ကြည့်ရန် <ExternalLink className="size-3" /></a>}
+      <Button size="sm" disabled={busy} onClick={save}>သိမ်းမည်</Button>
     </div>
   );
 }
