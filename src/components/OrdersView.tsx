@@ -22,6 +22,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [product, setProduct] = useState("");
   const [status, setStatus] = useState("active");
   const [township, setTownship] = useState("");
+  const [orderNo, setOrderNo] = useState("");
   const [sent, setSent] = useState<"unsent" | "sent" | "all">("unsent");
 
   const uniq = (f: (o: Order) => string) => [...new Set(orders.map(f))].sort();
@@ -34,24 +35,25 @@ export function OrdersView({ mode }: { mode: Mode }) {
         if (category && o.category !== category) return false;
         if (product && o.product_code !== product) return false;
         if (township && o.township !== township) return false;
+        if (orderNo && String(o.order_no) !== orderNo.trim().replace(/^#/, "")) return false;
         if (status === "active" ? o.status === "cancelled" : status && o.status !== status) return false;
         if (sent === "unsent" && o.sent) return false;
         if (sent === "sent" && !o.sent) return false;
         return true;
       }),
-    [orders, from, to, category, product, status, township, sent],
+    [orders, from, to, category, product, status, township, orderNo, sent],
   );
 
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
       ? {
-          "Order #": o.order_no, Date: format(new Date(o.created_at), "yyyy-MM-dd HH:mm"), Category: o.category, Code: o.product_code,
+          "ဝယ်ယူမှု ID": `#${o.order_no}`, Date: format(new Date(o.created_at), "yyyy-MM-dd HH:mm"), Category: o.category, Code: o.product_code,
           Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address, Note: o.note ?? "",
           Status: o.status, Sent: o.sent ? "yes" : "no",
         }
       : {
-          "Order #": o.order_no, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
+          "ဝယ်ယူမှု ID": `#${o.order_no}`, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
         },
   );
@@ -101,7 +103,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
         </div>
       </div>
 
-      <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-7">
+      <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-8">
+        <Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဝယ်ယူမှု ID (#1001)" title="ဝယ်ယူမှု ID" />
         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="စတင်ရက်" />
         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="အဆုံးရက်" />
         <select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -143,7 +146,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                 <tbody>
                   {list.map((o) => (
                     <tr key={o.id} className="border-t align-top first:border-t-0">
-                      <td className="px-4 py-2 font-mono text-xs">#{o.order_no}<div className="text-muted-foreground">{format(new Date(o.created_at), "MMM d HH:mm")}</div></td>
+                      <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: #{o.order_no}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "MMM d HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><b>{o.township}</b><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
                       <td className="py-2 text-right">{o.quantity} × {money(o.unit_price)}<div className="font-bold">{money(o.total)}</div></td>

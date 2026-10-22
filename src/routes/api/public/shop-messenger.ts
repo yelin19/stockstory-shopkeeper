@@ -84,7 +84,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       await save({ state: "idle", data: {} });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
       const o = order as unknown as { order_no: number; total: number };
-      await text(psid, `🎉 အော်ဒါအတည်ပြုပြီးပါပြီ။\nအော်ဒါနံပါတ်: ${o.order_no}\nစုစုပေါင်း: ${fmt(o.total)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်။ ကျေးဇူးတင်ပါတယ်။`);
+      await text(psid, `🎉 အော်ဒါအတည်ပြုပြီးပါပြီ။\nဝယ်ယူမှု ID: #${o.order_no}\nစုစုပေါင်း: ${fmt(o.total)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်။ ကျေးဇူးတင်ပါတယ်။\n\nအော်ဒါအခြေအနေစစ်ရန် ဒီဝယ်ယူမှု ID ကို သိမ်းထားပါ။`);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
