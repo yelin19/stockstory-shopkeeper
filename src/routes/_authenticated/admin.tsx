@@ -6,9 +6,9 @@ export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
       { title: "Shop Dashboard — Messenger Shop" },
-      { name: "description", content: "Manage your shop." },
+      { name: "description", content: "ဈေးဆိုင်ကို စီမံရန်" },
       { property: "og:title", content: "Shop Dashboard — Messenger Shop" },
-      { property: "og:description", content: "Manage your shop." },
+      { property: "og:description", content: "ဈေးဆိုင်ကို စီမံရန်" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -16,12 +16,12 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 const nav = [
-  { to: "/admin", label: "Sales Reports", icon: BarChart3, exact: true },
-  { to: "/admin/products", label: "Products", icon: Package },
-  { to: "/admin/orders", label: "Shop Orders", icon: ShoppingBag },
-  { to: "/admin/addresses", label: "Delivery Addresses", icon: MapPin },
-  { to: "/admin/stock", label: "Stock History", icon: History },
-  { to: "/admin/settings", label: "Settings & PIN", icon: Settings },
+  { to: "/admin", label: "ရောင်းအားအစီရင်ခံစာ", icon: BarChart3, exact: true },
+  { to: "/admin/products", label: "ပစ္စည်းများ", icon: Package },
+  { to: "/admin/orders", label: "အော်ဒါများ", icon: ShoppingBag },
+  { to: "/admin/addresses", label: "ပို့ဆောင်ရန်လိပ်စာများ", icon: MapPin },
+  { to: "/admin/stock", label: "လက်ကျန်မှတ်တမ်း", icon: History },
+  { to: "/admin/settings", label: "ဆက်တင်များနှင့် PIN", icon: Settings },
 ] as const;
 
 function AdminLayout() {
@@ -30,7 +30,7 @@ function AdminLayout() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="no-print flex shrink-0 flex-col bg-sidebar text-sidebar-foreground md:w-60">
-        <div className="px-5 py-5 font-display text-lg font-bold">Messenger Shop</div>
+        <div className="px-5 py-5 font-display text-lg font-bold">Messenger ဈေးဆိုင်</div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col">
           {nav.map((n) => (
             <Link

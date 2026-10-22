@@ -41,15 +41,15 @@ function Reports() {
   const low = products.filter((p) => p.active && p.stock <= threshold);
 
   const stats = [
-    { l: "Today's sales", v: money(sum(today)), s: `${today.length} orders` },
-    { l: "This month", v: money(sum(month)), s: `${month.length} orders` },
-    { l: "Total sales", v: money(sum(valid)), s: `${valid.length} orders` },
-    { l: "Unsent orders", v: String(valid.filter((o) => !o.sent).length), s: "waiting for delivery" },
+    { l: "ယနေ့ရောင်းအား", v: money(sum(today)), s: `${today.length} အော်ဒါ` },
+    { l: "ယခုလ", v: money(sum(month)), s: `${month.length} အော်ဒါ` },
+    { l: "စုစုပေါင်းရောင်းအား", v: money(sum(valid)), s: `${valid.length} အော်ဒါ` },
+    { l: "မပို့ရသေးသောအော်ဒါ", v: String(valid.filter((o) => !o.sent).length), s: "ပို့ဆောင်ရန်စောင့်နေသည်" },
   ];
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold">Sales Reports</h1>
+      <h1 className="text-3xl font-bold">ရောင်းအားအစီရင်ခံစာ</h1>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
           <div key={s.l} className="rounded-2xl border bg-card p-5">
@@ -60,12 +60,12 @@ function Reports() {
         ))}
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Breakdown title="Sales by category" rows={byCategory} />
-        <Breakdown title="Sales by product" rows={byProduct} />
+        <Breakdown title="အမျိုးအစားအလိုက် ရောင်းအား" rows={byCategory} />
+        <Breakdown title="ပစ္စည်းအလိုက် ရောင်းအား" rows={byProduct} />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border bg-card p-5">
-          <h2 className="mb-3 text-lg font-bold">Remaining inventory</h2>
+          <h2 className="mb-3 text-lg font-bold">လက်ကျန်ပစ္စည်း</h2>
           <table className="w-full text-sm">
             <tbody>
               {products.map((p) => (
@@ -78,17 +78,17 @@ function Reports() {
               ))}
             </tbody>
           </table>
-          {!products.length && <p className="text-sm text-muted-foreground">No products yet.</p>}
+          {!products.length && <p className="text-sm text-muted-foreground">ပစ္စည်းမရှိသေးပါ။</p>}
         </section>
         <section className="rounded-2xl border border-warning/50 bg-card p-5">
           <h2 className="mb-3 text-lg font-bold">Low stock (≤ {threshold})</h2>
           {low.length ? (
             <ul className="space-y-2 text-sm">
               {low.map((p) => (
-                <li key={p.id} className="flex justify-between"><span>{p.code} · {p.name}</span><b className="text-destructive">{p.stock} left</b></li>
+                <li key={p.id} className="flex justify-between"><span>{p.code} · {p.name}</span><b className="text-destructive">{p.stock} ကျန်</b></li>
               ))}
             </ul>
-          ) : <p className="text-sm text-muted-foreground">All products are well stocked.</p>}
+          ) : <p className="text-sm text-muted-foreground">ပစ္စည်းအားလုံး လုံလောက်ပါသည်။</p>}
         </section>
       </div>
     </div>
@@ -100,7 +100,7 @@ function Breakdown({ title, rows }: { title: string; rows: [string, { total: num
   return (
     <section className="rounded-2xl border bg-card p-5">
       <h2 className="mb-3 text-lg font-bold">{title}</h2>
-      {!rows.length && <p className="text-sm text-muted-foreground">No sales yet.</p>}
+      {!rows.length && <p className="text-sm text-muted-foreground">ရောင်းအားမရှိသေးပါ။</p>}
       <div className="space-y-3">
         {rows.map(([k, v]) => (
           <div key={k}>

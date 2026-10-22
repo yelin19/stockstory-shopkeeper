@@ -59,11 +59,11 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   async function markSent() {
     const ids = filtered.filter((o) => !o.sent && o.status !== "cancelled").map((o) => o.id);
-    if (!ids.length) return void toast.info("No unsent orders in this list");
-    if (!confirm(`Mark ${ids.length} order(s) as sent? They will be excluded from the default export.`)) return;
+    if (!ids.length) return void toast.info("ဤစာရင်းတွင် မပို့ရသေးသောအော်ဒါ မရှိပါ");
+    if (!confirm(`${ids.length} ခုကို ပို့ပြီးဟု မှတ်မလား။ ပုံမှန်စာရင်းထုတ်ရာတွင် မပါတော့ပါ။`)) return;
     const { error } = await supabase.from("orders").update({ sent: true, sent_at: new Date().toISOString() }).in("id", ids);
     if (error) return void toast.error(error.message);
-    toast.success(`${ids.length} marked as sent`);
+    toast.success(`${ids.length} ပို့ပြီးဟု မှတ်သားပြီးပါပြီ`);
     qc.invalidateQueries();
   }
   async function setOrder(o: Order, action: "sent" | "delivered" | "cancel") {
@@ -92,42 +92,42 @@ export function OrdersView({ mode }: { mode: Mode }) {
   return (
     <div className="space-y-5">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">{mode === "orders" ? "Shop Orders" : "Delivery Addresses"}</h1>
+        <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ဆောင်ရန်လိပ်စာများ"}</h1>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => exportCsv(rows, `${fname}.csv`)} disabled={!rows.length}><FileDown /> CSV</Button>
           <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel</Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()}><Printer /> Print</Button>
-          <Button size="sm" onClick={markSent}><Send /> Mark listed as sent</Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()}><Printer /> ပုံနှိပ်မည်</Button>
+          <Button size="sm" onClick={markSent}><Send /> စာရင်းပါအော်ဒါများ ပို့ပြီးဟုမှတ်မည်</Button>
         </div>
       </div>
 
       <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-7">
-        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
-        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="To" />
+        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="စတင်ရက်" />
+        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="အဆုံးရက်" />
         <select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="">All categories</option>{uniq((o) => o.category).map((c) => <option key={c}>{c}</option>)}
+          <option value="">အမျိုးအစားအားလုံး</option>{uniq((o) => o.category).map((c) => <option key={c}>{c}</option>)}
         </select>
         <select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
-          <option value="">All products</option>{uniq((o) => o.product_code).map((c) => <option key={c}>{c}</option>)}
+          <option value="">ပစ္စည်းအားလုံး</option>{uniq((o) => o.product_code).map((c) => <option key={c}>{c}</option>)}
         </select>
         <select className={sel} value={township} onChange={(e) => setTownship(e.target.value)}>
-          <option value="">All townships</option>{uniq((o) => o.township).map((c) => <option key={c}>{c}</option>)}
+          <option value="">မြို့နယ်အားလုံး</option>{uniq((o) => o.township).map((c) => <option key={c}>{c}</option>)}
         </select>
         <select className={sel} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="active">Not cancelled</option><option value="">All statuses</option>
-          <option value="confirmed">Confirmed</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option>
+          <option value="active">မပယ်ဖျက်ထားသော</option><option value="">အခြေအနေအားလုံး</option>
+          <option value="confirmed">အတည်ပြုပြီး</option><option value="delivered">ပို့ဆောင်ပြီး</option><option value="cancelled">ပယ်ဖျက်ပြီး</option>
         </select>
         <select className={sel} value={sent} onChange={(e) => setSent(e.target.value as typeof sent)}>
-          <option value="unsent">Unsent only</option><option value="sent">Sent (history)</option><option value="all">Sent + unsent</option>
+          <option value="unsent">မပို့ရသေးသည်များသာ</option><option value="sent">ပို့ပြီး (မှတ်တမ်း)</option><option value="all">ပို့ပြီး + မပို့ရသေး</option>
         </select>
       </div>
 
       <div className="text-sm text-muted-foreground no-print">
-        {filtered.length} orders · {money(filtered.filter((o) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total), 0))}
+        {filtered.length} အော်ဒါ · {money(filtered.filter((o) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total), 0))}
       </div>
 
       <div className="hidden print:block">
-        <h1 className="mb-2 text-2xl font-bold">{mode === "orders" ? "Orders report" : "Delivery list"} — {format(new Date(), "yyyy-MM-dd HH:mm")}</h1>
+        <h1 className="mb-2 text-2xl font-bold">{mode === "orders" ? "အော်ဒါအစီရင်ခံစာ" : "ပို့ဆောင်ရေးစာရင်း"} — {format(new Date(), "yyyy-MM-dd HH:mm")}</h1>
       </div>
 
       {[...grouped.entries()].map(([cat, pm]) => (
@@ -137,7 +137,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
             <div key={prod} className="overflow-x-auto rounded-xl border bg-card">
               <div className="flex justify-between border-b bg-muted px-4 py-2 text-sm font-semibold">
                 <span>{prod}</span>
-                <span>{list.reduce((s, o) => s + o.quantity, 0)} units · {money(list.reduce((s, o) => s + Number(o.total), 0))}</span>
+                <span>{list.reduce((s, o) => s + o.quantity, 0)} ခု · {money(list.reduce((s, o) => s + Number(o.total), 0))}</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
@@ -153,9 +153,9 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         </span>
                         {mode === "orders" && o.status !== "cancelled" && (
                           <div className="no-print mt-2 flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" title="Toggle sent" onClick={() => setOrder(o, "sent")}><Send /></Button>
-                            {o.status !== "delivered" && <Button size="sm" variant="ghost" title="Mark delivered" onClick={() => setOrder(o, "delivered")}><CheckCircle2 /></Button>}
-                            <Button size="sm" variant="ghost" title="Cancel & restock" onClick={() => confirm("Cancel this order and return stock?") && setOrder(o, "cancel")}><XCircle /></Button>
+                            <Button size="sm" variant="ghost" title="ပို့ပြီး/မပို့ရသေး ပြောင်းမည်" onClick={() => setOrder(o, "sent")}><Send /></Button>
+                            {o.status !== "delivered" && <Button size="sm" variant="ghost" title="ပို့ဆောင်ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "delivered")}><CheckCircle2 /></Button>}
+                            <Button size="sm" variant="ghost" title="ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မည်" onClick={() => confirm("ဤအော်ဒါကို ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မလား။") && setOrder(o, "cancel")}><XCircle /></Button>
                           </div>
                         )}
                       </td>
@@ -167,7 +167,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
           ))}
         </section>
       ))}
-      {!filtered.length && <p className="text-muted-foreground">No orders match these filters.</p>}
+      {!filtered.length && <p className="text-muted-foreground">ဤစစ်ထုတ်မှုများနှင့် ကိုက်ညီသောအော်ဒါ မရှိပါ</p>}
     </div>
   );
 }

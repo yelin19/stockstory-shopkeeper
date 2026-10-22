@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/admin/stock")({
   component: StockPage,
 });
 
-const labels: Record<string, string> = { initial: "Created", increase: "Stock added", sale: "Sale", cancel: "Cancelled order", adjust: "Manual adjust" };
+const labels: Record<string, string> = { initial: "ဖန်တီးထားသည်", increase: "လက်ကျန်ထပ်ဖြည့်သည်", sale: "ရောင်းချမှု", cancel: "ပယ်ဖျက်ထားသောအော်ဒါ", adjust: "ကိုယ်တိုင်ပြင်ဆင်မှု" };
 
 function StockPage() {
   const { data } = useSuspenseQuery(stockQuery);
@@ -23,7 +23,7 @@ function StockPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">Stock History</h1>
+        <h1 className="text-3xl font-bold">လက်ကျန်မှတ်တမ်း</h1>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => exportCsv(rows, "stock-history.csv")}><FileDown /> CSV</Button>
           <Button size="sm" variant="outline" onClick={() => exportXlsx(rows, "stock-history.xlsx")}><FileSpreadsheet /> Excel</Button>
@@ -31,15 +31,15 @@ function StockPage() {
       </div>
       <div className="flex gap-2">
         <select className="h-9 rounded-md border bg-card px-2 text-sm" value={reason} onChange={(e) => setReason(e.target.value)}>
-          <option value="">All types</option>{Object.entries(labels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          <option value="">အမျိုးအစားအားလုံး</option>{Object.entries(labels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <select className="h-9 rounded-md border bg-card px-2 text-sm" value={code} onChange={(e) => setCode(e.target.value)}>
-          <option value="">All products</option>{[...new Set(data.map((h) => h.product_code))].sort().map((c) => <option key={c}>{c}</option>)}
+          <option value="">ပစ္စည်းအားလုံး</option>{[...new Set(data.map((h) => h.product_code))].sort().map((c) => <option key={c}>{c}</option>)}
         </select>
       </div>
       <div className="overflow-x-auto rounded-2xl border bg-card">
         <table className="w-full text-sm">
-          <thead className="bg-muted text-left"><tr><th className="px-4 py-2">Date</th><th>Product</th><th>Type</th><th className="text-right">Change</th><th className="text-right">Balance</th><th className="px-4">Note</th></tr></thead>
+          <thead className="bg-muted text-left"><tr><th className="px-4 py-2">ရက်စွဲ</th><th>Product</th><th>အမျိုးအစား</th><th className="text-right">ပြောင်းလဲမှု</th><th className="text-right">လက်ကျန်</th><th className="px-4">မှတ်ချက်</th></tr></thead>
           <tbody>
             {list.map((h) => (
               <tr key={h.id} className="border-t">
@@ -53,7 +53,7 @@ function StockPage() {
             ))}
           </tbody>
         </table>
-        {!list.length && <p className="p-4 text-sm text-muted-foreground">No stock movements yet.</p>}
+        {!list.length && <p className="p-4 text-sm text-muted-foreground">လက်ကျန်ပြောင်းလဲမှု မရှိသေးပါ။</p>}
       </div>
     </div>
   );

@@ -20,9 +20,9 @@ function NotFoundComponent() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">စာမျက်နှာမတွေ့ပါ</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
+          ရှာဖွေနေသောစာမျက်နှာ မရှိတော့ပါ သို့မဟုတ် ရွှေ့ပြောင်းထားပါသည်။
         </p>
         <div className="mt-6">
           <Link
@@ -49,7 +49,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">This page didn't load</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          စနစ်ဘက်တွင် အမှားဖြစ်နေပါသည်။ Refresh ပြန်လုပ်ပါ သို့မဟုတ် ပင်မစာမျက်နှာသို့ ပြန်သွားပါ။
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -78,7 +78,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Messenger Shop" },
+      { title: "Messenger ဈေးဆိုင်" },
       { name: "description", content: "Online shop with Messenger ordering." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -102,7 +102,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="my">
       <head>
         <HeadContent />
       </head>

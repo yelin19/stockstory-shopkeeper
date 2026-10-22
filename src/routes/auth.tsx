@@ -12,9 +12,9 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Shop Admin Login — Messenger Shop" },
-      { name: "description", content: "Sign in to manage products, stock and Messenger orders." },
+      { name: "description", content: "ပစ္စည်းများ၊ လက်ကျန်နှင့် Messenger အော်ဒါများကို စီမံရန် ဝင်ပါ။" },
       { property: "og:title", content: "Shop Admin Login — Messenger Shop" },
-      { property: "og:description", content: "Sign in to manage products, stock and Messenger orders." },
+      { property: "og:description", content: "ပစ္စည်းများ၊ လက်ကျန်နှင့် Messenger အော်ဒါများကို စီမံရန် ဝင်ပါ။" },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -30,8 +30,8 @@ function AuthPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!/^[a-zA-Z0-9._-]{3,30}$/.test(username.trim())) return void toast.error("Username: 3-30 letters, numbers, . _ -");
-    if (password.length < 8) return void toast.error("Password must be at least 8 characters");
+    if (!/^[a-zA-Z0-9._-]{3,30}$/.test(username.trim())) return void toast.error("အသုံးပြုသူအမည်သည် အက္ခရာ/ဂဏန်း ၃-၃၀ လုံးဖြစ်ရမည်");
+    if (password.length < 8) return void toast.error("စကားဝှက်သည် အနည်းဆုံး ၈ လုံးရှိရမည်");
     setBusy(true);
     const email = usernameToEmail(username);
     const { error } =
@@ -49,21 +49,21 @@ function AuthPage() {
         <div className="flex items-center gap-3">
           <div className="grid size-11 place-items-center rounded-xl bg-accent text-accent-foreground"><Store /></div>
           <div>
-            <h1 className="text-2xl font-bold">Shop Admin</h1>
+            <h1 className="text-2xl font-bold">ဈေးဆိုင် Admin</h1>
             <p className="text-sm text-muted-foreground">{mode === "in" ? "Sign in to your shop" : "Create a shop admin account"}</p>
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="u">Username</Label>
+          <Label htmlFor="u">အသုံးပြုသူအမည်</Label>
           <Input id="u" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="p">Password</Label>
+          <Label htmlFor="p">စကားဝှက်</Label>
           <Input id="p" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "in" ? "current-password" : "new-password"} />
         </div>
-        <Button className="w-full" disabled={busy}>{mode === "in" ? "Sign in" : "Create account"}</Button>
+        <Button className="w-full" disabled={busy}>{mode === "in" ? "ဝင်မည်" : "အကောင့်ဖန်တီးမည်"}</Button>
         <button type="button" className="w-full text-sm text-muted-foreground hover:text-foreground" onClick={() => setMode(mode === "in" ? "up" : "in")}>
-          {mode === "in" ? "New shop? Create an admin account" : "Already have an account? Sign in"}
+          {mode === "in" ? "ဈေးဆိုင်အသစ်လား။ Admin အကောင့်ဖန်တီးပါ" : "အကောင့်ရှိပြီးသားလား။ ဝင်မည်"}
         </button>
       </form>
     </div>

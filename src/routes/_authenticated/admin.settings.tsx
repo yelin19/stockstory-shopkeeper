@@ -36,8 +36,8 @@ function SettingsPage() {
       low_stock_threshold: Math.max(0, parseInt(f.low_stock_threshold, 10) || 0),
       updated_at: new Date().toISOString(),
     });
-    if (error) return void toast.error(error.code === "23505" ? "That Facebook Page is already linked to another shop" : error.message);
-    toast.success("Settings saved");
+    if (error) return void toast.error(error.code === "23505" ? "ဤ Facebook Page ကို အခြားဈေးဆိုင်တွင် ချိတ်ထားပြီးပါပြီ" : error.message);
+    toast.success("ဆက်တင်များ သိမ်းပြီးပါပြီ");
     qc.invalidateQueries({ queryKey: ["settings"] });
   }
   async function savePin(e: React.FormEvent) {
@@ -45,33 +45,33 @@ function SettingsPage() {
     const { error } = await supabase.rpc("set_shop_pin", { _pin: pin });
     if (error) return void toast.error(error.message);
     setPin("");
-    toast.success("Shop PIN updated. Customers must enter the new PIN.");
+    toast.success("ဈေးဆိုင် PIN ပြောင်းပြီးပါပြီ။ ဝယ်သူများသည် PIN အသစ်ကို ထည့်ရပါမည်။");
     qc.invalidateQueries({ queryKey: ["settings"] });
   }
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   return (
     <div className="max-w-2xl space-y-8">
-      <h1 className="text-3xl font-bold">Settings & PIN</h1>
+      <h1 className="text-3xl font-bold">ဆက်တင်များနှင့် PIN</h1>
       <form onSubmit={savePin} className="space-y-3 rounded-2xl border bg-card p-6">
-        <h2 className="text-lg font-bold">Shop PIN</h2>
-        <p className="text-sm text-muted-foreground">Customers must type this PIN in Messenger before they can see products or order. {s?.pin_hash ? "A PIN is set." : "No PIN set yet — the bot will not serve customers until you set one."}</p>
+        <h2 className="text-lg font-bold">ဈေးဆိုင် PIN</h2>
+        <p className="text-sm text-muted-foreground">ဝယ်သူများသည် ပစ္စည်းကြည့်ရန် သို့မဟုတ် အော်ဒါတင်ရန် Messenger တွင် ဤ PIN ကို အရင်ထည့်ရပါမည်။ {s?.pin_hash ? "PIN သတ်မှတ်ထားပြီးပါပြီ။" : "PIN မသတ်မှတ်ရသေးပါ — PIN သတ်မှတ်ပြီးမှသာ Bot က ဝယ်သူများကို ဝန်ဆောင်မှုပေးပါမည်။"}</p>
         <div className="flex gap-2">
           <Input type="password" inputMode="numeric" placeholder="4–8 digits" value={pin} onChange={(e) => setPin(e.target.value)} />
-          <Button>Set PIN</Button>
+          <Button>PIN သတ်မှတ်မည်</Button>
         </div>
       </form>
       <form onSubmit={save} className="space-y-4 rounded-2xl border bg-card p-6">
-        <h2 className="text-lg font-bold">Shop & Messenger</h2>
-        <div className="space-y-1"><Label>Shop name</Label><Input value={f.shop_name} onChange={set("shop_name")} /></div>
+        <h2 className="text-lg font-bold">ဈေးဆိုင်နှင့် Messenger</h2>
+        <div className="space-y-1"><Label>ဈေးဆိုင်အမည်</Label><Input value={f.shop_name} onChange={set("shop_name")} /></div>
         <div className="space-y-1"><Label>Facebook Page ID</Label><Input value={f.fb_page_id} onChange={set("fb_page_id")} placeholder="e.g. 1029384756" /></div>
-        <div className="space-y-1"><Label>Page username (for m.me order button)</Label><Input value={f.messenger_username} onChange={set("messenger_username")} placeholder="yourshoppage" /></div>
-        <div className="space-y-1"><Label>Low-stock warning at</Label><Input type="number" min="0" value={f.low_stock_threshold} onChange={set("low_stock_threshold")} /></div>
-        <Button>Save settings</Button>
+        <div className="space-y-1"><Label>Page username (m.me အော်ဒါခလုတ်အတွက်)</Label><Input value={f.messenger_username} onChange={set("messenger_username")} placeholder="yourshoppage" /></div>
+        <div className="space-y-1"><Label>လက်ကျန်နည်းကြောင်း သတိပေးမည့်အရေအတွက်</Label><Input type="number" min="0" value={f.low_stock_threshold} onChange={set("low_stock_threshold")} /></div>
+        <Button>ဆက်တင်များ သိမ်းမည်</Button>
       </form>
       <div className="space-y-2 rounded-2xl border bg-muted p-6 text-sm">
-        <h2 className="text-lg font-bold">Messenger webhook</h2>
-        <p>Callback URL for your Facebook App (Messenger → Webhooks), subscribe to <b>messages</b>:</p>
+        <h2 className="text-lg font-bold">Messenger Webhook</h2>
+        <p>Facebook App (Messenger → Webhooks) တွင် ထည့်ရန် Callback URL — <b>messages</b> ကို subscribe လုပ်ပါ:</p>
         <code className="block break-all rounded bg-card p-2">{webhook}</code>
       </div>
     </div>
