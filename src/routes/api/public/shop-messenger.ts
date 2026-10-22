@@ -35,25 +35,25 @@ async function send(psid: string, message: Record<string, unknown>) {
 const text = (psid: string, t: string) => send(psid, { text: t });
 const fmt = (n: number) => Number(n).toLocaleString("en-US") + " Ks";
 
-async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string) {
+function parseCustomerDetails(msg: string) {
+  const lines = msg.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+  const get = (re: RegExp) => msg.match(re)?.[1]?.trim();
+  const name = get(/(?:အမည်|နာမည်)\s*[:：-]\s*(.+)/i) ?? lines[0];
+  const phone = get(/(?:ဖုန်း(?:နံပါတ်)?|phone)\s*[:：-]\s*([0-9+\-\s]{6,20})/i) ?? lines[1];
+  const address = get(/(?:လိပ်စာ|ပို့ရမည့်လိပ်စာ|address)\s*[:：-]\s*(.+)/i) ?? lines.slice(2).join(" ");
+  if (!name || !phone || !address || !/^[0-9+\-\s]{6,20}$/.test(phone)) return null;
+  return { name: name.slice(0, 100), phone: phone.slice(0, 20), address: address.slice(0, 500) };
+}
+
+async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
 
-  if (!s.pin_verified) {
-    const { data: ok } = await db.rpc("verify_shop_pin", { _owner: owner, _pin: msg.trim() });
-    if (ok) {
-      await save({ pin_verified: true, state: "idle", data: {} });
-      return text(psid, "✅ PIN accepted. Send a product code (e.g. 111) to see it, or 111 2 to order 2 units.");
-    }
-    if (!existing) await save({});
-    return text(psid, "🔒 Please enter the Shop PIN to continue.");
-  }
-
   if (isNo(msg) && s.state !== "idle") {
     await save({ state: "idle", data: {} });
-    return text(psid, "Order cancelled. Send a product code any time.");
+    return text(psid, "❌ အော်ဒါကို ပယ်ဖျက်လိုက်ပါပြီ။ ပစ္စည်း Code နှင့် အရေအတွက်ကို ထပ်ပို့နိုင်ပါတယ်။");
   }
 
   type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; note?: string };
@@ -64,49 +64,47 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   };
 
   switch (s.state) {
-    case "ask_name":
-      return next("ask_phone", { ...d, name: msg.trim().slice(0, 100) }, "📞 Phone number?");
-    case "ask_phone":
-      if (!/^[0-9+\-\s]{6,20}$/.test(msg.trim())) return text(psid, "Please send a valid phone number.");
-      return next("ask_township", { ...d, phone: msg.trim() }, "🏙️ City / Township?");
-    case "ask_township":
-      return next("ask_address", { ...d, township: msg.trim().slice(0, 100) }, "🏠 Full delivery address?");
-    case "ask_address":
-      return next("ask_note", { ...d, address: msg.trim().slice(0, 500) }, "📝 Any note? (send - to skip)");
-    case "ask_note": {
-      const nd: Draft = { ...d, note: msg.trim() === "-" ? "" : msg.trim().slice(0, 300) };
+    case "ask_customer_details": {
+      const details = parseCustomerDetails(msg);
+      if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+      const nd: Draft = { ...d, ...details, township: "လိပ်စာထဲတွင်ပါဝင်သည်", note: "" };
       const total = Number(nd.price) * Number(nd.qty);
       return next(
         "confirm",
         nd,
-        `🧾 Order summary\n${nd.code} · ${nd.product}\nQty: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nName: ${nd.name}\nPhone: ${nd.phone}\nTownship: ${nd.township}\nAddress: ${nd.address}${nd.note ? `\nNote: ${nd.note}` : ""}\n\nReply YES to confirm or NO to cancel.`,
+        `🧾 အော်ဒါစာရင်း\n${nd.code} · ${nd.product}\nအရေအတွက်: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ပါသလား။ မှန်ကန်ရင် “ဟုတ်ကဲ့”၊ ပြင်လိုရင် “မဟုတ်” လို့ ပြန်ပို့ပါ။`,
       );
     }
     case "confirm": {
-      if (!isYes(msg)) return text(psid, "Reply YES to confirm or NO to cancel.");
+      if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “ဟုတ်ကဲ့” လို့ ပြန်ပို့ပါ။ ပယ်ဖျက်လိုရင် “မဟုတ်” လို့ ပို့ပါ။");
       const { data: order, error } = await db.rpc("place_order", {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: String(d.township), _address: String(d.address), _note: String(d.note ?? ""),
       });
       await save({ state: "idle", data: {} });
-      if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 Sorry, not enough stock left. Please try a smaller quantity." : "Sorry, something went wrong. Please try again.");
+      if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
       const o = order as unknown as { order_no: number; total: number };
-      return text(psid, `🎉 Order #${o.order_no} confirmed! Total ${fmt(o.total)}. We'll deliver soon. Thank you!`);
+      await text(psid, `🎉 အော်ဒါအတည်ပြုပြီးပါပြီ။\nအော်ဒါနံပါတ်: ${o.order_no}\nစုစုပေါင်း: ${fmt(o.total)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်။ ကျေးဇူးတင်ပါတယ်။`);
+      if (pageUsername) {
+        await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
+      }
+      return;
     }
   }
 
   const req = parseProductRequest(msg);
-  if (!req) return text(psid, "Send a product code (e.g. 111) or code and quantity (e.g. 111 2).");
+  if (!req) return text(psid, "ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ - 111 2 သို့မဟုတ် 111=2");
   const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
-  if (!p) return text(psid, `No product found with code ${req.code}.`);
+  if (!p) return text(psid, `Code ${req.code} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
 
   if (req.qty === null) {
     if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
-    return text(psid, `${p.name}\n💰 ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}${p.description ? `\n\n${p.description}` : ""}\n\nTo order send: ${p.code} 1  (or ${p.code}=2)`);
+    return text(psid, `${p.name}\n💰 ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `လက်ကျန် ${p.stock}` : "လက်ကျန်ကုန်ပါပြီ"}${p.description ? `\n\n${p.description}` : ""}\n\nအော်ဒါတင်ရန် ${p.code} 1 သို့မဟုတ် ${p.code}=2 ပို့ပါ။`);
   }
-  if (p.stock < req.qty) return text(psid, p.stock ? `Only ${p.stock} left for ${p.name}.` : `${p.name} is out of stock.`);
-  return next("ask_name", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty },
-    `🛒 ${req.qty} × ${p.name} (${fmt(Number(p.price) * req.qty)})\n\n👤 Your name?  (send NO anytime to cancel)`);
+  if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+  if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
+  return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty },
+    `🛒 ${p.name}\n💰 တစ်ခုဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${req.qty}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
 }
 
 export const Route = createFileRoute("/api/public/shop-messenger")({
@@ -128,13 +126,13 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
         for (const entry of payload.entry ?? []) {
-          const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id").eq("fb_page_id", entry.id).maybeSingle();
+          const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id, messenger_username").eq("fb_page_id", entry.id).maybeSingle();
           if (!shop) continue;
           for (const ev of entry.messaging ?? []) {
             const t = ev.message?.is_echo ? undefined : (ev.message?.text ?? ev.postback?.payload);
             if (!t) continue;
             try {
-              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin);
+              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
             } catch (e) {
               console.error("shop-messenger handler error", (e as Error).message);
             }
