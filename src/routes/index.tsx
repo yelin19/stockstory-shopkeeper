@@ -1,8 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Package, FileSpreadsheet } from "lucide-react";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: () => {
+    throw redirect({ to: "/auth" });
+  },
   head: () => ({
     meta: [
       { title: "Messenger ဈေးဆိုင် — Messenger မှာ ရောင်းပြီး အော်ဒါလက်ခံပါ" },
