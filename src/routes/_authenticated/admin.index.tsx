@@ -5,6 +5,15 @@ import { ordersQuery, productsQuery, settingsQuery } from "@/lib/shop-data";
 import { money } from "@/lib/export";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
+  head: () => ({ meta: [
+    { title: "Sales Reports — Messenger Shop" },
+    { name: "description", content: "Review Messenger shop sales and remaining stock." },
+    { property: "og:title", content: "Sales Reports — Messenger Shop" },
+    { property: "og:description", content: "Review Messenger shop sales and remaining stock." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "robots", content: "noindex" },
+  ] }),
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(ordersQuery),

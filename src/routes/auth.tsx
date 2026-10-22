@@ -11,6 +11,8 @@ import { Store } from "lucide-react";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { title: "Shop Admin Login — Messenger Shop" },
       { name: "description", content: "ပစ္စည်းများ၊ လက်ကျန်နှင့် Messenger အော်ဒါများကို စီမံရန် ဝင်ပါ။" },
       { property: "og:title", content: "Shop Admin Login — Messenger Shop" },

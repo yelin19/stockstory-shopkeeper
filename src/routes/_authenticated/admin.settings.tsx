@@ -9,6 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
+  head: () => ({ meta: [
+    { title: "Shop Settings and PIN — Messenger Shop" },
+    { name: "description", content: "Configure the Messenger shop, Facebook Page and customer PIN." },
+    { property: "og:title", content: "Shop Settings and PIN — Messenger Shop" },
+    { property: "og:description", content: "Configure the Messenger shop, Facebook Page and customer PIN." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "robots", content: "noindex" },
+  ] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(settingsQuery),
   component: SettingsPage,
 });

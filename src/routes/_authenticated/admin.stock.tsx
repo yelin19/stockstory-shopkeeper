@@ -8,6 +8,15 @@ import { exportCsv, exportXlsx } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/admin/stock")({
+  head: () => ({ meta: [
+    { title: "Stock History — Messenger Shop" },
+    { name: "description", content: "Review stock movements for the Messenger shop." },
+    { property: "og:title", content: "Stock History — Messenger Shop" },
+    { property: "og:description", content: "Review stock movements for the Messenger shop." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "robots", content: "noindex" },
+  ] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(stockQuery),
   component: StockPage,
 });
