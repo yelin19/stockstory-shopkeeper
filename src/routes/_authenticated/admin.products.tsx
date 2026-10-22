@@ -14,6 +14,15 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/admin/products")({
+  head: () => ({ meta: [
+    { title: "Shop Products — Messenger Shop" },
+    { name: "description", content: "Manage the Messenger shop product catalogue and stock." },
+    { property: "og:title", content: "Shop Products — Messenger Shop" },
+    { property: "og:description", content: "Manage the Messenger shop product catalogue and stock." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "robots", content: "noindex" },
+  ] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(productsQuery),
   component: ProductsPage,
 });

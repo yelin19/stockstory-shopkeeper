@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { title: "Shop Dashboard — Messenger Shop" },
       { name: "description", content: "ဈေးဆိုင်ကို စီမံရန်" },
       { property: "og:title", content: "Shop Dashboard — Messenger Shop" },

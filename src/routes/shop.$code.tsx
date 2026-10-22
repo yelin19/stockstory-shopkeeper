@@ -24,6 +24,7 @@ export const Route = createFileRoute("/shop/$code")({
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
         { property: "og:type", content: "product" },
+        { name: "twitter:card", content: "summary_large_image" },
         { property: "og:url", content: `${loaderData.origin}/shop/${params.code}` },
         { property: "product:price:amount", content: String(p.price) },
         { property: "product:price:currency", content: "MMK" },

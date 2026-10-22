@@ -8,6 +8,8 @@ export const Route = createFileRoute("/")({
   },
   head: () => ({
     meta: [
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       { title: "Messenger ဈေးဆိုင် — Messenger မှာ ရောင်းပြီး အော်ဒါလက်ခံပါ" },
       { name: "description", content: "ပစ္စည်းနှင့် လက်ကျန်ကို စီမံပြီး Facebook Messenger မှ တိုက်ရိုက်အော်ဒါလက်ခံပါ။" },
       { property: "og:title", content: "Messenger ဈေးဆိုင် — Messenger မှာ ရောင်းပြီး အော်ဒါလက်ခံပါ" },
