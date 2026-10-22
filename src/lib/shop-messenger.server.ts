@@ -94,7 +94,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
 }
 
 export const messengerHandlers = {
-      GET: async ({ request }) => {
+      GET: async ({ request }: { request: Request }) => {
         const u = new URL(request.url);
         const expected = process.env["SHOP_FB_VERIFY_TOKEN"] ?? process.env["MESSENGER_VERIFY_TOKEN"];
         const parsed = messengerVerificationSchema.safeParse({ mode: u.searchParams.get("hub.mode"), token: u.searchParams.get("hub.verify_token"), challenge: u.searchParams.get("hub.challenge") });
@@ -103,7 +103,7 @@ export const messengerHandlers = {
         }
         return new Response("Forbidden", { status: 403 });
       },
-      POST: async ({ request }) => {
+      POST: async ({ request }: { request: Request }) => {
         const body = await request.text();
         if (!(await verifyMessengerSignature(body, request.headers.get("x-hub-signature-256"), process.env["SHOP_FB_APP_SECRET"]))) return new Response("Invalid signature", { status: 401 });
         let json: unknown;
@@ -121,7 +121,7 @@ export const messengerHandlers = {
             if (!t) continue;
             try {
               await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin);
-            } catch (e) {
+            } catch {
               console.error("shop-messenger handler failed");
               return new Response("Processing failed", { status: 500 });
             }
