@@ -48,6 +48,8 @@ export type Database = {
           created_at: string
           customer_name: string
           delivery_status: string
+          delivery_image_url: string | null
+          delivery_notified_at: string | null
           id: string
           note: string | null
           order_no: number
@@ -74,6 +76,8 @@ export type Database = {
           created_at?: string
           customer_name: string
           delivery_status?: string
+          delivery_image_url?: string | null
+          delivery_notified_at?: string | null
           id?: string
           note?: string | null
           order_no?: number
@@ -100,6 +104,8 @@ export type Database = {
           created_at?: string
           customer_name?: string
           delivery_status?: string
+          delivery_image_url?: string | null
+          delivery_notified_at?: string | null
           id?: string
           note?: string | null
           order_no?: number

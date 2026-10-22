@@ -195,20 +195,32 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
   const [deliveryStatus, setDeliveryStatus] = useState(order.delivery_status || "confirmed");
   const [trackingNumber, setTrackingNumber] = useState(order.tracking_number ?? "");
   const [trackingUrl, setTrackingUrl] = useState(order.tracking_url ?? "");
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     try {
-      const { error } = await supabase.from("orders").update({
-        delivery_status: deliveryStatus,
-        tracking_number: trackingNumber.trim() || null,
-        tracking_url: trackingUrl.trim() || null,
-        updated_at: new Date().toISOString(),
-        status: deliveryStatus === "delivered" ? "delivered" : order.status,
-      }).eq("id", order.id);
-      if (error) throw error;
-      toast.success("ပို့ဆောင်ရေးအချက်အလက် သိမ်းပြီးပါပြီ");
+      let imageUrl: string | null = null;
+      if (file) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+        const path = `${userData.user.id}/${order.id}-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
+        const { error: uploadError } = await supabase.storage.from("delivery-images").upload(path, file, { contentType: file.type, upsert: false });
+        if (uploadError) throw uploadError;
+        imageUrl = supabase.storage.from("delivery-images").getPublicUrl(path).data.publicUrl;
+      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+      const response = await fetch("/api/admin/order-shipping", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ order_id: order.id, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
+      toast.success(`ဝယ်ယူမှု ID #${order.order_no} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -225,6 +237,11 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       </select>
       <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking number" />
       <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (https://...)" />
+      <label className="flex items-center gap-2 rounded border bg-card px-2 py-2">
+        <span>ပို့ဆောင်မှုဓာတ်ပုံ</span>
+        <input className="min-w-0 flex-1" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      </label>
+      <p className="text-muted-foreground">သိမ်းမည်နှိပ်လျှင် စာတိုက် link နှင့် ဓာတ်ပုံကို Customer Messenger ဆီ ပြန်ပို့ပါမည်။</p>
       <Button size="sm" disabled={busy} onClick={save}>သိမ်းမည်</Button>
     </div>
   );
