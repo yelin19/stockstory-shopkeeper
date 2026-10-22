@@ -267,6 +267,7 @@ export type Database = {
           _note: string
           _product_id: string
           _reason: string
+          _request_id?: string
         }
         Returns: number
       }

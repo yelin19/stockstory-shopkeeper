@@ -143,15 +143,23 @@ function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adj
   const qc = useQueryClient();
   const [qty, setQty] = useState("");
   const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     const n = parseInt(qty, 10);
     if (!n || (mode === "increase" && n <= 0)) return void toast.error("မှန်ကန်သောအရေအတွက် ထည့်ပါ");
-    const { error } = await supabase.rpc("change_stock", { _product_id: p.id, _delta: n, _reason: mode, _note: note });
-    if (error) return void toast.error(error.message);
-    toast.success("လက်ကျန်ပြင်ပြီးပါပြီ");
-    qc.invalidateQueries();
-    onClose();
+    setSaving(true);
+    try {
+      const requestId = crypto.randomUUID();
+      const { error } = await supabase.rpc("change_stock", { _product_id: p.id, _delta: n, _reason: mode, _note: note, _request_id: requestId });
+      if (error) return void toast.error(error.message);
+      toast.success("လက်ကျန်ပြင်ပြီးပါပြီ");
+      qc.invalidateQueries();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   }
   return (
     <Dialog open onOpenChange={onClose}>
@@ -164,7 +172,7 @@ function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adj
             <Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
           </div>
           <div className="space-y-1"><Label>မှတ်ချက်</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="မဖြစ်မနေမဟုတ်ပါ" /></div>
-          <Button className="w-full">သိမ်းမည်</Button>
+          <Button className="w-full" type="submit" disabled={saving}>{saving ? "သိမ်းနေသည်..." : "သိမ်းမည်"}</Button>
         </form>
       </DialogContent>
     </Dialog>
