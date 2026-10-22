@@ -14,3 +14,4 @@
 - Every shop table is scoped by `owner_id = auth.uid()` RLS; stock changes only via DB functions (`change_stock`, `cancel_order`, `place_order`) so history is always written and stock can't go negative.
 - `place_order` and `verify_shop_pin` are service-role only, called from the Messenger webhook at `/api/public/shop-messenger` (signature-verified). Webhook picks the shop by Facebook Page ID from `shop_settings.fb_page_id`.
 - Product images live in a private bucket and are served through `/api/public/product-image/$code` so Facebook/OG can fetch them (public buckets are blocked in this workspace).
+- Messenger HTTP handlers live in a server-only module behind the TanStack public route, with Web Crypto signature checks and schema validation before database access; this preserves Worker compatibility and makes order handling testable without exposing credentials.
