@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileDown, FileSpreadsheet, Printer, XCircle, Truck } from "lucide-react";
+import { FileDown, FileSpreadsheet, Printer, Copy, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
 import { exportCsv, exportXlsx, money, type Row } from "@/lib/export";
@@ -58,15 +58,14 @@ export function OrdersView({ mode }: { mode: Mode }) {
   );
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
-  async function setOrder(o: Order, action: "accepted" | "unsent" | "cancel") {
-    const { error } =
-      action === "cancel"
-        ? await supabase.rpc("cancel_order", { _order_id: o.id })
-        : action === "accepted"
-          ? await supabase.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null, tracking_number: null, tracking_url: null, delivery_image_url: null, delivery_notified_at: null }).eq("id", o.id)
-          : await supabase.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null, tracking_number: null, tracking_url: null, delivery_image_url: null, delivery_notified_at: null }).eq("id", o.id);
-    if (error) return void toast.error(error.message);
-    qc.invalidateQueries();
+  async function copyAddress(o: Order) {
+    const text = `ဝယ်ယူမှု ID: ${o.public_order_id}\nအမည်: ${o.customer_name}\nဖုန်း: ${o.phone}\nမြို့နယ်: ${o.township}\nလိပ်စာ: ${o.address}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ၏ လိပ်စာကို Copy လုပ်ပြီးပါပြီ`);
+    } catch {
+      toast.error("လိပ်စာ Copy လုပ်မရပါ။ Browser permission ကို စစ်ပါ");
+    }
   }
 
   function toggleOrder(id: string) {
@@ -178,10 +177,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
                           <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
-                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID နှင့် Link မပြည့်သေးလျှင် လက်ခံထားအဖြစ်ထားမည်" onClick={() => setOrder(o, "accepted")}>လက်ခံထား</Button>
-                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="မပို့ရသေးအဖြစ်ထားမည်" onClick={() => setOrder(o, "unsent")}>မပို့ရသေး</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
-                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive" title="အော်ဒါဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မည်" onClick={() => confirm("ဤအော်ဒါကို ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မလား။") && setOrder(o, "cancel")}><XCircle /> ဖျက်မည်</Button>
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ဝယ်ယူသူ၏ ပို့ဆောင်မည့်လိပ်စာကို Copy လုပ်မည်" onClick={() => copyAddress(o)}><Copy /> လိပ်စာ Copy</Button>
                           </div>
                         )}
                         {editingDeliveryId === o.id && (
