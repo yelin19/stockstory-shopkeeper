@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileSpreadsheet, Copy, Truck } from "lucide-react";
+import { FileSpreadsheet, Copy, Truck, Undo2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
 import { exportXlsx, money, type Row } from "@/lib/export";
@@ -22,6 +22,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
   const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
+  const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
 
   const isShipped = (o: Order) => Boolean(o.tracking_number?.trim() && o.tracking_url?.trim());
   const scopedOrders = useMemo(
@@ -86,6 +87,29 @@ export function OrdersView({ mode }: { mode: Mode }) {
     setSelectedOrderIds([]);
     setBulkTrackingUrl("");
     qc.invalidateQueries();
+  }
+
+  async function markReturned(o: Order) {
+    if (returningOrderId) return;
+    setReturningOrderId(o.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+      const response = await fetch("/api/admin/order-shipping", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ order_id: o.id, delivery_status: "returned" }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "ပြန်လာသည်အဖြစ် သိမ်းမရပါ");
+      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ပြန်လာသည်အဖြစ် သိမ်းပြီးပါပြီ`);
+      qc.invalidateQueries();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setReturningOrderId(null);
+    }
   }
 
   // group by category → product for print
@@ -170,6 +194,13 @@ export function OrdersView({ mode }: { mode: Mode }) {
                           <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ဝယ်ယူသူ၏ ပို့ဆောင်မည့်လိပ်စာကို Copy လုပ်မည်" onClick={() => copyAddress(o)}><Copy /> လိပ်စာ Copy</Button>
+                          </div>
+                        )}
+                        {mode === "addresses" && o.delivery_status !== "returned" && (
+                          <div className="no-print mt-2 flex justify-end">
+                            <Button size="sm" variant="destructive" className="h-8 px-2 text-xs" title="ပစ္စည်းပြန်လာသည်အဖြစ် သိမ်းမည်" onClick={() => markReturned(o)} disabled={returningOrderId === o.id}>
+                              <Undo2 /> {returningOrderId === o.id ? "သိမ်းနေသည်..." : "ပြန်လာသည်"}
+                            </Button>
                           </div>
                         )}
                         {editingDeliveryId === o.id && (
