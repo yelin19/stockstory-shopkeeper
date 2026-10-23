@@ -2,10 +2,10 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileDown, FileSpreadsheet, Printer, Copy, Truck } from "lucide-react";
+import { FileSpreadsheet, Copy, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
-import { exportCsv, exportXlsx, money, type Row } from "@/lib/export";
+import { exportXlsx, money, type Row } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -110,9 +110,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
           <p className="mt-1 text-sm text-muted-foreground">{mode === "orders" ? "မပို့ရသေးသော Order များသာ ပြထားသည်" : "Tracking ID နှင့် Link ပြည့်ပြီး ပို့ပြီးသော Order များသာ ပြထားသည်"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportCsv(rows, `${fname}.csv`)} disabled={!rows.length}><FileDown /> CSV ထုတ်မည်</Button>
           <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()}><Printer /> ပုံနှိပ်မည်</Button>
         </div>
       </div>
 
