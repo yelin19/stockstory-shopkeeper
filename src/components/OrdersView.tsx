@@ -17,8 +17,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const qc = useQueryClient();
   const { data: orders } = useSuspenseQuery(ordersQuery);
   const [category, setCategory] = useState("");
+  const [product, setProduct] = useState("");
   const [orderNo, setOrderNo] = useState("");
-  const [sent, setSent] = useState<"unsent" | "sent" | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "accepted" | "shipped">("all");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
@@ -30,15 +30,14 @@ export function OrdersView({ mode }: { mode: Mode }) {
     () =>
       orders.filter((o) => {
         if (category && o.category !== category) return false;
+        if (product && `${o.product_code}::${o.product_name}` !== product) return false;
         if (orderNo && o.public_order_id !== orderNo.trim().replace(/^#/, "")) return false;
         const hasCompleteTracking = Boolean(o.tracking_number?.trim() && o.tracking_url?.trim());
         if (deliveryFilter === "accepted" && hasCompleteTracking) return false;
         if (deliveryFilter === "shipped" && !hasCompleteTracking) return false;
-        if (sent === "unsent" && o.sent) return false;
-        if (sent === "sent" && !o.sent) return false;
         return true;
       }),
-    [orders, category, orderNo, deliveryFilter, sent],
+    [orders, category, product, orderNo, deliveryFilter],
   );
 
   const rows: Row[] = filtered.map((o) =>
@@ -132,11 +131,11 @@ export function OrdersView({ mode }: { mode: Mode }) {
         <div className="mb-2 text-sm font-semibold">အော်ဒါရှာဖွေခြင်းနှင့် စစ်ထုတ်ခြင်း</div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs text-muted-foreground">Order ID (၆ လုံး)<Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဥပမာ 100001" title="Order ID" /></label>
-        <label className="text-xs text-muted-foreground">ပစ္စည်းအမျိုးအစား<select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
+        <label className="text-xs text-muted-foreground">ပစ္စည်းအမျိုးအစားမှာ ရွေးချယ်ရန်<select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">အမျိုးအစားအားလုံး</option>{uniq((o) => o.category).map((c) => <option key={c}>{c}</option>)}
         </select></label>
-        <label className="text-xs text-muted-foreground">စာရင်းပို့ထားမှု<select className={sel} value={sent} onChange={(e) => setSent(e.target.value as typeof sent)}>
-          <option value="unsent">မပို့ရသေးသည်များသာ</option><option value="sent">ပို့ပြီး (မှတ်တမ်း)</option><option value="all">ပို့ပြီး + မပို့ရသေး</option>
+        <label className="text-xs text-muted-foreground">ပစ္စည်းနာမည်တစ်ခုချင်းရွေး<select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
+          <option value="">ပစ္စည်းနာမည်အားလုံး</option>{uniq((o) => `${o.product_code}::${o.product_name}`).map((value) => { const [, name] = value.split("::"); return <option key={value} value={value}>{name ? `${value.split("::")[0]} - ${name}` : value}</option>; })}
         </select></label>
         <label className="text-xs text-muted-foreground">ပို့ဆောင်မှုအခြေအနေ<select className={sel} value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value as typeof deliveryFilter)}>
           <option value="all">အော်ဒါအားလုံး</option><option value="accepted">လက်ခံထားသောအော်ဒါ</option><option value="shipped">ပို့ပြီးအော်ဒါ</option>
