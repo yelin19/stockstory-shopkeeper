@@ -107,12 +107,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
           <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ဆောင်ရန်လိပ်စာများ"}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{mode === "orders" ? "မပို့ရသေးသော Order များသာ ပြထားသည်" : "Tracking ID နှင့် Link ပြည့်ပြီး ပို့ပြီးသော Order များသာ ပြထားသည်"}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {mode === "orders" && <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
-        </div>
+        </div>}
       </div>
 
-      <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
+      {mode === "orders" && <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
         <div className="basis-full text-sm font-semibold">အော်ဒါအများစုအတွက် Tracking Link ထည့်ရန်</div>
         <Button size="sm" variant="outline" onClick={toggleAllFiltered} disabled={!filtered.length}>
           {filtered.filter((o) => o.status !== "cancelled").every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အော်ဒါများရွေးမည်"}
@@ -123,7 +123,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
           {bulkTrackingBusy ? "သိမ်းနေသည်..." : "ရွေးထားသောအော်ဒါများသို့ Link ထည့်မည်"}
         </Button>
         <span className="basis-full text-xs text-muted-foreground">Tracking link တူသောအော်ဒါများကို ရွေးပြီး ထည့်ပါ။ Tracking ID ကို အော်ဒါတစ်ခုချင်းစီမှာ သီးသန့်ထည့်နိုင်ပါသည်။</span>
-      </div>
+      </div>}
 
       <div className="no-print rounded-2xl border bg-card p-3">
         <div className="mb-2 text-sm font-semibold">အော်ဒါရှာဖွေခြင်းနှင့် စစ်ထုတ်ခြင်း</div>
