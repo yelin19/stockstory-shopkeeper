@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileDown, FileSpreadsheet, Printer, Send, XCircle, CheckCircle2, Truck } from "lucide-react";
+import { FileDown, FileSpreadsheet, Printer, XCircle, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
 import { exportCsv, exportXlsx, money, type Row } from "@/lib/export";
@@ -57,22 +57,13 @@ export function OrdersView({ mode }: { mode: Mode }) {
   );
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
-  async function markSent() {
-    const ids = filtered.filter((o) => !o.sent && o.status !== "cancelled").map((o) => o.id);
-    if (!ids.length) return void toast.info("ဤစာရင်းတွင် မပို့ရသေးသောအော်ဒါ မရှိပါ");
-    if (!confirm(`${ids.length} ခုကို ပို့ပြီးဟု မှတ်မလား။ ပုံမှန်စာရင်းထုတ်ရာတွင် မပါတော့ပါ။`)) return;
-    const { error } = await supabase.from("orders").update({ sent: true, sent_at: new Date().toISOString() }).in("id", ids);
-    if (error) return void toast.error(error.message);
-    toast.success(`${ids.length} ပို့ပြီးဟု မှတ်သားပြီးပါပြီ`);
-    qc.invalidateQueries();
-  }
-  async function setOrder(o: Order, action: "sent" | "delivered" | "cancel") {
+  async function setOrder(o: Order, action: "accepted" | "unsent" | "cancel") {
     const { error } =
       action === "cancel"
         ? await supabase.rpc("cancel_order", { _order_id: o.id })
-        : action === "sent"
-          ? await supabase.from("orders").update({ sent: !o.sent, sent_at: o.sent ? null : new Date().toISOString() }).eq("id", o.id)
-          : await supabase.from("orders").update({ status: "delivered" }).eq("id", o.id);
+        : action === "accepted"
+          ? await supabase.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null }).eq("id", o.id)
+          : await supabase.from("orders").update({ sent: false, sent_at: null }).eq("id", o.id);
     if (error) return void toast.error(error.message);
     qc.invalidateQueries();
   }
@@ -121,7 +112,6 @@ export function OrdersView({ mode }: { mode: Mode }) {
           <Button variant="outline" size="sm" onClick={() => exportCsv(rows, `${fname}.csv`)} disabled={!rows.length}><FileDown /> CSV ထုတ်မည်</Button>
           <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}><Printer /> ပုံနှိပ်မည်</Button>
-          <Button size="sm" onClick={markSent}><Send /> ပို့ပြီးဟု မှတ်မည်</Button>
         </div>
       </div>
 
@@ -187,8 +177,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
                           <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
-                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="စာရင်းကို ပို့ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "sent")}><Send /> {o.sent ? "မပို့ရသေး" : "ပို့ပြီး"}</Button>
-                            {o.status !== "delivered" && <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ပစ္စည်းရောက်ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "delivered")}><CheckCircle2 /> ရောက်ပြီး</Button>}
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID နှင့် Link မပြည့်သေးလျှင် လက်ခံထားအဖြစ်ထားမည်" onClick={() => setOrder(o, "accepted")}>လက်ခံထား</Button>
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="မပို့ရသေးအဖြစ်ထားမည်" onClick={() => setOrder(o, "unsent")}>မပို့ရသေး</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive" title="အော်ဒါဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မည်" onClick={() => confirm("ဤအော်ဒါကို ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မလား။") && setOrder(o, "cancel")}><XCircle /> ဖျက်မည်</Button>
                           </div>
@@ -246,9 +236,9 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
       });
-      const result = await response.json() as { error?: string };
+      const result = await response.json() as { error?: string; accepted?: boolean };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
-      toast.success(`ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
+      toast.success(result.accepted ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို လက်ခံထားအဖြစ် သိမ်းပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);

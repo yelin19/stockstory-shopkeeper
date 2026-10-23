@@ -29,7 +29,14 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const trackingUrl = body.tracking_url?.trim() || null;
         const trackingNumber = body.tracking_number?.trim() || null;
         const imageUrl = body.image_url?.trim() || null;
-        const deliveryStatus = ["confirmed", "preparing", "shipped", "in_transit", "delivered"].includes(body.delivery_status || "") ? body.delivery_status! : "shipped";
+        const readyToShip = Boolean(trackingNumber && trackingUrl);
+        const deliveryStatus = readyToShip ? "shipped" : "confirmed";
+        const now = new Date().toISOString();
+        if (!readyToShip) {
+          const { error: acceptedError } = await supabaseAdmin.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          if (acceptedError) return Response.json({ error: acceptedError.message }, { status: 500 });
+          return Response.json({ ok: true, accepted: true, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် လက်ခံထားအဖြစ်သိမ်းပြီးပါပြီ" });
+        }
         const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
         if (!tokenValue) return Response.json({ error: "Facebook Page Access Token မတွေ့ပါ" }, { status: 500 });
 
@@ -46,7 +53,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ" }, { status: 502 });
         }
 
-        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: new Date().toISOString(), tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
+        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
         return Response.json({ ok: true, public_order_id: orderId });
       },
