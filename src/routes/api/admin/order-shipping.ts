@@ -9,7 +9,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const auth = request.headers.get("authorization");
         const token = auth?.replace(/^Bearer\s+/i, "");
         if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
-        const body = await request.json() as { order_id?: string; tracking_url?: string | null; tracking_number?: string | null; image_url?: string | null };
+        const body = await request.json() as { order_id?: string; delivery_status?: string; tracking_url?: string | null; tracking_number?: string | null; image_url?: string | null };
         if (!body.order_id) return Response.json({ error: "order_id is required" }, { status: 400 });
 
         const { createClient } = await import("@supabase/supabase-js");
@@ -29,11 +29,12 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const trackingUrl = body.tracking_url?.trim() || null;
         const trackingNumber = body.tracking_number?.trim() || null;
         const imageUrl = body.image_url?.trim() || null;
+        const deliveryStatus = ["confirmed", "preparing", "shipped", "in_transit", "delivered"].includes(body.delivery_status || "") ? body.delivery_status! : "shipped";
         const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
         if (!tokenValue) return Response.json({ error: "Facebook Page Access Token မတွေ့ပါ" }, { status: 500 });
 
         const orderId = order.public_order_id ?? String(order.order_no).padStart(6, "0");
-        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} ကို ပို့ဆောင်ပေးလိုက်ပါပြီ။${trackingNumber ? `\nစာတိုက် Tracking No: ${trackingNumber}` : ""}${trackingUrl ? `\nTracking link: ${trackingUrl}` : ""}`;
+        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ${deliveryStatus === "delivered" ? "ပစ္စည်းရောက်ရှိပါပြီ" : "ပို့ဆောင်ပေးနေပါပြီ"}${trackingNumber ? `\nစာတိုက် Tracking ID: ${trackingNumber}` : ""}${trackingUrl ? `\nTracking link: ${trackingUrl}` : ""}`;
         const sendText = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: message } }),
         });
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ" }, { status: 502 });
         }
 
-        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: "shipped", sent: true, sent_at: new Date().toISOString(), tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
+        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: new Date().toISOString(), tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
         return Response.json({ ok: true, public_order_id: orderId });
       },

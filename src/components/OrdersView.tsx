@@ -129,14 +129,15 @@ export function OrdersView({ mode }: { mode: Mode }) {
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ဆောင်ရန်လိပ်စာများ"}</h1>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportCsv(rows, `${fname}.csv`)} disabled={!rows.length}><FileDown /> CSV</Button>
-          <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel</Button>
+          <Button variant="outline" size="sm" onClick={() => exportCsv(rows, `${fname}.csv`)} disabled={!rows.length}><FileDown /> CSV ထုတ်မည်</Button>
+          <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}><Printer /> ပုံနှိပ်မည်</Button>
-          <Button size="sm" onClick={markSent}><Send /> စာရင်းပါအော်ဒါများ ပို့ပြီးဟုမှတ်မည်</Button>
+          <Button size="sm" onClick={markSent}><Send /> ပို့ပြီးဟု မှတ်မည်</Button>
         </div>
       </div>
 
       <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
+        <div className="basis-full text-sm font-semibold">အော်ဒါအများစုအတွက် Tracking Link ထည့်ရန်</div>
         <Button size="sm" variant="outline" onClick={toggleAllFiltered} disabled={!filtered.length}>
           {filtered.filter((o) => o.status !== "cancelled").every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အော်ဒါများရွေးမည်"}
         </Button>
@@ -148,29 +149,32 @@ export function OrdersView({ mode }: { mode: Mode }) {
         <span className="basis-full text-xs text-muted-foreground">Tracking link တူသောအော်ဒါများကို ရွေးပြီး ထည့်ပါ။ Tracking ID ကို အော်ဒါတစ်ခုချင်းစီမှာ သီးသန့်ထည့်နိုင်ပါသည်။</span>
       </div>
 
-      <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-9">
-        <Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="Order ID (၆ လုံး)" title="Order ID" />
-        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="စတင်ရက်" />
-        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="အဆုံးရက်" />
-        <select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
+      <div className="no-print rounded-2xl border bg-card p-3">
+        <div className="mb-2 text-sm font-semibold">အော်ဒါရှာဖွေခြင်းနှင့် စစ်ထုတ်ခြင်း</div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-9">
+        <label className="text-xs text-muted-foreground">Order ID (၆ လုံး)<Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဥပမာ 100001" title="Order ID" /></label>
+        <label className="text-xs text-muted-foreground">စတင်ရက်<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="စတင်ရက်" /></label>
+        <label className="text-xs text-muted-foreground">အဆုံးရက်<Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="အဆုံးရက်" /></label>
+        <label className="text-xs text-muted-foreground">ပစ္စည်းအမျိုးအစား<select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">အမျိုးအစားအားလုံး</option>{uniq((o) => o.category).map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
+        </select></label>
+        <label className="text-xs text-muted-foreground">ပစ္စည်း<select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
           <option value="">ပစ္စည်းအားလုံး</option>{uniq((o) => o.product_code).map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select className={sel} value={township} onChange={(e) => setTownship(e.target.value)}>
+        </select></label>
+        <label className="text-xs text-muted-foreground">မြို့နယ်<select className={sel} value={township} onChange={(e) => setTownship(e.target.value)}>
           <option value="">မြို့နယ်အားလုံး</option>{uniq((o) => o.township).map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <select className={sel} value={status} onChange={(e) => setStatus(e.target.value)}>
+        </select></label>
+        <label className="text-xs text-muted-foreground">အော်ဒါအခြေအနေ<select className={sel} value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="active">မပယ်ဖျက်ထားသော</option><option value="">အခြေအနေအားလုံး</option>
           <option value="confirmed">အတည်ပြုပြီး</option><option value="delivered">ပို့ဆောင်ပြီး</option><option value="cancelled">ပယ်ဖျက်ပြီး</option>
-        </select>
-        <select className={sel} value={sent} onChange={(e) => setSent(e.target.value as typeof sent)}>
+        </select></label>
+        <label className="text-xs text-muted-foreground">စာရင်းပို့ထားမှု<select className={sel} value={sent} onChange={(e) => setSent(e.target.value as typeof sent)}>
           <option value="unsent">မပို့ရသေးသည်များသာ</option><option value="sent">ပို့ပြီး (မှတ်တမ်း)</option><option value="all">ပို့ပြီး + မပို့ရသေး</option>
-        </select>
-        <select className={sel} value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value as typeof deliveryFilter)}>
+        </select></label>
+        <label className="text-xs text-muted-foreground">ပို့ဆောင်မှုအခြေအနေ<select className={sel} value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value as typeof deliveryFilter)}>
           <option value="all">အော်ဒါအားလုံး</option><option value="accepted">လက်ခံထားသောအော်ဒါ</option><option value="shipped">ပို့ပြီးအော်ဒါ</option>
-        </select>
+        </select></label>
+        </div>
       </div>
 
       <div className="text-sm text-muted-foreground no-print">
@@ -205,11 +209,11 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         </span>
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
-                          <div className="no-print mt-2 flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" title="ပို့ပြီး/မပို့ရသေး ပြောင်းမည်" onClick={() => setOrder(o, "sent")}><Send /></Button>
-                            {o.status !== "delivered" && <Button size="sm" variant="ghost" title="ပို့ဆောင်ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "delivered")}><CheckCircle2 /></Button>}
-                            <Button size="sm" variant="ghost" title="ပို့ဆောင်ရေးပြင်မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /></Button>
-                            <Button size="sm" variant="ghost" title="ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မည်" onClick={() => confirm("ဤအော်ဒါကို ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မလား။") && setOrder(o, "cancel")}><XCircle /></Button>
+                          <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="စာရင်းကို ပို့ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "sent")}><Send /> {o.sent ? "မပို့ရသေး" : "ပို့ပြီး"}</Button>
+                            {o.status !== "delivered" && <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ပစ္စည်းရောက်ပြီးဟု မှတ်မည်" onClick={() => setOrder(o, "delivered")}><CheckCircle2 /> ရောက်ပြီး</Button>}
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
+                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs text-destructive" title="အော်ဒါဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မည်" onClick={() => confirm("ဤအော်ဒါကို ပယ်ဖျက်ပြီး လက်ကျန်ပြန်ဖြည့်မလား။") && setOrder(o, "cancel")}><XCircle /> ဖျက်မည်</Button>
                           </div>
                         )}
                         {editingDeliveryId === o.id && (
@@ -263,7 +267,7 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       const response = await fetch("/api/admin/order-shipping", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ order_id: order.id, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
+        body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
@@ -279,17 +283,17 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
   return (
     <div className="mt-2 space-y-2 rounded-lg border bg-muted p-3 text-left text-xs" onClick={(e) => e.stopPropagation()}>
       <div className="font-semibold">ဝယ်ယူမှု ID: {order.public_order_id} — ပို့ဆောင်ရေးအချက်အလက်</div>
-      <select className={sel} value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
+      <label className="block text-xs font-medium">ပို့ဆောင်မှုအခြေအနေ<select className={`${sel} mt-1 w-full`} value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
         {Object.entries(deliveryLabels).filter(([key]) => key !== "cancelled").map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select>
-      <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking number" />
-      <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (https://...)" />
+      </select></label>
+      <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking ID (ဒီအော်ဒါအတွက် သီးသန့်)" />
+      <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (တူရင် အုပ်စုလိုက်ထည့်နိုင်)" />
       <label className="flex items-center gap-2 rounded border bg-card px-2 py-2">
         <span>ပို့ဆောင်မှုဓာတ်ပုံ</span>
         <input className="min-w-0 flex-1" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </label>
-      <p className="text-muted-foreground">သိမ်းမည်နှိပ်လျှင် စာတိုက် link နှင့် ဓာတ်ပုံကို Customer Messenger ဆီ ပြန်ပို့ပါမည်။</p>
-      <Button size="sm" disabled={busy} onClick={save}>သိမ်းမည်</Button>
+      <p className="text-muted-foreground">သိမ်းမည်နှိပ်လျှင် Tracking ID၊ Link နှင့် ဓာတ်ပုံကို Customer Messenger ဆီ ပြန်ပို့ပါမည်။</p>
+      <Button size="sm" className="w-full" disabled={busy} onClick={save}>{busy ? "Messenger သို့ ပို့နေသည်..." : "သိမ်းပြီး Customer ဆီ ပို့မည်"}</Button>
     </div>
   );
 }
