@@ -16,12 +16,7 @@ const sel = "h-9 rounded-md border bg-card px-2 text-sm";
 export function OrdersView({ mode }: { mode: Mode }) {
   const qc = useQueryClient();
   const { data: orders } = useSuspenseQuery(ordersQuery);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const [category, setCategory] = useState("");
-  const [product, setProduct] = useState("");
-  const [status, setStatus] = useState("active");
-  const [township, setTownship] = useState("");
   const [orderNo, setOrderNo] = useState("");
   const [sent, setSent] = useState<"unsent" | "sent" | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "accepted" | "shipped">("all");
@@ -34,21 +29,15 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const filtered = useMemo(
     () =>
       orders.filter((o) => {
-        const d = o.created_at.slice(0, 10);
-        if (from && d < from) return false;
-        if (to && d > to) return false;
         if (category && o.category !== category) return false;
-        if (product && o.product_code !== product) return false;
-        if (township && o.township !== township) return false;
         if (orderNo && o.public_order_id !== orderNo.trim().replace(/^#/, "")) return false;
         if (deliveryFilter === "accepted" && !["confirmed", "preparing"].includes(o.delivery_status)) return false;
         if (deliveryFilter === "shipped" && !["shipped", "in_transit", "delivered"].includes(o.delivery_status)) return false;
-        if (status === "active" ? o.status === "cancelled" : status && o.status !== status) return false;
         if (sent === "unsent" && o.sent) return false;
         if (sent === "sent" && !o.sent) return false;
         return true;
       }),
-    [orders, from, to, category, product, township, orderNo, deliveryFilter, sent],
+    [orders, category, orderNo, deliveryFilter, sent],
   );
 
   const rows: Row[] = filtered.map((o) =>
@@ -151,22 +140,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
       <div className="no-print rounded-2xl border bg-card p-3">
         <div className="mb-2 text-sm font-semibold">အော်ဒါရှာဖွေခြင်းနှင့် စစ်ထုတ်ခြင်း</div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-9">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs text-muted-foreground">Order ID (၆ လုံး)<Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဥပမာ 100001" title="Order ID" /></label>
-        <label className="text-xs text-muted-foreground">စတင်ရက်<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="စတင်ရက်" /></label>
-        <label className="text-xs text-muted-foreground">အဆုံးရက်<Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="အဆုံးရက်" /></label>
         <label className="text-xs text-muted-foreground">ပစ္စည်းအမျိုးအစား<select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">အမျိုးအစားအားလုံး</option>{uniq((o) => o.category).map((c) => <option key={c}>{c}</option>)}
-        </select></label>
-        <label className="text-xs text-muted-foreground">ပစ္စည်း<select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
-          <option value="">ပစ္စည်းအားလုံး</option>{uniq((o) => o.product_code).map((c) => <option key={c}>{c}</option>)}
-        </select></label>
-        <label className="text-xs text-muted-foreground">မြို့နယ်<select className={sel} value={township} onChange={(e) => setTownship(e.target.value)}>
-          <option value="">မြို့နယ်အားလုံး</option>{uniq((o) => o.township).map((c) => <option key={c}>{c}</option>)}
-        </select></label>
-        <label className="text-xs text-muted-foreground">အော်ဒါအခြေအနေ<select className={sel} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="active">မပယ်ဖျက်ထားသော</option><option value="">အခြေအနေအားလုံး</option>
-          <option value="confirmed">အတည်ပြုပြီး</option><option value="delivered">ပို့ဆောင်ပြီး</option><option value="cancelled">ပယ်ဖျက်ပြီး</option>
         </select></label>
         <label className="text-xs text-muted-foreground">စာရင်းပို့ထားမှု<select className={sel} value={sent} onChange={(e) => setSent(e.target.value as typeof sent)}>
           <option value="unsent">မပို့ရသေးသည်များသာ</option><option value="sent">ပို့ပြီး (မှတ်တမ်း)</option><option value="all">ပို့ပြီး + မပို့ရသေး</option>
