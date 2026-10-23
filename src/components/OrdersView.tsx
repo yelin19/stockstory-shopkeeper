@@ -26,6 +26,9 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [sent, setSent] = useState<"unsent" | "sent" | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "accepted" | "shipped">("all");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
+  const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
 
   const uniq = (f: (o: Order) => string) => [...new Set(orders.map(f))].sort();
   const filtered = useMemo(
@@ -85,6 +88,30 @@ export function OrdersView({ mode }: { mode: Mode }) {
     qc.invalidateQueries();
   }
 
+  function toggleOrder(id: string) {
+    setSelectedOrderIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
+  function toggleAllFiltered() {
+    const ids = filtered.filter((o) => o.status !== "cancelled").map((o) => o.id);
+    setSelectedOrderIds((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]);
+  }
+
+  async function applyBulkTrackingLink() {
+    const link = bulkTrackingUrl.trim();
+    if (!selectedOrderIds.length) return void toast.info("Tracking link ထည့်မည့်အော်ဒါကို အရင်ရွေးပါ");
+    if (!/^https?:\/\//i.test(link)) return void toast.error("https:// ဖြင့်စသော Tracking link ထည့်ပါ");
+    if (bulkTrackingBusy) return;
+    setBulkTrackingBusy(true);
+    const { error } = await supabase.from("orders").update({ tracking_url: link }).in("id", selectedOrderIds);
+    setBulkTrackingBusy(false);
+    if (error) return void toast.error(error.message);
+    toast.success(`${selectedOrderIds.length} ခုတွင် Tracking link ထည့်ပြီးပါပြီ`);
+    setSelectedOrderIds([]);
+    setBulkTrackingUrl("");
+    qc.invalidateQueries();
+  }
+
   // group by category → product for print
   const grouped = useMemo(() => {
     const m = new Map<string, Map<string, Order[]>>();
@@ -107,6 +134,18 @@ export function OrdersView({ mode }: { mode: Mode }) {
           <Button variant="outline" size="sm" onClick={() => window.print()}><Printer /> ပုံနှိပ်မည်</Button>
           <Button size="sm" onClick={markSent}><Send /> စာရင်းပါအော်ဒါများ ပို့ပြီးဟုမှတ်မည်</Button>
         </div>
+      </div>
+
+      <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
+        <Button size="sm" variant="outline" onClick={toggleAllFiltered} disabled={!filtered.length}>
+          {filtered.filter((o) => o.status !== "cancelled").every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အော်ဒါများရွေးမည်"}
+        </Button>
+        <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedOrderIds.length} ခု</span>
+        <Input className="min-w-[240px] flex-1" value={bulkTrackingUrl} onChange={(e) => setBulkTrackingUrl(e.target.value)} placeholder="တူညီသော Tracking link (https://...)" />
+        <Button size="sm" onClick={applyBulkTrackingLink} disabled={!selectedOrderIds.length || bulkTrackingBusy}>
+          {bulkTrackingBusy ? "သိမ်းနေသည်..." : "ရွေးထားသောအော်ဒါများသို့ Link ထည့်မည်"}
+        </Button>
+        <span className="basis-full text-xs text-muted-foreground">Tracking link တူသောအော်ဒါများကို ရွေးပြီး ထည့်ပါ။ Tracking ID ကို အော်ဒါတစ်ခုချင်းစီမှာ သီးသန့်ထည့်နိုင်ပါသည်။</span>
       </div>
 
       <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-9">
@@ -155,6 +194,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                 <tbody>
                   {list.map((o) => (
                     <tr key={o.id} className="border-t align-top first:border-t-0">
+                      <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={o.status === "cancelled"} /></td>
                       <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><b>{o.township}</b><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
