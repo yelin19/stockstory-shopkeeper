@@ -55,7 +55,7 @@ function Reports() {
     { l: "ယခုလ", v: money(sum(month)), s: `${month.length} အော်ဒါ` },
     { l: "စုစုပေါင်းရောင်းအား", v: money(sum(sales)), s: `${sales.length} အော်ဒါ` },
     { l: "မပို့ရသေးသောအော်ဒါ", v: String(sales.filter((o) => !o.sent).length), s: "ပို့ဆောင်ရန်စောင့်နေသည်" },
-    { l: "ပြန်လာသည့်အရှုံး", v: money(sum(returned)), s: `${returned.length} အော်ဒါ` },
+    { l: "ပို့ဆောင်မှုမအောင်မြင်သည့်အရှုံး", v: money(sum(returned)), s: `${returned.length} အော်ဒါ` },
   ];
 
   return (
@@ -72,7 +72,7 @@ function Reports() {
       </div>
       {returned.length > 0 && <section className="rounded-2xl border border-destructive/40 bg-card p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-bold">ပြန်လာသည့်စာရင်း (အရှုံး)</h2>
+          <h2 className="text-lg font-bold">ပို့ဆောင်မှုမအောင်မြင်သည့်စာရင်း (အရှုံး)</h2>
           <b className="text-destructive">အရှုံးစုစုပေါင်း: {money(sum(returned))}</b>
         </div>
         <div className="space-y-2 text-sm">

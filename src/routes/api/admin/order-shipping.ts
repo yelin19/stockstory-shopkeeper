@@ -39,7 +39,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         if (body.delivery_status === "returned") {
           const { error: returnedError } = await authClient.from("orders").update({ delivery_status: "returned", updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (returnedError) return Response.json({ error: returnedError.message }, { status: 500 });
-          return Response.json({ ok: true, returned: true, message: "ပြန်လာသည်အဖြစ် သိမ်းပြီးပါပြီ" });
+          return Response.json({ ok: true, returned: true, message: "ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ" });
         }
         const readyToShip = Boolean(trackingNumber && trackingUrl);
         const deliveryStatus = readyToShip ? "shipped" : "confirmed";

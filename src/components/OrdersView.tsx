@@ -102,8 +102,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
         body: JSON.stringify({ order_id: o.id, delivery_status: "returned" }),
       });
       const result = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(result.error || "ပြန်လာသည်အဖြစ် သိမ်းမရပါ");
-      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ပြန်လာသည်အဖြစ် သိမ်းပြီးပါပြီ`);
+      if (!response.ok) throw new Error(result.error || "ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းမရပါ");
+      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ`);
       qc.invalidateQueries();
     } catch (err) {
       toast.error((err as Error).message);
@@ -187,7 +187,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="py-2 text-right">{o.quantity} × {money(o.unit_price)}<div className="font-bold">{money(o.total)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
-                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပြန်လာသည်" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}
+                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပို့ဆောင်မှုမအောင်မြင်ပါ" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}
                         </span>
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
@@ -198,8 +198,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         )}
                         {mode === "addresses" && o.delivery_status !== "returned" && (
                           <div className="no-print mt-2 flex justify-end">
-                            <Button size="sm" variant="destructive" className="h-8 px-2 text-xs" title="ပစ္စည်းပြန်လာသည်အဖြစ် သိမ်းမည်" onClick={() => markReturned(o)} disabled={returningOrderId === o.id}>
-                              <Undo2 /> {returningOrderId === o.id ? "သိမ်းနေသည်..." : "ပြန်လာသည်"}
+                            <Button size="sm" variant="destructive" className="h-8 px-2 text-xs" title="ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းမည်" onClick={() => markReturned(o)} disabled={returningOrderId === o.id}>
+                              <Undo2 /> {returningOrderId === o.id ? "သိမ်းနေသည်..." : "ပို့ဆောင်မှုမအောင်မြင်ပါ"}
                             </Button>
                           </div>
                         )}
@@ -226,7 +226,7 @@ const deliveryLabels: Record<string, string> = {
   shipped: "ပို့ဆောင်ပြီး",
   in_transit: "ပို့ဆောင်နေသည်",
   delivered: "ရောက်ရှိပြီး",
-  returned: "ပြန်လာသည်",
+  returned: "ပို့ဆောင်မှုမအောင်မြင်ပါ",
   cancelled: "ပယ်ဖျက်ပြီး",
 };
 
@@ -259,7 +259,7 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       });
       const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
-      toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပြန်လာသည်အဖြစ် သိမ်းပြီးပါပြီ` : result.accepted ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို လက်ခံထားအဖြစ် သိမ်းပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
+      toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ` : result.accepted ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို လက်ခံထားအဖြစ် သိမ်းပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
