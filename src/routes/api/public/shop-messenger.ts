@@ -33,6 +33,13 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+const confirmation = (psid: string, t: string) => send(psid, {
+  text: t,
+  quick_replies: [
+    { content_type: "text", title: "YES", payload: "YES" },
+    { content_type: "text", title: "NO", payload: "NO" },
+  ],
+});
 const fmt = (n: number) => Number(n).toLocaleString("en-US") + " Ks";
 
 function parseCustomerDetails(msg: string) {
@@ -70,11 +77,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
       const nd: Draft = { ...d, ...details, township: "လိပ်စာထဲတွင်ပါဝင်သည်", note: "" };
       const total = Number(nd.price) * Number(nd.qty);
-      return next(
-        "confirm",
-        nd,
-        `🧾 အော်ဒါစာရင်း\n${nd.code} · ${nd.product}\nအရေအတွက်: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် “yes”၊ ပြင်လိုရင် “no” လို့ ပြန်ပို့ပါ။`,
-      );
+      await save({ state: "confirm", data: nd });
+      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.code} · ${nd.product}\nအရေအတွက်: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
@@ -123,7 +127,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
       POST: async ({ request }) => {
         const body = await request.text();
         if (!(await verifySignature(body, request.headers.get("x-hub-signature-256")))) return new Response("Invalid signature", { status: 401 });
-        const payload = JSON.parse(body) as { object?: string; entry?: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean }; postback?: { payload?: string } }[] }[] };
+        const payload = JSON.parse(body) as { object?: string; entry?: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string } }; postback?: { payload?: string } }[] }[] };
         if (payload.object !== "page") return new Response("ok");
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
@@ -131,7 +135,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id, messenger_username").eq("fb_page_id", entry.id).maybeSingle();
           if (!shop) continue;
           for (const ev of entry.messaging ?? []) {
-            const t = ev.message?.is_echo ? undefined : (ev.message?.text ?? ev.postback?.payload);
+            const t = ev.message?.is_echo ? undefined : (ev.message?.text ?? ev.message?.quick_reply?.payload ?? ev.postback?.payload);
             if (!t) continue;
             try {
               await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
