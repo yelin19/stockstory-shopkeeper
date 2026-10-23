@@ -47,7 +47,7 @@ function ProductsPage() {
             <div className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-mono text-xs text-muted-foreground">#{p.code} · {p.category}</div>
+                  <div className="font-mono text-xs text-muted-foreground">#{p.code}</div>
                   <div className="font-bold">{p.name}</div>
                 </div>
                 <div className="text-right">
