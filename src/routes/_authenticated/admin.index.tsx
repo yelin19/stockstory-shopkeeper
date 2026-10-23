@@ -41,24 +41,27 @@ function Reports() {
   const { data: settings } = useSuspenseQuery(settingsQuery);
   const threshold = settings?.low_stock_threshold ?? 5;
   const valid = orders.filter((o) => o.status !== "cancelled");
+  const returned = valid.filter((o) => o.delivery_status === "returned");
+  const sales = valid.filter((o) => o.delivery_status !== "returned");
   const now = new Date();
   const sum = (l: typeof valid) => l.reduce((s, o) => s + Number(o.total), 0);
-  const today = valid.filter((o) => isSameDay(new Date(o.created_at), now));
-  const month = valid.filter((o) => isSameMonth(new Date(o.created_at), now));
-  const byProduct = group(valid, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total));
+  const today = sales.filter((o) => isSameDay(new Date(o.created_at), now));
+  const month = sales.filter((o) => isSameMonth(new Date(o.created_at), now));
+  const byProduct = group(sales, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total));
   const low = products.filter((p) => p.active && p.stock <= threshold);
 
   const stats = [
     { l: "ယနေ့ရောင်းအား", v: money(sum(today)), s: `${today.length} အော်ဒါ` },
     { l: "ယခုလ", v: money(sum(month)), s: `${month.length} အော်ဒါ` },
-    { l: "စုစုပေါင်းရောင်းအား", v: money(sum(valid)), s: `${valid.length} အော်ဒါ` },
-    { l: "မပို့ရသေးသောအော်ဒါ", v: String(valid.filter((o) => !o.sent).length), s: "ပို့ဆောင်ရန်စောင့်နေသည်" },
+    { l: "စုစုပေါင်းရောင်းအား", v: money(sum(sales)), s: `${sales.length} အော်ဒါ` },
+    { l: "မပို့ရသေးသောအော်ဒါ", v: String(sales.filter((o) => !o.sent).length), s: "ပို့ဆောင်ရန်စောင့်နေသည်" },
+    { l: "ပြန်လာသည့်အရှုံး", v: money(sum(returned)), s: `${returned.length} အော်ဒါ` },
   ];
 
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold">ရောင်းအားအစီရင်ခံစာ</h1>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((s) => (
           <div key={s.l} className="rounded-2xl border bg-card p-5">
             <div className="text-sm text-muted-foreground">{s.l}</div>
@@ -67,6 +70,20 @@ function Reports() {
           </div>
         ))}
       </div>
+      {returned.length > 0 && <section className="rounded-2xl border border-destructive/40 bg-card p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold">ပြန်လာသည့်စာရင်း (အရှုံး)</h2>
+          <b className="text-destructive">အရှုံးစုစုပေါင်း: {money(sum(returned))}</b>
+        </div>
+        <div className="space-y-2 text-sm">
+          {returned.map((o) => (
+            <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+              <span>Order ID: {o.public_order_id} · {new Date(o.created_at).toLocaleDateString("en-GB")} · {o.product_name} · {o.quantity}ထုပ်</span>
+              <b className="text-destructive">-{money(o.total)}</b>
+            </div>
+          ))}
+        </div>
+      </section>}
       <Breakdown title="ပစ္စည်းအလိုက် ရောင်းအား" rows={byProduct} />
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border bg-card p-5">
