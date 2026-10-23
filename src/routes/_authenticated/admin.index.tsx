@@ -46,7 +46,6 @@ function Reports() {
   const today = valid.filter((o) => isSameDay(new Date(o.created_at), now));
   const month = valid.filter((o) => isSameMonth(new Date(o.created_at), now));
   const byProduct = group(valid, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total));
-  const byCategory = group(valid, (o) => o.category, (o) => Number(o.total));
   const low = products.filter((p) => p.active && p.stock <= threshold);
 
   const stats = [
@@ -68,10 +67,7 @@ function Reports() {
           </div>
         ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Breakdown title="အမျိုးအစားအလိုက် ရောင်းအား" rows={byCategory} />
-        <Breakdown title="ပစ္စည်းအလိုက် ရောင်းအား" rows={byProduct} />
-      </div>
+      <Breakdown title="ပစ္စည်းအလိုက် ရောင်းအား" rows={byProduct} />
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border bg-card p-5">
           <h2 className="mb-3 text-lg font-bold">လက်ကျန်ပစ္စည်း</h2>
