@@ -66,8 +66,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     .order("created_at", { ascending: false })
     .limit(20);
   if (returnedOrders?.length) {
-    const history = returnedOrders.map((o: { public_order_id: string; product_name: string; quantity: number }) =>
-      `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်`,
+    const history = returnedOrders.map((o: { public_order_id: string; product_name: string; quantity: number; created_at: string }) =>
+      `Order ID: ${o.public_order_id}\nရက်စွဲ: ${new Date(o.created_at).toLocaleDateString("en-GB")}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်`,
     ).join("\n\n");
     return text(psid, `⚠️ ယခင်မှာယူထားသောပစ္စည်း ပြန်လာခဲ့ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nအကြောင်းအရာကြောင့် ဤ Messenger အကောင့်သို့ နောက်ထပ်ပစ္စည်း မရောင်းတော့ပါ။`);
   }
