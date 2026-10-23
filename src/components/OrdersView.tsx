@@ -18,7 +18,6 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const { data: orders } = useSuspenseQuery(ordersQuery);
   const [product, setProduct] = useState("");
   const [orderNo, setOrderNo] = useState("");
-  const [deliveryFilter, setDeliveryFilter] = useState<"all" | "accepted" | "shipped">("all");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
@@ -35,12 +34,9 @@ export function OrdersView({ mode }: { mode: Mode }) {
       scopedOrders.filter((o) => {
         if (product && `${o.product_code}::${o.product_name}` !== product) return false;
         if (orderNo && o.public_order_id !== orderNo.trim().replace(/^#/, "")) return false;
-        const hasCompleteTracking = isShipped(o);
-        if (deliveryFilter === "accepted" && hasCompleteTracking) return false;
-        if (deliveryFilter === "shipped" && !hasCompleteTracking) return false;
         return true;
       }),
-    [scopedOrders, product, orderNo, deliveryFilter],
+    [scopedOrders, product, orderNo],
   );
 
   const rows: Row[] = filtered.map((o) =>
@@ -139,9 +135,6 @@ export function OrdersView({ mode }: { mode: Mode }) {
         <label className="text-xs text-muted-foreground">Order ID (၆ လုံး)<Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဥပမာ 100001" title="Order ID" /></label>
         <label className="text-xs text-muted-foreground">ပစ္စည်းနာမည်တစ်ခုချင်းရွေး<select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
           <option value="">ပစ္စည်းနာမည်အားလုံး</option>{uniq((o) => `${o.product_code}::${o.product_name}`).map((value) => { const [, name] = value.split("::"); return <option key={value} value={value}>{name ? `${value.split("::")[0]} - ${name}` : value}</option>; })}
-        </select></label>
-        <label className="text-xs text-muted-foreground">ပို့ဆောင်မှုအခြေအနေ<select className={sel} value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value as typeof deliveryFilter)}>
-          <option value="all">အော်ဒါအားလုံး</option><option value="accepted">လက်ခံထားသောအော်ဒါ</option><option value="shipped">ပို့ပြီးအော်ဒါ</option>
         </select></label>
         </div>
       </div>
