@@ -12,6 +12,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
         const parsed = z.object({
           order_id: z.string().uuid(),
+          delivery_status: z.enum(["confirmed", "preparing", "shipped", "in_transit", "delivered", "returned", "cancelled"]).optional(),
           tracking_number: z.string().trim().max(200).nullish(),
           tracking_url: z.string().trim().max(2000).nullish(),
           image_url: z.string().trim().url().max(2000).nullish(),
@@ -35,6 +36,11 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const trackingUrl = body.tracking_url?.trim() || null;
         const trackingNumber = body.tracking_number?.trim() || null;
         const imageUrl = body.image_url?.trim() || null;
+        if (body.delivery_status === "returned") {
+          const { error: returnedError } = await authClient.from("orders").update({ delivery_status: "returned", updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
+          if (returnedError) return Response.json({ error: returnedError.message }, { status: 500 });
+          return Response.json({ ok: true, returned: true, message: "ပြန်လာသည်အဖြစ် သိမ်းပြီးပါပြီ" });
+        }
         const readyToShip = Boolean(trackingNumber && trackingUrl);
         const deliveryStatus = readyToShip ? "shipped" : "confirmed";
         const now = new Date().toISOString();

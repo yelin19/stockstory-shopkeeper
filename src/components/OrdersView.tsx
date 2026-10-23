@@ -163,7 +163,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="py-2 text-right">{o.quantity} × {money(o.unit_price)}<div className="font-bold">{money(o.total)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
-                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}
+                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပြန်လာသည်" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}
                         </span>
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
@@ -195,6 +195,7 @@ const deliveryLabels: Record<string, string> = {
   shipped: "ပို့ဆောင်ပြီး",
   in_transit: "ပို့ဆောင်နေသည်",
   delivered: "ရောက်ရှိပြီး",
+  returned: "ပြန်လာသည်",
   cancelled: "ပယ်ဖျက်ပြီး",
 };
 
@@ -225,9 +226,9 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
       });
-      const result = await response.json() as { error?: string; accepted?: boolean };
+      const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
-      toast.success(result.accepted ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို လက်ခံထားအဖြစ် သိမ်းပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
+      toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပြန်လာသည်အဖြစ် သိမ်းပြီးပါပြီ` : result.accepted ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို လက်ခံထားအဖြစ် သိမ်းပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
