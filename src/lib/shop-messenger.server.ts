@@ -74,8 +74,9 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       });
       await save({ state: "idle", data: {} });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 Sorry, not enough stock left. Please try a smaller quantity." : "Sorry, something went wrong. Please try again.");
-      const o = order as unknown as { order_no: number; total: number };
-      return text(psid, `🎉 အော်ဒါအတည်ပြုပြီးပါပြီ။\n🆔 ဝယ်ယူမှု ID: #${o.order_no}\n💵 စုစုပေါင်း: ${fmt(o.total)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်။ ကျေးဇူးတင်ပါတယ်။`);
+      const o = order as unknown as { public_order_id?: string; order_no: number; total: number };
+      const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
+      return text(psid, `🎉 အော်ဒါအတည်ပြုပြီးပါပြီ။\n🆔 ဝယ်ယူမှု ID: ${orderId}\n💵 စုစုပေါင်း: ${fmt(o.total)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်။ ကျေးဇူးတင်ပါတယ်။`);
     }
   }
 

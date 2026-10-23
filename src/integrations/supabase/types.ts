@@ -55,6 +55,7 @@ export type Database = {
           order_no: number
           owner_id: string
           phone: string
+          public_order_id: string
           product_code: string
           product_id: string | null
           product_name: string
@@ -83,6 +84,7 @@ export type Database = {
           order_no?: number
           owner_id: string
           phone: string
+          public_order_id?: string
           product_code: string
           product_id?: string | null
           product_name: string
@@ -111,6 +113,7 @@ export type Database = {
           order_no?: number
           owner_id?: string
           phone?: string
+          public_order_id?: string
           product_code?: string
           product_id?: string | null
           product_name?: string

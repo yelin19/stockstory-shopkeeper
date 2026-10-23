@@ -24,6 +24,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [township, setTownship] = useState("");
   const [orderNo, setOrderNo] = useState("");
   const [sent, setSent] = useState<"unsent" | "sent" | "all">("unsent");
+  const [deliveryFilter, setDeliveryFilter] = useState<"all" | "accepted" | "shipped">("all");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
 
   const uniq = (f: (o: Order) => string) => [...new Set(orders.map(f))].sort();
@@ -36,26 +37,28 @@ export function OrdersView({ mode }: { mode: Mode }) {
         if (category && o.category !== category) return false;
         if (product && o.product_code !== product) return false;
         if (township && o.township !== township) return false;
-        if (orderNo && String(o.order_no) !== orderNo.trim().replace(/^#/, "")) return false;
+        if (orderNo && o.public_order_id !== orderNo.trim().replace(/^#/, "")) return false;
+        if (deliveryFilter === "accepted" && !["confirmed", "preparing"].includes(o.delivery_status)) return false;
+        if (deliveryFilter === "shipped" && !["shipped", "in_transit", "delivered"].includes(o.delivery_status)) return false;
         if (status === "active" ? o.status === "cancelled" : status && o.status !== status) return false;
         if (sent === "unsent" && o.sent) return false;
         if (sent === "sent" && !o.sent) return false;
         return true;
       }),
-    [orders, from, to, category, product, status, township, orderNo, sent],
+    [orders, from, to, category, product, township, orderNo, deliveryFilter, sent],
   );
 
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
       ? {
-          "ဝယ်ယူမှု ID": `#${o.order_no}`, Date: format(new Date(o.created_at), "yyyy-MM-dd HH:mm"), Category: o.category, Code: o.product_code,
+          "ဝယ်ယူမှု ID": o.public_order_id, Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Category: o.category, Code: o.product_code,
           Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address, Note: o.note ?? "",
           Status: o.status, Sent: o.sent ? "yes" : "no",
           "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         }
       : {
-          "ဝယ်ယူမှု ID": `#${o.order_no}`, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
+          "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
           "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         },
@@ -106,8 +109,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
         </div>
       </div>
 
-      <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-8">
-        <Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဝယ်ယူမှု ID (#1001)" title="ဝယ်ယူမှု ID" />
+      <div className="no-print grid grid-cols-2 gap-2 rounded-2xl border bg-card p-3 md:grid-cols-4 xl:grid-cols-9">
+        <Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="Order ID (၆ လုံး)" title="Order ID" />
         <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} title="စတင်ရက်" />
         <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} title="အဆုံးရက်" />
         <select className={sel} value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -125,6 +128,9 @@ export function OrdersView({ mode }: { mode: Mode }) {
         </select>
         <select className={sel} value={sent} onChange={(e) => setSent(e.target.value as typeof sent)}>
           <option value="unsent">မပို့ရသေးသည်များသာ</option><option value="sent">ပို့ပြီး (မှတ်တမ်း)</option><option value="all">ပို့ပြီး + မပို့ရသေး</option>
+        </select>
+        <select className={sel} value={deliveryFilter} onChange={(e) => setDeliveryFilter(e.target.value as typeof deliveryFilter)}>
+          <option value="all">အော်ဒါအားလုံး</option><option value="accepted">လက်ခံထားသောအော်ဒါ</option><option value="shipped">ပို့ပြီးအော်ဒါ</option>
         </select>
       </div>
 
@@ -149,14 +155,15 @@ export function OrdersView({ mode }: { mode: Mode }) {
                 <tbody>
                   {list.map((o) => (
                     <tr key={o.id} className="border-t align-top first:border-t-0">
-                      <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: #{o.order_no}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "MMM d HH:mm")}</div></td>
+                      <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><b>{o.township}</b><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
                       <td className="py-2 text-right">{o.quantity} × {money(o.unit_price)}<div className="font-bold">{money(o.total)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
-                          {o.status === "cancelled" ? "cancelled" : o.sent ? "sent" : "unsent"}{o.status === "delivered" ? " · delivered" : ""}
+                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "shipped" ? "ပို့ပြီး" : o.delivery_status === "delivered" ? "ရောက်ပြီး" : "လက်ခံထား"}
                         </span>
+                        {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
                           <div className="no-print mt-2 flex justify-end gap-1">
                             <Button size="sm" variant="ghost" title="ပို့ပြီး/မပို့ရသေး ပြောင်းမည်" onClick={() => setOrder(o, "sent")}><Send /></Button>
@@ -220,7 +227,7 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
-      toast.success(`ဝယ်ယူမှု ID #${order.order_no} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
+      toast.success(`ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -231,7 +238,7 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
 
   return (
     <div className="mt-2 space-y-2 rounded-lg border bg-muted p-3 text-left text-xs" onClick={(e) => e.stopPropagation()}>
-      <div className="font-semibold">ဝယ်ယူမှု ID: #{order.order_no} — ပို့ဆောင်ရေးအချက်အလက်</div>
+      <div className="font-semibold">ဝယ်ယူမှု ID: {order.public_order_id} — ပို့ဆောင်ရေးအချက်အလက်</div>
       <select className={sel} value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
         {Object.entries(deliveryLabels).filter(([key]) => key !== "cancelled").map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select>
