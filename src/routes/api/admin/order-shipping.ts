@@ -45,7 +45,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ" }, { status: 502 });
         }
 
-        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: "shipped", tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
+        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: "shipped", sent: true, sent_at: new Date().toISOString(), tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
         return Response.json({ ok: true, public_order_id: orderId });
       },

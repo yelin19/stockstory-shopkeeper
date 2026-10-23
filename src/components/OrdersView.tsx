@@ -23,7 +23,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [status, setStatus] = useState("active");
   const [township, setTownship] = useState("");
   const [orderNo, setOrderNo] = useState("");
-  const [sent, setSent] = useState<"unsent" | "sent" | "all">("unsent");
+  const [sent, setSent] = useState<"unsent" | "sent" | "all">("all");
   const [deliveryFilter, setDeliveryFilter] = useState<"all" | "accepted" | "shipped">("all");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
 
