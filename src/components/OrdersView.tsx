@@ -25,19 +25,24 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
   const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
 
-  const uniq = (f: (o: Order) => string) => [...new Set(orders.map(f))].sort();
+  const isShipped = (o: Order) => Boolean(o.tracking_number?.trim() && o.tracking_url?.trim());
+  const scopedOrders = useMemo(
+    () => orders.filter((o) => mode === "orders" ? !isShipped(o) : isShipped(o)),
+    [orders, mode],
+  );
+  const uniq = (f: (o: Order) => string) => [...new Set(scopedOrders.map(f))].sort();
   const filtered = useMemo(
     () =>
-      orders.filter((o) => {
+      scopedOrders.filter((o) => {
         if (category && o.category !== category) return false;
         if (product && `${o.product_code}::${o.product_name}` !== product) return false;
         if (orderNo && o.public_order_id !== orderNo.trim().replace(/^#/, "")) return false;
-        const hasCompleteTracking = Boolean(o.tracking_number?.trim() && o.tracking_url?.trim());
+        const hasCompleteTracking = isShipped(o);
         if (deliveryFilter === "accepted" && hasCompleteTracking) return false;
         if (deliveryFilter === "shipped" && !hasCompleteTracking) return false;
         return true;
       }),
-    [orders, category, product, orderNo, deliveryFilter],
+    [scopedOrders, category, product, orderNo, deliveryFilter],
   );
 
   const rows: Row[] = filtered.map((o) =>
@@ -106,7 +111,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
   return (
     <div className="space-y-5">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ဆောင်ရန်လိပ်စာများ"}</h1>
+        <div>
+          <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ဆောင်ရန်လိပ်စာများ"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{mode === "orders" ? "မပို့ရသေးသော Order များသာ ပြထားသည်" : "Tracking ID နှင့် Link ပြည့်ပြီး ပို့ပြီးသော Order များသာ ပြထားသည်"}</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => exportCsv(rows, `${fname}.csv`)} disabled={!rows.length}><FileDown /> CSV ထုတ်မည်</Button>
           <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
