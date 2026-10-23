@@ -57,7 +57,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
   async function copyAddress(o: Order) {
-    const text = `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအမည်: ${o.customer_name}\nဖုန်း: ${o.phone}\nလိပ်စာ: ${o.address}`;
+    const text = `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်\nအမည်: ${o.customer_name}\nဖုန်း: ${o.phone}\nလိပ်စာ: ${o.address}`;
     try {
       await navigator.clipboard.writeText(text);
       toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ၏ လိပ်စာကို Copy လုပ်ပြီးပါပြီ`);
