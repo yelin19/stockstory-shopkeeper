@@ -27,7 +27,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const { data: userData, error: userError } = await authClient.auth.getUser(token);
         if (userError || !userData.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, customer_name, delivery_status, status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
+        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, product_name, delivery_status, status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
         if (orderError) return Response.json({ error: orderError.message }, { status: 500 });
         if (!order) return Response.json({ error: "Order not found" }, { status: 404 });
         if (order.status === "cancelled") return Response.json({ error: "Order is cancelled" }, { status: 409 });
@@ -49,7 +49,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         if (!tokenValue) return Response.json({ error: "Facebook Page Access Token မတွေ့ပါ" }, { status: 500 });
 
         const orderId = order.public_order_id ?? String(order.order_no).padStart(6, "0");
-        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ပို့ဆောင်ပေးနေပါပြီ\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
+        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ပို့ဆောင်ပေးနေပါပြီ\nပစ္စည်းအမည်: ${order.product_name}\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
         const sendText = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: message } }),
         });
