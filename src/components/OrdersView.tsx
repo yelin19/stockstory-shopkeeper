@@ -104,8 +104,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
     <div className="space-y-5">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ဆောင်ရန်လိပ်စာများ"}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{mode === "orders" ? "မပို့ရသေးသော Order များသာ ပြထားသည်" : "Tracking ID နှင့် Link ပြည့်ပြီး ပို့ပြီးသော Order များသာ ပြထားသည်"}</p>
+          <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ပြီးသော Order များ"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{mode === "orders" ? "မပို့ရသေးသော Order များသာ ပြထားသည်" : "ပို့ပြီးသော Order များကိုသာ ပြန်ရှာနိုင်သည်"}</p>
         </div>
         {mode === "orders" && <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>

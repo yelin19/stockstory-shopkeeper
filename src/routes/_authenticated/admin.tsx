@@ -21,7 +21,7 @@ const nav = [
   { to: "/admin", label: "ရောင်းအားအစီရင်ခံစာ", icon: BarChart3, exact: true },
   { to: "/admin/products", label: "ပစ္စည်းများ", icon: Package },
   { to: "/admin/orders", label: "အော်ဒါများ", icon: ShoppingBag },
-  { to: "/admin/addresses", label: "ပို့ဆောင်ရန်လိပ်စာများ", icon: MapPin },
+  { to: "/admin/addresses", label: "ပို့ပြီးသော Order များ", icon: MapPin },
   { to: "/admin/stock", label: "လက်ကျန်မှတ်တမ်း", icon: History },
   { to: "/admin/settings", label: "ဆက်တင်များနှင့် PIN", icon: Settings },
 ] as const;
