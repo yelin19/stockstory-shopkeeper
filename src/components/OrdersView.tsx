@@ -42,16 +42,14 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
       ? {
-          "ဝယ်ယူမှု ID": o.public_order_id, Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Category: o.category, Code: o.product_code,
+          "ဝယ်ယူမှု ID": o.public_order_id, Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Code: o.product_code,
           Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Address: o.address, Note: o.note ?? "",
-          Status: o.status, Sent: o.sent ? "yes" : "no",
-          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
+          Status: o.status,
         }
       : {
           "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
-          "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         },
   );
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
