@@ -76,9 +76,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const details = parseCustomerDetails(msg);
       if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
       const nd: Draft = { ...d, ...details, township: "လိပ်စာထဲတွင်ပါဝင်သည်", note: "" };
-      const total = Number(nd.price) * Number(nd.qty);
       await save({ state: "confirm", data: nd });
-      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.code} · ${nd.product}\nအရေအတွက်: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
+      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${nd.qty}ထုပ်\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
