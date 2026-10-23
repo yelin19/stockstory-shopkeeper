@@ -44,12 +44,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
       ? {
           "ဝယ်ယူမှု ID": o.public_order_id, Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Category: o.category, Code: o.product_code,
           Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
-          Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address, Note: o.note ?? "",
+          Customer: o.customer_name, Phone: o.phone, Address: o.address, Note: o.note ?? "",
           Status: o.status, Sent: o.sent ? "yes" : "no",
           "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         }
       : {
-          "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Township: o.township, Address: o.address,
+          "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
           "Delivery status": o.delivery_status, "Tracking number": o.tracking_number ?? "", "Tracking link": o.tracking_url ?? "",
         },
@@ -57,7 +57,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
   async function copyAddress(o: Order) {
-    const text = `ဝယ်ယူမှု ID: ${o.public_order_id}\nအမည်: ${o.customer_name}\nဖုန်း: ${o.phone}\nမြို့နယ်: ${o.township}\nလိပ်စာ: ${o.address}`;
+    const text = `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအမည်: ${o.customer_name}\nဖုန်း: ${o.phone}\nလိပ်စာ: ${o.address}`;
     try {
       await navigator.clipboard.writeText(text);
       toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ၏ လိပ်စာကို Copy လုပ်ပြီးပါပြီ`);
@@ -163,7 +163,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={o.status === "cancelled"} /></td>
                       <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
-                      <td className="py-2"><b>{o.township}</b><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
+                      <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
                       <td className="py-2 text-right">{o.quantity} × {money(o.unit_price)}<div className="font-bold">{money(o.total)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>

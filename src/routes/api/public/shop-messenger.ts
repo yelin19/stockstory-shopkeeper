@@ -64,7 +64,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
 
-  type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; note?: string };
+  type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string };
   const d = s.data as Draft;
   const next = async (state: string, data: Record<string, unknown>, prompt: string) => {
     await save({ state, data });
@@ -75,7 +75,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     case "ask_customer_details": {
       const details = parseCustomerDetails(msg);
       if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
-      const nd: Draft = { ...d, ...details, township: "လိပ်စာထဲတွင်ပါဝင်သည်", note: "" };
+      const nd: Draft = { ...d, ...details, note: "" };
       await save({ state: "confirm", data: nd });
       return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${nd.qty}ထုပ်\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
     }
@@ -83,13 +83,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
       const { data: order, error } = await db.rpc("place_order", {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
-        _name: String(d.name), _phone: String(d.phone), _township: String(d.township), _address: String(d.address), _note: String(d.note ?? ""),
+        _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? ""),
       });
       await save({ state: "idle", data: {} });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
       const o = order as unknown as { public_order_id?: string; order_no: number; total: number };
       const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
-      await text(psid, `Order ID: ${orderId}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`);
+      await text(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
