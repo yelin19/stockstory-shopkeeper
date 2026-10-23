@@ -79,7 +79,6 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
     name: product?.name ?? "",
     category: product?.category ?? "General",
     price: String(product?.price ?? ""),
-    stock: "0",
     description: product?.description ?? "",
     active: product?.active ?? true,
   });
@@ -90,10 +89,8 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const price = Number(f.price);
-    const stock = parseInt(f.stock, 10);
     if (!/^[A-Za-z0-9_-]{1,32}$/.test(f.code)) return void toast.error("Code တွင် အက္ခရာ/ဂဏန်းများသာ ထည့်ပါ၊ space မထည့်ပါနှင့်");
     if (!f.name.trim() || !(price >= 0)) return void toast.error("အမည်နှင့် မှန်ကန်သောဈေးနှုန်း ထည့်ရန်လိုပါသည်");
-    if (!product && !(stock >= 0)) return void toast.error("လက်ကျန်သည် အနုတ်မဖြစ်ရပါ");
     setBusy(true);
     try {
       let image_url = product?.image_url ?? null;
@@ -107,7 +104,7 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
       const row = { code: f.code.trim(), name: f.name.trim(), category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url };
       const { error } = product
         ? await supabase.from("products").update(row).eq("id", product.id)
-        : await supabase.from("products").insert({ ...row, stock });
+        : await supabase.from("products").insert({ ...row, stock: 0 });
       if (error) throw error.code === "23505" ? new Error("ဤပစ္စည်း Code ကို အသုံးပြုပြီးသားပါ") : error;
       toast.success("သိမ်းပြီးပါပြီ");
       qc.invalidateQueries();
@@ -125,10 +122,8 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
         <DialogHeader><DialogTitle>{product ? "ပစ္စည်းပြင်မည်" : "ပစ္စည်းအသစ်"}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
           <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="111" /></div>
-          <div className="space-y-1"><Label>အမျိုးအစား</Label><Input value={f.category} onChange={set("category")} /></div>
           <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
           <div className="space-y-1"><Label>ဈေးနှုန်း (ကျပ်)</Label><Input type="number" min="0" step="any" value={f.price} onChange={set("price")} /></div>
-          {!product && <div className="space-y-1"><Label>စတင်လက်ကျန်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}
           <div className="col-span-2 space-y-1"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
           <div className="col-span-2 space-y-1"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={set("description")} /></div>
           <label className="col-span-2 flex items-center gap-2 text-sm"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /> ဖွင့်ထားသည် (ဝယ်သူများမြင်ရမည်)</label>
