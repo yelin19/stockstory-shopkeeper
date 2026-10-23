@@ -10,6 +10,7 @@
 <!-- LOVABLE:END -->
 
 ## Project rules
+- Shipping saves use the authenticated caller's database client and owner scope; server-enforced tracking validation controls Messenger notification and shipping state.
 - Shop admin login uses username + password; usernames map to synthetic `<username>@shop-admin.local` emails (auto-confirm on) — no email is collected.
 - Every shop table is scoped by `owner_id = auth.uid()` RLS; stock changes only via DB functions (`change_stock`, `cancel_order`, `place_order`) so history is always written and stock can't go negative.
 - `place_order` and `verify_shop_pin` are service-role only, called from the Messenger webhook at `/api/public/shop-messenger` (signature-verified). Webhook picks the shop by Facebook Page ID from `shop_settings.fb_page_id`.

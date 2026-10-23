@@ -63,7 +63,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
         ? await supabase.rpc("cancel_order", { _order_id: o.id })
         : action === "accepted"
           ? await supabase.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null }).eq("id", o.id)
-          : await supabase.from("orders").update({ sent: false, sent_at: null }).eq("id", o.id);
+          : await supabase.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null }).eq("id", o.id);
     if (error) return void toast.error(error.message);
     qc.invalidateQueries();
   }
@@ -97,7 +97,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
     const m = new Map<string, Map<string, Order[]>>();
     for (const o of filtered) {
       if (!m.has(o.category)) m.set(o.category, new Map());
-      const pm = m.get(o.category)!;
+      const pm = m.get(o.category);
+      if (!pm) continue;
       const k = `${o.product_code} · ${o.product_name}`;
       pm.set(k, [...(pm.get(k) ?? []), o]);
     }
@@ -200,17 +201,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   );
 }
 
-const deliveryLabels: Record<string, string> = {
-  confirmed: "အော်ဒါလက်ခံပြီး",
-  preparing: "ပစ္စည်းပြင်ဆင်နေသည်",
-  shipped: "ပို့ဆောင်ပြီး",
-  in_transit: "ပို့ဆောင်နေသည်",
-  delivered: "ရောက်ရှိပြီး",
-  cancelled: "ပယ်ဖျက်ပြီး",
-};
-
 function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void }) {
-  const [deliveryStatus, setDeliveryStatus] = useState(order.delivery_status || "confirmed");
   const [trackingNumber, setTrackingNumber] = useState(order.tracking_number ?? "");
   const [trackingUrl, setTrackingUrl] = useState(order.tracking_url ?? "");
   const [file, setFile] = useState<File | null>(null);
@@ -234,7 +225,7 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       const response = await fetch("/api/admin/order-shipping", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
+        body: JSON.stringify({ order_id: order.id, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
       });
       const result = await response.json() as { error?: string; accepted?: boolean };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
@@ -250,17 +241,13 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
   return (
     <div className="mt-2 space-y-2 rounded-lg border bg-muted p-3 text-left text-xs" onClick={(e) => e.stopPropagation()}>
       <div className="font-semibold">ဝယ်ယူမှု ID: {order.public_order_id} — ပို့ဆောင်ရေးအချက်အလက်</div>
-      <label className="block text-xs font-medium">ပို့ဆောင်မှုအခြေအနေ<select className={`${sel} mt-1 w-full`} value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
-        {Object.entries(deliveryLabels).filter(([key]) => key !== "cancelled").map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></label>
-      <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking ID (ဒီအော်ဒါအတွက် သီးသန့်)" />
-      <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (တူရင် အုပ်စုလိုက်ထည့်နိုင်)" />
+      <Input aria-label="Tracking ID" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking ID (ဒီအော်ဒါအတွက် သီးသန့်)" />
+      <Input aria-label="Tracking link" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (တူရင် အုပ်စုလိုက်ထည့်နိုင်)" />
       <label className="flex items-center gap-2 rounded border bg-card px-2 py-2">
         <span>ပို့ဆောင်မှုဓာတ်ပုံ</span>
         <input className="min-w-0 flex-1" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </label>
-      <p className="text-muted-foreground">သိမ်းမည်နှိပ်လျှင် Tracking ID၊ Link နှင့် ဓာတ်ပုံကို Customer Messenger ဆီ ပြန်ပို့ပါမည်။</p>
-      <Button size="sm" className="w-full" disabled={busy} onClick={save}>{busy ? "Messenger သို့ ပို့နေသည်..." : "သိမ်းပြီး Customer ဆီ ပို့မည်"}</Button>
+      <Button size="sm" className="w-full" disabled={busy} onClick={save}>{busy ? "သိမ်းနေသည်..." : trackingNumber.trim() && trackingUrl.trim() ? "သိမ်းပြီး Customer ဆီ ပို့မည်" : "လက်ခံထားအဖြစ် သိမ်းမည်"}</Button>
     </div>
   );
 }

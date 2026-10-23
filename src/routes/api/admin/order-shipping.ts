@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 const envFirst = (...names: string[]) => names.map((name) => process.env[name]).find(Boolean);
 
@@ -9,22 +10,27 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const auth = request.headers.get("authorization");
         const token = auth?.replace(/^Bearer\s+/i, "");
         if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
-        const body = await request.json() as { order_id?: string; delivery_status?: string; tracking_url?: string | null; tracking_number?: string | null; image_url?: string | null };
-        if (!body.order_id) return Response.json({ error: "order_id is required" }, { status: 400 });
+        const parsed = z.object({
+          order_id: z.string().uuid(),
+          tracking_number: z.string().trim().max(200).nullish(),
+          tracking_url: z.string().trim().max(2000).nullish(),
+          image_url: z.string().trim().url().max(2000).nullish(),
+        }).safeParse(await request.json().catch(() => null));
+        if (!parsed.success) return Response.json({ error: "Invalid shipping information" }, { status: 400 });
+        const body = parsed.data;
 
         const { createClient } = await import("@supabase/supabase-js");
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-        if (!supabaseUrl || !publishableKey) return Response.json({ error: "Supabase is not configured" }, { status: 500 });
-        const authClient = createClient(supabaseUrl, publishableKey, { auth: { persistSession: false } });
+        const supabaseUrl = process.env["SUPABASE_URL"];
+        const publishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+        if (!supabaseUrl || !publishableKey) return Response.json({ error: "Shop service is not configured" }, { status: 500 });
+        const authClient = createClient(supabaseUrl, publishableKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
         const { data: userData, error: userError } = await authClient.auth.getUser(token);
         if (userError || !userData.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-        const { data: order, error: orderError } = await supabaseAdmin.from("orders").select("id, owner_id, psid, order_no, public_order_id, customer_name, delivery_status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
+        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, customer_name, delivery_status, status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
         if (orderError) return Response.json({ error: orderError.message }, { status: 500 });
         if (!order) return Response.json({ error: "Order not found" }, { status: 404 });
-        if (!order.psid) return Response.json({ error: "ဒီအော်ဒါမှာ Messenger customer မရှိပါ" }, { status: 400 });
+        if (order.status === "cancelled") return Response.json({ error: "Order is cancelled" }, { status: 409 });
 
         const trackingUrl = body.tracking_url?.trim() || null;
         const trackingNumber = body.tracking_number?.trim() || null;
@@ -33,15 +39,17 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const deliveryStatus = readyToShip ? "shipped" : "confirmed";
         const now = new Date().toISOString();
         if (!readyToShip) {
-          const { error: acceptedError } = await supabaseAdmin.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          const { error: acceptedError } = await authClient.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (acceptedError) return Response.json({ error: acceptedError.message }, { status: 500 });
           return Response.json({ ok: true, accepted: true, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် လက်ခံထားအဖြစ်သိမ်းပြီးပါပြီ" });
         }
+        if (!order.psid) return Response.json({ error: "ဒီအော်ဒါမှာ Messenger customer မရှိပါ" }, { status: 400 });
+        if (!/^https?:\/\//i.test(trackingUrl ?? "")) return Response.json({ error: "Invalid tracking link" }, { status: 400 });
         const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
         if (!tokenValue) return Response.json({ error: "Facebook Page Access Token မတွေ့ပါ" }, { status: 500 });
 
         const orderId = order.public_order_id ?? String(order.order_no).padStart(6, "0");
-        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ${deliveryStatus === "delivered" ? "ပစ္စည်းရောက်ရှိပါပြီ" : "ပို့ဆောင်ပေးနေပါပြီ"}${trackingNumber ? `\nစာတိုက် Tracking ID: ${trackingNumber}` : ""}${trackingUrl ? `\nTracking link: ${trackingUrl}` : ""}`;
+        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ပို့ဆောင်ပေးနေပါပြီ\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
         const sendText = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: message } }),
         });
@@ -53,7 +61,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ" }, { status: 502 });
         }
 
-        const { error: updateError } = await supabaseAdmin.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+        const { error: updateError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
         return Response.json({ ok: true, public_order_id: orderId });
       },

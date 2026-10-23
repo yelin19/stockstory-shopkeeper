@@ -47,27 +47,27 @@ export type Database = {
           category: string
           created_at: string
           customer_name: string
-          delivery_status: string
           delivery_image_url: string | null
           delivery_notified_at: string | null
+          delivery_status: string
           id: string
           note: string | null
           order_no: number
           owner_id: string
           phone: string
-          public_order_id: string
           product_code: string
           product_id: string | null
           product_name: string
           psid: string | null
+          public_order_id: string
           quantity: number
           sent: boolean
           sent_at: string | null
           status: string
           total: number
+          township: string
           tracking_number: string | null
           tracking_url: string | null
-          township: string
           unit_price: number
           updated_at: string
         }
@@ -76,27 +76,27 @@ export type Database = {
           category: string
           created_at?: string
           customer_name: string
-          delivery_status?: string
           delivery_image_url?: string | null
           delivery_notified_at?: string | null
+          delivery_status?: string
           id?: string
           note?: string | null
           order_no?: number
           owner_id: string
           phone: string
-          public_order_id?: string
           product_code: string
           product_id?: string | null
           product_name: string
           psid?: string | null
+          public_order_id: string
           quantity: number
           sent?: boolean
           sent_at?: string | null
           status?: string
           total: number
+          township: string
           tracking_number?: string | null
           tracking_url?: string | null
-          township: string
           unit_price: number
           updated_at?: string
         }
@@ -105,27 +105,27 @@ export type Database = {
           category?: string
           created_at?: string
           customer_name?: string
-          delivery_status?: string
           delivery_image_url?: string | null
           delivery_notified_at?: string | null
+          delivery_status?: string
           id?: string
           note?: string | null
           order_no?: number
           owner_id?: string
           phone?: string
-          public_order_id?: string
           product_code?: string
           product_id?: string | null
           product_name?: string
           psid?: string | null
+          public_order_id?: string
           quantity?: number
           sent?: boolean
           sent_at?: string | null
           status?: string
           total?: number
+          township?: string
           tracking_number?: string | null
           tracking_url?: string | null
-          township?: string
           unit_price?: number
           updated_at?: string
         }
@@ -208,6 +208,30 @@ export type Database = {
           pin_hash?: string | null
           shop_name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      stock_action_requests: {
+        Row: {
+          created_at: string
+          final_stock: number
+          owner_id: string
+          product_id: string
+          request_id: string
+        }
+        Insert: {
+          created_at?: string
+          final_stock: number
+          owner_id: string
+          product_id: string
+          request_id: string
+        }
+        Update: {
+          created_at?: string
+          final_stock?: number
+          owner_id?: string
+          product_id?: string
+          request_id?: string
         }
         Relationships: []
       }
@@ -305,6 +329,9 @@ export type Database = {
           category: string
           created_at: string
           customer_name: string
+          delivery_image_url: string | null
+          delivery_notified_at: string | null
+          delivery_status: string
           id: string
           note: string | null
           order_no: number
@@ -314,13 +341,17 @@ export type Database = {
           product_id: string | null
           product_name: string
           psid: string | null
+          public_order_id: string
           quantity: number
           sent: boolean
           sent_at: string | null
           status: string
           total: number
           township: string
+          tracking_number: string | null
+          tracking_url: string | null
           unit_price: number
+          updated_at: string
         }
         SetofOptions: {
           from: "*"
