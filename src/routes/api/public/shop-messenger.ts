@@ -8,6 +8,8 @@ const envFirst = (...names: string[]) => names.map((name) => process.env[name]).
 
 type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
+const callShopRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
+  (db.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
 
 async function verifySignature(body: string, header: string | null) {
   const secret = envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET");
@@ -41,6 +43,8 @@ const confirmation = (psid: string, t: string) => send(psid, {
   ],
 });
 const fmt = (n: number) => Number(n).toLocaleString("en-US") + " Ks";
+const orderCommand = (msg: string, words: string[]) => msg.trim().match(new RegExp(`^(?:${words.join("|")})\\s+([0-9]{6})$`, "i"))?.[1];
+const orderIsLocked = (o: { sent?: boolean; delivery_status?: string }) => Boolean(o.sent || ["shipped", "in_transit", "delivered", "returned"].includes(o.delivery_status ?? ""));
 
 function parseCustomerDetails(msg: string) {
   const lines = msg.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
@@ -72,7 +76,26 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, `⚠️ ယခင်မှာယူထားသောပစ္စည်း ပြန်လာခဲ့ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nအကြောင်းအရာကြောင့် ဤ Messenger အကောင့်သို့ နောက်ထပ်ပစ္စည်း မရောင်းတော့ပါ။`);
   }
 
+  const editOrderId = orderCommand(msg, ["ပြင်", "ပြင်ဆင်", "edit"]);
+  const cancelOrderId = orderCommand(msg, ["ဖျက်", "ဖျက်မယ်", "cancel"]);
+  if (editOrderId || cancelOrderId) {
+    const publicOrderId = editOrderId ?? cancelOrderId!;
+    const { data: order } = await db.from("orders").select("*").eq("owner_id", owner).eq("psid", psid).eq("public_order_id", publicOrderId).maybeSingle();
+    if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
+    if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
+    if (cancelOrderId) {
+      await save({ state: "cancel_order", data: { public_order_id: publicOrderId, product: order.product_name, quantity: order.quantity } });
+      return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${order.quantity}ထုပ်\n\nဒီအော်ဒါကို ဖျက်မည်မှာ သေချာပါသလား။`);
+    }
+    await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, quantity: order.quantity } });
+    return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${order.quantity}ထုပ်\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
+  }
+
   if (isNo(msg) && s.state !== "idle") {
+    if (s.state === "cancel_order") {
+      await save({ state: "idle", data: {} });
+      return text(psid, "အော်ဒါဖျက်ခြင်းကို မလုပ်တော့ပါ။");
+    }
     await save({ state: "idle", data: {} });
     return text(psid, "❌ အော်ဒါကို ပယ်ဖျက်လိုက်ပါပြီ။ ပစ္စည်း Code နှင့် အရေအတွက်ကို ထပ်ပို့နိုင်ပါတယ်။");
   }
@@ -86,6 +109,26 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   };
 
   switch (s.state) {
+    case "edit_order": {
+      const quantity = Number(msg.trim());
+      if (!/^[1-9][0-9]{0,3}$/.test(msg.trim())) return text(psid, "အရေအတွက်ကို 1 မှ 9999 အတွင်း ဂဏန်းဖြင့်သာ ပို့ပါ။");
+      const { data: updated, error } = await callShopRpc(db, "edit_order_by_customer", {
+        _owner: owner, _psid: psid, _public_order_id: String((d as { public_order_id?: string }).public_order_id), _qty: quantity,
+      });
+      await save({ state: "idle", data: {} });
+      if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါအရေအတွက်ပြင်ရာတွင် အမှားဖြစ်ပါသည်။");
+      const o = updated as unknown as { public_order_id: string; product_name: string; quantity: number };
+      return text(psid, `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်\n\nအော်ဒါအရေအတွက်ကို ပြင်ဆင်ပြီးပါပြီ။`);
+    }
+    case "cancel_order": {
+      if (!isYes(msg)) return text(psid, "အော်ဒါဖျက်ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
+      const { error } = await callShopRpc(db, "cancel_order_by_customer", {
+        _owner: owner, _psid: psid, _public_order_id: String((d as { public_order_id?: string }).public_order_id),
+      });
+      await save({ state: "idle", data: {} });
+      if (error) return text(psid, "အော်ဒါဖျက်ရာတွင် အမှားဖြစ်ပါသည်။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
+      return text(psid, `Order ID: ${String((d as { public_order_id?: string }).public_order_id)} ကို ဖျက်ပြီးပါပြီ။\nStock ကို အလိုအလျောက် ပြန်ဖြည့်ပြီးပါပြီ။`);
+    }
     case "ask_customer_details": {
       const details = parseCustomerDetails(msg);
       if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
