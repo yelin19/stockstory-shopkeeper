@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { parseProductRequest, isYes, isNo } from "@/lib/messenger-parse";
 import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSignature } from "@/lib/messenger-webhook";
 import { formatCurrency } from "@/lib/currency";
+import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
+import { parseLowStockPairPin } from "@/lib/low-stock-alert";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -12,6 +14,13 @@ type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["su
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
 const callShopRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
   (db.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
+const retryLowStockAlerts = async (owner: string, productId: string | null = null) => {
+  try {
+    await dispatchLowStockAlerts(owner, productId);
+  } catch (error) {
+    console.error("Could not process low-stock Messenger alert", (error as Error).message);
+  }
+};
 
 async function send(psid: string, message: Record<string, unknown>) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
@@ -63,6 +72,18 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
   const { data: shopCurrency } = await db.from("shop_settings").select("currency").eq("owner_id", owner).maybeSingle();
   const fmt = (amount: number) => formatCurrency(amount, shopCurrency?.currency);
+  const pairingPin = parseLowStockPairPin(msg);
+  if (pairingPin) {
+    const { data: paired, error } = await callShopRpc(db, "pair_low_stock_alert_recipient", {
+      _owner: owner, _psid: psid, _pin: pairingPin,
+    });
+    if (error) return text(psid, "Messenger PIN ချိတ်ဆက်၍မရပါ။ ဒေတာဘေ့စ်ပြင်ဆင်မှု 0016 ကို အရင်လုပ်ဆောင်ပါ။");
+    if (paired !== true) return text(psid, "PIN မမှန်ပါ၊ သက်တမ်းကုန်နေပါသည်၊ သို့မဟုတ် ထပ်မံကြိုးစားမှုများလွန်းနေပါသည်။ ဆက်တင်များတွင် PIN အသစ်သတ်မှတ်ပါ။");
+    await retryLowStockAlerts(owner);
+    return text(psid, "ဒီ Messenger အကောင့်ကို လက်ကျန်နည်းသတိပေးစာ လက်ခံရန် ချိတ်ဆက်ပြီးပါပြီ။");
+  }
+  const { data: alertSettings, error: alertSettingsError } = await db.from("shop_settings").select("low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
+  if (!alertSettingsError && alertSettings?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
 
@@ -153,16 +174,19 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       });
       await save({ state: "idle", data: {} });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါအရေအတွက်ပြင်ရာတွင် အမှားဖြစ်ပါသည်။");
-      const o = updated as unknown as { public_order_id: string; product_name: string; quantity: number };
+      const o = updated as unknown as { public_order_id: string; product_name: string; quantity: number; product_id: string | null };
+      if (o.product_id) await retryLowStockAlerts(owner, o.product_id);
       return text(psid, `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်\n\nအော်ဒါအရေအတွက်ကို ပြင်ဆင်ပြီးပါပြီ။`);
     }
     case "cancel_order": {
       if (!isYes(msg)) return text(psid, "အော်ဒါဖျက်ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
-      const { error } = await callShopRpc(db, "cancel_order_by_customer", {
+      const { data: cancelled, error } = await callShopRpc(db, "cancel_order_by_customer", {
         _owner: owner, _psid: psid, _public_order_id: String((d as { public_order_id?: string }).public_order_id),
       });
       await save({ state: "idle", data: {} });
       if (error) return text(psid, "အော်ဒါဖျက်ရာတွင် အမှားဖြစ်ပါသည်။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
+      const cancelledOrder = cancelled as { product_id?: string | null } | null;
+      if (cancelledOrder?.product_id) await retryLowStockAlerts(owner, cancelledOrder.product_id);
       return text(psid, `Order ID: ${String((d as { public_order_id?: string }).public_order_id)} ကို ဖျက်ပြီးပါပြီ။`);
     }
     case "ask_customer_details": {
@@ -180,7 +204,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       });
       await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
-      const o = order as unknown as { public_order_id?: string; order_no: number; total: number };
+      const o = order as unknown as { public_order_id?: string; order_no: number; total: number; product_id: string | null };
+      if (o.product_id) await retryLowStockAlerts(owner, o.product_id);
       const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
       if ((d as Draft & { prepay_allowed?: boolean }).prepay_allowed) {
         const proofUrl = String((d as Draft & { payment_proof_url?: string }).payment_proof_url ?? "");

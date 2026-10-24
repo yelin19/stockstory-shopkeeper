@@ -20,6 +20,7 @@ import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminStockRouteImport } from './routes/_authenticated/admin.stock'
+import { Route as ApiAdminLowStockAlertRouteImport } from './routes/api/admin/low-stock-alert'
 import { Route as ApiAdminOrderShippingRouteImport } from './routes/api/admin/order-shipping'
 import { Route as ApiPublicShopMessengerRouteImport } from './routes/api/public/shop-messenger'
 import { Route as ApiPublicProductImageCodeRouteImport } from './routes/api/public/product-image.$code'
@@ -82,6 +83,11 @@ const AuthenticatedAdminStockRoute = AuthenticatedAdminStockRouteImport.update({
   path: '/stock',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const ApiAdminLowStockAlertRoute = ApiAdminLowStockAlertRouteImport.update({
+  id: '/api/admin/low-stock-alert',
+  path: '/api/admin/low-stock-alert',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminOrderShippingRoute = ApiAdminOrderShippingRouteImport.update({
   id: '/api/admin/order-shipping',
   path: '/api/admin/order-shipping',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/api/admin/low-stock-alert': typeof ApiAdminLowStockAlertRoute
   '/api/admin/order-shipping': typeof ApiAdminOrderShippingRoute
   '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/api/admin/low-stock-alert': typeof ApiAdminLowStockAlertRoute
   '/api/admin/order-shipping': typeof ApiAdminOrderShippingRoute
   '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/stock': typeof AuthenticatedAdminStockRoute
+  '/api/admin/low-stock-alert': typeof ApiAdminLowStockAlertRoute
   '/api/admin/order-shipping': typeof ApiAdminOrderShippingRoute
   '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/settings'
     | '/admin/stock'
+    | '/api/admin/low-stock-alert'
     | '/api/admin/order-shipping'
     | '/api/public/shop-messenger'
     | '/admin/'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/settings'
     | '/admin/stock'
+    | '/api/admin/low-stock-alert'
     | '/api/admin/order-shipping'
     | '/api/public/shop-messenger'
     | '/admin'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/stock'
+    | '/api/admin/low-stock-alert'
     | '/api/admin/order-shipping'
     | '/api/public/shop-messenger'
     | '/_authenticated/admin/'
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ShopCodeRoute: typeof ShopCodeRoute
+  ApiAdminLowStockAlertRoute: typeof ApiAdminLowStockAlertRoute
   ApiAdminOrderShippingRoute: typeof ApiAdminOrderShippingRoute
   ApiPublicShopMessengerRoute: typeof ApiPublicShopMessengerRoute
   ApiPublicProductImageCodeRoute: typeof ApiPublicProductImageCodeRoute
@@ -282,6 +295,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminStockRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/admin/low-stock-alert': {
+      id: '/api/admin/low-stock-alert'
+      path: '/api/admin/low-stock-alert'
+      fullPath: '/api/admin/low-stock-alert'
+      preLoaderRoute: typeof ApiAdminLowStockAlertRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/order-shipping': {
       id: '/api/admin/order-shipping'
       path: '/api/admin/order-shipping'
@@ -343,6 +363,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ShopCodeRoute: ShopCodeRoute,
+  ApiAdminLowStockAlertRoute: ApiAdminLowStockAlertRoute,
   ApiAdminOrderShippingRoute: ApiAdminOrderShippingRoute,
   ApiPublicShopMessengerRoute: ApiPublicShopMessengerRoute,
   ApiPublicProductImageCodeRoute: ApiPublicProductImageCodeRoute,

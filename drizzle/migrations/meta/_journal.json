@@ -43,6 +43,13 @@
       "when": 1792858395380,
       "tag": "0015_shop_currency",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792860499494,
+      "tag": "0016_low_stock_messenger_alerts",
+      "breakpoints": true
     }
   ]
 }

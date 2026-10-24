@@ -166,6 +166,7 @@ export type Database = {
           description: string | null
           id: string
           image_url: string | null
+          low_stock_alert_sent: boolean
           name: string
           owner_id: string
           price: number
@@ -179,6 +180,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          low_stock_alert_sent?: boolean
           name: string
           owner_id?: string
           price: number
@@ -192,6 +194,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          low_stock_alert_sent?: boolean
           name?: string
           owner_id?: string
           price?: number
@@ -206,6 +209,8 @@ export type Database = {
           bank_name: string | null
           currency: string
           fb_page_id: string | null
+          low_stock_alert_pin_hash: string | null
+          low_stock_alert_psid: string | null
           low_stock_threshold: number
           messenger_username: string | null
           owner_id: string
@@ -219,6 +224,8 @@ export type Database = {
           bank_name?: string | null
           currency?: string
           fb_page_id?: string | null
+          low_stock_alert_pin_hash?: string | null
+          low_stock_alert_psid?: string | null
           low_stock_threshold?: number
           messenger_username?: string | null
           owner_id: string
@@ -232,6 +239,8 @@ export type Database = {
           bank_name?: string | null
           currency?: string
           fb_page_id?: string | null
+          low_stock_alert_pin_hash?: string | null
+          low_stock_alert_psid?: string | null
           low_stock_threshold?: number
           messenger_username?: string | null
           owner_id?: string
@@ -318,6 +327,17 @@ export type Database = {
     }
     Functions: {
       cancel_order: { Args: { _order_id: string }; Returns: undefined }
+      claim_low_stock_alerts: {
+        Args: { _owner: string; _product_id?: string | null }
+        Returns: {
+          product_code: string
+          product_id: string
+          product_name: string
+          recipient_psid: string
+          stock: number
+          threshold: number
+        }[]
+      }
       change_stock: {
         Args: {
           _delta: number
@@ -343,6 +363,10 @@ export type Database = {
           sold_count: number
           stock: number
         }[]
+      }
+      pair_low_stock_alert_recipient: {
+        Args: { _owner: string; _pin: string; _psid: string }
+        Returns: boolean
       }
       place_order: {
         Args: {
@@ -393,6 +417,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      release_low_stock_alert: { Args: { _product_id: string }; Returns: undefined }
+      set_low_stock_alert_pin: { Args: { _pin: string }; Returns: undefined }
       set_shop_pin: { Args: { _pin: string }; Returns: undefined }
       verify_shop_pin: {
         Args: { _owner: string; _pin: string }
