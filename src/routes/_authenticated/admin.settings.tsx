@@ -127,12 +127,13 @@ function SettingsPage() {
             {s?.low_stock_alert_psid ? "Messenger အကောင့်တစ်ခု ချိတ်ဆက်ထားပါသည်။" : "Messenger အကောင့် မချိတ်ဆက်ရသေးပါ။"}
             {s?.low_stock_alert_pin_hash ? " PIN ပို့ပြီး အကောင့်ချိတ်ရန် စောင့်နေပါသည်။" : ""}
           </p>
+          {s?.low_stock_alert_psid && <p className="text-sm">လက်ခံမည့်အကောင့်ပြောင်းရန် PIN အသစ်သတ်မှတ်ပါ။ PIN အသစ်သတ်မှတ်လိုက်သည်နှင့် လက်ရှိအကောင့်ကို ဖြုတ်ပြီး၊ PIN အသစ်ကိုပို့သောအကောင့်ကို ချိတ်ဆက်ပါမည်။</p>}
         </div>
         <div className="space-y-1">
-          <Label htmlFor="low-stock-alert-pin">Messenger ချိတ်ဆက်ရန် PIN (၆–၈ လုံး)</Label>
+          <Label htmlFor="low-stock-alert-pin">{s?.low_stock_alert_psid ? "အကောင့်ပြောင်းရန် PIN အသစ် (၆–၈ လုံး)" : "Messenger ချိတ်ဆက်ရန် PIN (၆–၈ လုံး)"}</Label>
           <Input id="low-stock-alert-pin" type="password" inputMode="numeric" autoComplete="new-password" maxLength={8} value={alertPin} onChange={(e) => setAlertPin(e.target.value.replace(/\D/g, ""))} placeholder="ဥပမာ 123456" />
         </div>
-        <Button type="button" onClick={saveAlertPin} disabled={savingAlertPin}>{savingAlertPin ? "သိမ်းနေသည်..." : "PIN သတ်မှတ်မည်"}</Button>
+        <Button type="button" onClick={saveAlertPin} disabled={savingAlertPin}>{savingAlertPin ? "သိမ်းနေသည်..." : s?.low_stock_alert_psid ? "လက်ခံမည့်အကောင့် ပြောင်းမည်" : "PIN သတ်မှတ်မည်"}</Button>
         {s?.low_stock_alert_pin_hash && !s?.low_stock_alert_psid && <div className="space-y-1 text-sm">
           <p>PIN သတ်မှတ်ပြီးပါက လက်ခံစေလိုသော Messenger အကောင့်မှ ဆိုင် Page ကိုဖွင့်ပြီး <b>PIN 123456</b> ပုံစံဖြင့် ပို့ပါ။ အဲဒီအကောင့်ကို သတိပေးစာလက်ခံမည့်အကောင့်အဖြစ် ချိတ်ပါမည်။ PIN ကို တစ်ကြိမ်သာ အသုံးပြုနိုင်ပါသည်။</p>
           {f.messenger_username.trim() && <a className="font-semibold text-primary underline" href={`https://m.me/${encodeURIComponent(f.messenger_username.trim().replace(/^@/, ""))}`} target="_blank" rel="noreferrer">ဆိုင် Page Messenger ကိုဖွင့်ရန်</a>}

@@ -10,3 +10,7 @@ export function formatLowStockAlertMessage(alert: {
 }) {
   return `⚠️ လက်ကျန်နည်းနေပါပြီ\nပစ္စည်း: ${alert.product_name} (${alert.product_code})\nလက်ကျန်: ${alert.stock} ခု\nသတိပေးအရေအတွက်: ${alert.threshold} ခု`;
 }
+
+export function lowStockPairingConfirmation() {
+  return "✅ အတည်ပြုပါသည်။ ဒီ Messenger အကောင့်ကို ဆိုင်၏ လက်ကျန်နည်းသတိပေးစာ လက်ခံမည့်အကောင့်အဖြစ် ချိတ်ဆက်ပြီးပါပြီ။ လက်ကျန်က သတ်မှတ်ထားသော အရေအတွက်သို့မဟုတ် အောက်ရောက်ပါက ဒီအကောင့်သို့ သတိပေးစာပို့ပါမည်။ အကောင့်ပြောင်းရန် ဆက်တင်များနှင့် Messenger ထဲတွင် PIN အသစ်သတ်မှတ်ပါ။";
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLowStockAlertMessage, parseLowStockPairPin } from "@/lib/low-stock-alert";
+import { formatLowStockAlertMessage, lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
 
 describe("parseLowStockPairPin", () => {
   it("accepts the documented PIN command", () => {
@@ -18,5 +18,13 @@ describe("formatLowStockAlertMessage", () => {
   it("includes product, current stock, and threshold", () => {
     expect(formatLowStockAlertMessage({ product_code: "2233", product_name: "Shampoo", stock: 3, threshold: 5 }))
       .toBe("⚠️ လက်ကျန်နည်းနေပါပြီ\nပစ္စည်း: Shampoo (2233)\nလက်ကျန်: 3 ခု\nသတိပေးအရေအတွက်: 5 ခု");
+  });
+});
+
+describe("lowStockPairingConfirmation", () => {
+  it("confirms the linked account and explains how to change it", () => {
+    const message = lowStockPairingConfirmation();
+    expect(message).toContain("ချိတ်ဆက်ပြီးပါပြီ");
+    expect(message).toContain("အကောင့်ပြောင်းရန်");
   });
 });

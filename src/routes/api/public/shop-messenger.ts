@@ -3,7 +3,7 @@ import { parseProductRequest, isYes, isNo } from "@/lib/messenger-parse";
 import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSignature } from "@/lib/messenger-webhook";
 import { formatCurrency } from "@/lib/currency";
 import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
-import { parseLowStockPairPin } from "@/lib/low-stock-alert";
+import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -80,7 +80,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (error) return text(psid, "Messenger PIN ချိတ်ဆက်၍မရပါ။ ဒေတာဘေ့စ်ပြင်ဆင်မှု 0016 ကို အရင်လုပ်ဆောင်ပါ။");
     if (paired !== true) return text(psid, "PIN မမှန်ပါ၊ သက်တမ်းကုန်နေပါသည်၊ သို့မဟုတ် ထပ်မံကြိုးစားမှုများလွန်းနေပါသည်။ ဆက်တင်များတွင် PIN အသစ်သတ်မှတ်ပါ။");
     await retryLowStockAlerts(owner);
-    return text(psid, "ဒီ Messenger အကောင့်ကို လက်ကျန်နည်းသတိပေးစာ လက်ခံရန် ချိတ်ဆက်ပြီးပါပြီ။");
+    return text(psid, lowStockPairingConfirmation());
   }
   const { data: alertSettings, error: alertSettingsError } = await db.from("shop_settings").select("low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
   if (!alertSettingsError && alertSettings?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
