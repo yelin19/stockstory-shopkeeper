@@ -40,6 +40,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
       }),
     [scopedOrders, product, orderNo],
   );
+  const pendingPaymentOrders = useMemo(() => filtered.filter((o) => o.payment_status === "proof_submitted"), [filtered]);
 
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
@@ -179,6 +180,16 @@ export function OrdersView({ mode }: { mode: Mode }) {
       <div className="text-sm text-muted-foreground no-print">
         {filtered.length} အော်ဒါ · {money(filtered.filter((o) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total), 0))}
       </div>
+
+      {mode === "orders" && pendingPaymentOrders.length > 0 && <section className="no-print rounded-2xl border-2 border-primary/40 bg-primary/5 p-4">
+        <h2 className="mb-3 text-lg font-bold">ငွေလွှဲဖြတ်ပိုင်း စစ်ဆေးရန် (ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Customer)</h2>
+        <div className="space-y-3">
+          {pendingPaymentOrders.map((o) => <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm">
+            <div><b>Order ID: {o.public_order_id}</b><div>{o.product_name} · {o.quantity}ထုပ် · {money(o.total)}</div><div>{o.customer_name} · {o.phone} · {o.address}</div></div>
+            <div className="flex flex-wrap gap-2"><a className="rounded-md border px-3 py-2 text-xs font-semibold text-primary underline" href={o.payment_proof_url ?? "#"} target="_blank" rel="noreferrer">ငွေလွှဲဖြတ်ပိုင်းကြည့်မည်</a><Button size="sm" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "အတည်ပြုမည်"}</Button></div>
+          </div>)}
+        </div>
+      </section>}
 
       <div className="hidden print:block">
         <h1 className="mb-2 text-2xl font-bold">{mode === "orders" ? "အော်ဒါအစီရင်ခံစာ" : "ပို့ဆောင်ရေးစာရင်း"} — {format(new Date(), "yyyy-MM-dd HH:mm")}</h1>
