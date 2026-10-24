@@ -16,7 +16,8 @@ const callShopRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
   (db.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
 const retryLowStockAlerts = async (owner: string, productId: string | null = null) => {
   try {
-    await dispatchLowStockAlerts(owner, productId);
+    const result = await dispatchLowStockAlerts(owner, productId);
+    if (result.failed) console.error("Could not deliver low-stock Messenger alert", result.errors);
   } catch (error) {
     console.error("Could not process low-stock Messenger alert", (error as Error).message);
   }

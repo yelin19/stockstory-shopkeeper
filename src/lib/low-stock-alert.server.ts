@@ -9,6 +9,12 @@ type LowStockAlert = {
   threshold: number;
   recipient_psid: string;
 };
+type AlertDeliveryError = {
+  reason: "missing_page_token" | "facebook_rejected" | "network_error";
+  status?: number;
+  code?: number;
+  subcode?: number;
+};
 
 const envFirst = (...names: string[]) => names.map((name) => process.env[name]).find(Boolean);
 const callRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
@@ -25,11 +31,14 @@ export async function dispatchLowStockAlerts(ownerId: string, productId: string 
   const alerts = (Array.isArray(data) ? data : data ? [data] : []) as LowStockAlert[];
   let sent = 0;
   let failed = 0;
+  const errors: AlertDeliveryError[] = [];
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
 
   for (const alert of alerts) {
     if (!token) {
       failed += 1;
+      errors.push({ reason: "missing_page_token" });
+      console.error("Low-stock Messenger alert cannot be sent: Page access token is missing");
       await callRpc(supabaseAdmin, "release_low_stock_alert", { _product_id: alert.product_id });
       continue;
     }
@@ -44,20 +53,34 @@ export async function dispatchLowStockAlerts(ownerId: string, productId: string 
           message: { text: formatLowStockAlertMessage(alert) },
         }),
       });
+      const body = await response.json().catch(() => null) as {
+        error?: { message?: string; code?: number; error_subcode?: number };
+      } | null;
 
       if (!response.ok) {
         failed += 1;
-        console.error("Low-stock Messenger alert was not accepted", response.status);
+        const issue: AlertDeliveryError = {
+          reason: "facebook_rejected",
+          status: response.status,
+          ...(typeof body?.error?.code === "number" ? { code: body.error.code } : {}),
+          ...(typeof body?.error?.error_subcode === "number" ? { subcode: body.error.error_subcode } : {}),
+        };
+        errors.push(issue);
+        console.error("Low-stock Messenger alert was not accepted", {
+          ...issue,
+          message: body?.error?.message,
+        });
         await callRpc(supabaseAdmin, "release_low_stock_alert", { _product_id: alert.product_id });
         continue;
       }
       sent += 1;
     } catch (error) {
       failed += 1;
+      errors.push({ reason: "network_error" });
       console.error("Low-stock Messenger alert request failed", error);
       await callRpc(supabaseAdmin, "release_low_stock_alert", { _product_id: alert.product_id });
     }
   }
 
-  return { sent, failed };
+  return { sent, failed, errors };
 }

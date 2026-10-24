@@ -227,23 +227,36 @@ function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adj
       setPendingAction(null);
       storePendingStockAction(storageKey, null);
       let alertFailed = false;
+      let alertFailure: { reason?: string; code?: number } | undefined;
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token;
-        if (token) {
+        if (!token) {
+          alertFailed = true;
+          alertFailure = { reason: "missing_session" };
+        } else {
           const response = await fetch("/api/admin/low-stock-alert", {
             method: "POST",
             headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
             body: JSON.stringify({ product_id: p.id }),
           });
-          const result = await response.json() as { failed?: number };
+          const result = await response.json() as { failed?: number; errors?: { reason?: string; code?: number }[] };
           alertFailed = !response.ok || (result.failed ?? 0) > 0;
+          alertFailure = result.errors?.[0];
         }
       } catch {
         alertFailed = true;
       }
-      if (alertFailed) toast.warning("လက်ကျန်ကို သိမ်းပြီးပါပြီ။ Messenger သတိပေးစာ မပို့နိုင်ပါက Dashboard ကို စစ်ပါ။");
-      else toast.success("လက်ကျန်ပြင်ပြီးပါပြီ");
+      if (alertFailed) {
+        if (alertFailure?.reason === "missing_page_token") {
+          toast.warning("လက်ကျန်ကို သိမ်းပြီးပါပြီ။ သတိပေးစာ မပို့နိုင်ပါ—Lovable တွင် Facebook Page Access Token ကို စစ်ပါ။");
+        } else if (alertFailure?.reason === "facebook_rejected") {
+          const code = alertFailure.code ? ` (အမှားကုဒ် ${alertFailure.code})` : "";
+          toast.warning(`လက်ကျန်ကို သိမ်းပြီးပါပြီ။ Facebook က သတိပေးစာကို လက်မခံပါ။ Messenger ၏ ၂၄ နာရီအတွင်း စာပို့ခွင့်နှင့် Page ခွင့်ပြုချက်ကို စစ်ပါ${code}။`);
+        } else {
+          toast.warning("လက်ကျန်ကို သိမ်းပြီးပါပြီ။ Messenger သတိပေးစာ မပို့နိုင်ပါ။ ဆက်သွယ်မှု သို့မဟုတ် ဆာဗာကို စစ်ပါ။");
+        }
+      } else toast.success("လက်ကျန်ပြင်ပြီးပါပြီ");
       qc.invalidateQueries();
       onClose();
     } catch (err) {
