@@ -91,7 +91,7 @@ function ProductsPage() {
         ))}
       </div>
       {!products.length && <p className="text-muted-foreground">ပစ္စည်းမရှိသေးပါ။ ပထမဆုံးပစ္စည်းကို ထည့်ပါ။</p>}
-      {edit && <ProductDialog product={edit === "new" ? null : edit} currency={settings?.currency} onClose={() => setEdit(null)} />}
+      {edit && <ProductDialog product={edit === "new" ? null : edit} currency={settings?.currency ?? null} onClose={() => setEdit(null)} />}
       {stock && <StockDialog {...stock} onClose={() => setStock(null)} />}
     </div>
   );

@@ -163,7 +163,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       });
       await save({ state: "idle", data: {} });
       if (error) return text(psid, "အော်ဒါဖျက်ရာတွင် အမှားဖြစ်ပါသည်။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
-      return text(psid, `Order ID: ${String((d as { public_order_id?: string }).public_order_id)} ကို ဖျက်ပြီးပါပြီ။\nStock ကို အလိုအလျောက် ပြန်ဖြည့်ပြီးပါပြီ။`);
+      return text(psid, `Order ID: ${String((d as { public_order_id?: string }).public_order_id)} ကို ဖျက်ပြီးပါပြီ။`);
     }
     case "ask_customer_details": {
       const details = parseCustomerDetails(msg);
