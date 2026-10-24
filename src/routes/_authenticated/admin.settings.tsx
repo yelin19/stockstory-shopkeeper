@@ -25,7 +25,7 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
 
 function SettingsPage() {
   const qc = useQueryClient();
-  const { data: s } = useSuspenseQuery(settingsQuery);
+  const { data: s, refetch: refetchSettings } = useSuspenseQuery(settingsQuery);
   const { user } = Route.useRouteContext();
   const [f, setF] = useState({
     shop_name: s?.shop_name ?? "My Shop",
@@ -39,7 +39,28 @@ function SettingsPage() {
   });
   const [alertPin, setAlertPin] = useState("");
   const [savingAlertPin, setSavingAlertPin] = useState(false);
+  const [refreshingStatus, setRefreshingStatus] = useState(false);
   const webhook = typeof window !== "undefined" ? `${window.location.origin}/api/public/shop-messenger` : "";
+
+  async function refreshConnectionStatus() {
+    setRefreshingStatus(true);
+    try {
+      const { data, error } = await refetchSettings();
+      if (error) {
+        toast.error("ချိတ်ဆက်မှုအခြေအနေကို ပြန်စစ်မရပါ။ ခဏနေပြီး ထပ်စမ်းပါ။");
+      } else if (data?.low_stock_alert_psid) {
+        toast.success("Messenger အကောင့် ချိတ်ဆက်ထားပါသည်။");
+      } else if (data?.low_stock_alert_pin_hash) {
+        toast.info("PIN ကို Messenger သို့ ပို့ပြီး ချိတ်ဆက်မှု စောင့်နေပါသည်။");
+      } else {
+        toast.error("Messenger အကောင့် မချိတ်ဆက်ရသေးပါ။ PIN သတ်မှတ်ပြီး Page သို့ ပို့ပါ။");
+      }
+    } catch {
+      toast.error("ချိတ်ဆက်မှုအခြေအနေကို ပြန်စစ်မရပါ။ ခဏနေပြီး ထပ်စမ်းပါ။");
+    } finally {
+      setRefreshingStatus(false);
+    }
+  }
 
   async function processPendingAlerts() {
     try {
@@ -139,7 +160,9 @@ function SettingsPage() {
           {f.messenger_username.trim() && <a className="font-semibold text-primary underline" href={`https://m.me/${encodeURIComponent(f.messenger_username.trim().replace(/^@/, ""))}`} target="_blank" rel="noreferrer">ဆိုင် Page Messenger ကိုဖွင့်ရန်</a>}
         </div>}
         <p className="text-xs text-muted-foreground">Messenger က ပုံမှန်အားဖြင့် အကောင့်က Page ဆီ စာပို့ပြီး ၂၄ နာရီအတွင်းသာ မက်ဆေ့ခ်ျပို့ခွင့်ပေးနိုင်ပါသည်။ အဲဒီအချိန်ကျော်လို့ မပို့နိုင်ပါက လက်ကျန်နည်းစာရင်းကို Dashboard မှာ ဆက်မြင်နိုင်ပြီး၊ လက်ခံမည့်အကောင့်က Page ဆီ ထပ်စာပို့ပါက ပြန်ပို့ရန် ကြိုးစားပါမည်။</p>
-        <Button type="button" variant="outline" onClick={() => qc.invalidateQueries({ queryKey: ["settings"] })}>ချိတ်ဆက်မှုအခြေအနေ ပြန်စစ်ရန်</Button>
+        <Button type="button" variant="outline" onClick={refreshConnectionStatus} disabled={refreshingStatus}>
+          {refreshingStatus ? "အခြေအနေ စစ်နေသည်..." : "ချိတ်ဆက်မှုအခြေအနေ ပြန်စစ်ရန်"}
+        </Button>
       </section>
       <div className="space-y-2 rounded-2xl border bg-muted p-6 text-sm">
         <h2 className="text-lg font-bold">Messenger Webhook</h2>
