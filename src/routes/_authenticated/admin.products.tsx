@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink, Copy } from "lucide-react";
+import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink, Copy, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { productsQuery, settingsQuery, productImageUrl, productPageUrl, type Product } from "@/lib/shop-data";
 import { money } from "@/lib/export";
@@ -56,6 +56,35 @@ function ProductsPage() {
     }
   }
 
+  async function shareProduct(p: Product) {
+    const link = productPageUrl(p.code, window.location.origin);
+    const text = `${p.name}\n${money(p.price, settings?.currency)}\n${link}`;
+    if (!navigator.share) {
+      toast.error("ဒီဖုန်းက မျှဝေခြင်းကို မပံ့ပိုးပါ။ လင့်ခ်ကူးယူခလုတ်ကို အသုံးပြုပါ။");
+      return;
+    }
+
+    try {
+      if (p.image_url) {
+        const response = await fetch(productImageUrl(p.code, p.image_url));
+        if (!response.ok) throw new Error("Product image could not be loaded");
+        const blob = await response.blob();
+        const mime = blob.type || "image/jpeg";
+        const extension = mime.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
+        const image = new File([blob], `${p.code}.${extension}`, { type: mime });
+        if (navigator.canShare?.({ files: [image] })) {
+          await navigator.share({ title: p.name, text, files: [image] });
+          return;
+        }
+      }
+      await navigator.share({ title: p.name, text, url: link });
+      if (p.image_url) toast.warning("ဤစက်က ပုံတွဲမျှဝေခြင်းကို မပံ့ပိုးပါ။ လင့်ခ်သာ မျှဝေထားပါသည်။");
+    } catch (error) {
+      if ((error as Error).name === "AbortError") return;
+      toast.error("ပုံနှင့်လင့်ခ်ကို မမျှဝေနိုင်ပါ။ ထပ်စမ်းကြည့်ပါ။");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -84,6 +113,7 @@ function ProductsPage() {
                 <Button size="sm" variant="outline" onClick={() => setStock({ p, mode: "adjust" })}><SlidersHorizontal /> လက်ကျန်ပြင်မည်</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEdit(p)}><Pencil /></Button>
                 <Button size="sm" variant="outline" title="ပစ္စည်းလင့်ခ်ကူးယူမည်" aria-label={`${p.name} ပစ္စည်းလင့်ခ်ကူးယူမည်`} onClick={() => void copyProductLink(p.code)}><Copy /> လင့်ခ်ကူးယူမည်</Button>
+                <Button size="sm" variant="outline" title="ပစ္စည်းပုံနှင့်လင့်ခ်ကို မျှဝေမည်" onClick={() => void shareProduct(p)}><Share2 /> ပုံ+လင့် မျှဝေမည်</Button>
                 <Button size="sm" variant="ghost" asChild><Link to="/shop/$code" params={{ code: p.code }} target="_blank"><ExternalLink /></Link></Button>
               </div>
             </div>
