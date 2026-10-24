@@ -100,7 +100,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
     }
     const incoming = parseProductRequest(msg);
-    if (s.state === "idle" && incoming?.qty) {
+    if (incoming?.qty && s.state !== "prepay_choice") {
       await save({ state: "prepay_choice", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
       return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
     }
