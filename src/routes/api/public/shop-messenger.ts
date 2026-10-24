@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { parseProductRequest, isYes, isNo } from "@/lib/messenger-parse";
 import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSignature } from "@/lib/messenger-webhook";
+import { formatCurrency } from "@/lib/currency";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -30,7 +31,6 @@ const confirmation = (psid: string, t: string) => send(psid, {
     { content_type: "text", title: "NO", payload: "NO" },
   ],
 });
-const fmt = (n: number) => Number(n).toLocaleString("en-US") + " Ks";
 const paymentChoices = (psid: string, t: string) => send(psid, {
   text: t,
   quick_replies: [
@@ -61,6 +61,8 @@ function parseCustomerDetails(msg: string) {
 async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
+  const { data: shopCurrency } = await db.from("shop_settings").select("currency").eq("owner_id", owner).maybeSingle();
+  const fmt = (amount: number) => formatCurrency(amount, shopCurrency?.currency);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
 

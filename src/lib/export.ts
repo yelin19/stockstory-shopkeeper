@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { formatCurrency } from "@/lib/currency";
 
 export type Row = Record<string, string | number | null | undefined>;
 
@@ -28,5 +29,4 @@ export function exportXlsx(rows: Row[], filename: string, sheet = "Data") {
   XLSX.writeFile(wb, filename);
 }
 
-export const money = (n: number | string) =>
-  Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 }) + " Ks";
+export const money = formatCurrency;

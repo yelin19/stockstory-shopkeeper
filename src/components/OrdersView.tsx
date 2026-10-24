@@ -4,8 +4,9 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { FileSpreadsheet, Copy, Truck, Undo2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { isOrderShipped, ordersQuery, type Order } from "@/lib/shop-data";
+import { isOrderShipped, ordersQuery, settingsQuery, type Order } from "@/lib/shop-data";
 import { exportXlsx, money, type Row } from "@/lib/export";
+import { sumByCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -16,6 +17,7 @@ const sel = "h-9 rounded-md border bg-card px-2 text-sm";
 export function OrdersView({ mode }: { mode: Mode }) {
   const qc = useQueryClient();
   const { data: orders } = useSuspenseQuery(ordersQuery);
+  const { data: settings } = useSuspenseQuery(settingsQuery);
   const [product, setProduct] = useState("");
   const [orderNo, setOrderNo] = useState("");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
@@ -45,13 +47,13 @@ export function OrdersView({ mode }: { mode: Mode }) {
     mode === "orders"
       ? {
           "ဝယ်ယူမှု ID": o.public_order_id, Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Code: o.product_code,
-          Product: o.product_name, Qty: o.quantity, "Unit price": Number(o.unit_price), Total: Number(o.total),
+          Product: o.product_name, Qty: o.quantity, Currency: o.currency ?? settings?.currency ?? "MMK", "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Address: o.address, Note: o.note ?? "",
           Status: o.status,
         }
       : {
           "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Address: o.address,
-          Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
+          Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Currency: o.currency ?? settings?.currency ?? "MMK", Total: Number(o.total), Note: o.note ?? "",
       },
   );
   const exportRows = rows.filter((_, index) => filtered[index]?.status !== "cancelled");
@@ -178,14 +180,14 @@ export function OrdersView({ mode }: { mode: Mode }) {
       </div>
 
       <div className="text-sm text-muted-foreground no-print">
-        {filtered.length} အော်ဒါ · {money(filtered.filter((o) => o.status !== "cancelled").reduce((s, o) => s + Number(o.total), 0))}
+        {filtered.length} အော်ဒါ · {sumByCurrency(filtered.filter((o) => o.status !== "cancelled"), settings?.currency)}
       </div>
 
       {mode === "orders" && pendingPaymentOrders.length > 0 && <section className="no-print rounded-2xl border-2 border-primary/40 bg-primary/5 p-4">
         <h2 className="mb-3 text-lg font-bold">ငွေလွှဲဖြတ်ပိုင်း စစ်ဆေးရန် (ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Customer)</h2>
         <div className="space-y-3">
           {pendingPaymentOrders.map((o) => <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm">
-            <div><b>Order ID: {o.public_order_id}</b><div>{o.product_name} · {o.quantity}ထုပ် · {money(o.total)}</div><div>{o.customer_name} · {o.phone} · {o.address}</div></div>
+            <div><b>Order ID: {o.public_order_id}</b><div>{o.product_name} · {o.quantity}ထုပ် · {money(o.total, o.currency ?? settings?.currency)}</div><div>{o.customer_name} · {o.phone} · {o.address}</div></div>
             <div className="flex flex-wrap gap-2"><a className="rounded-md border px-3 py-2 text-xs font-semibold text-primary underline" href={o.payment_proof_url ?? "#"} target="_blank" rel="noreferrer">ငွေလွှဲဖြတ်ပိုင်းကြည့်မည်</a><Button size="sm" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "အတည်ပြုမည်"}</Button></div>
           </div>)}
         </div>
@@ -202,7 +204,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
             <div key={prod} className="overflow-x-auto rounded-xl border bg-card">
               <div className="flex justify-between border-b bg-muted px-4 py-2 text-sm font-semibold">
                 <span>{prod}</span>
-                <span>{list.reduce((s, o) => s + o.quantity, 0)} ခု · {money(list.reduce((s, o) => s + Number(o.total), 0))}</span>
+                <span>{list.reduce((s, o) => s + o.quantity, 0)} ခု · {sumByCurrency(list, settings?.currency)}</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
@@ -212,7 +214,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
-                      <td className="py-2 text-right">{o.quantity} × {money(o.unit_price)}<div className="font-bold">{money(o.total)}</div></td>
+                      <td className="py-2 text-right">{o.quantity} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
                           {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပို့ဆောင်မှုမအောင်မြင်ပါ" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}

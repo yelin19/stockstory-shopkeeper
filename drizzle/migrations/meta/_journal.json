@@ -36,6 +36,13 @@
       "when": 1792854386815,
       "tag": "0014_public_product_sold_count",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792858395380,
+      "tag": "0015_shop_currency",
+      "breakpoints": true
     }
   ]
 }

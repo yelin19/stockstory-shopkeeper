@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
+import { formatCurrency } from "@/lib/currency";
 
 const envFirst = (...names: string[]) => names.map((name) => process.env[name]).find(Boolean);
 
@@ -40,8 +41,9 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           const { error: paymentError } = await authClient.from("orders").update({ payment_status: body.payment_status, payment_approved_at: body.payment_status === "approved" ? now : null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (paymentError) return Response.json({ error: paymentError.message }, { status: 500 });
           if (body.payment_status === "approved" && order.psid) {
+            const { data: orderCurrency } = await authClient.from("orders").select("currency").eq("id", order.id).eq("owner_id", userData.user.id).maybeSingle();
             const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
-            if (tokenValue) await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: `✅ Order ID: ${order.public_order_id} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းအမည်: ${order.product_name}\nပေးချေပြီးငွေ: ${Number(order.total).toLocaleString("en-US")} Ks\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။` } }) });
+            if (tokenValue) await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: `✅ Order ID: ${order.public_order_id} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းအမည်: ${order.product_name}\nပေးချေပြီးငွေ: ${formatCurrency(order.total, orderCurrency?.currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။` } }) });
           }
           return Response.json({ ok: true, payment_status: body.payment_status });
         }

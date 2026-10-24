@@ -45,6 +45,7 @@ export type Database = {
         Row: {
           address: string
           category: string
+          currency: string
           created_at: string
           customer_name: string
           delivery_image_url: string | null
@@ -79,6 +80,7 @@ export type Database = {
         Insert: {
           address: string
           category: string
+          currency?: string
           created_at?: string
           customer_name: string
           delivery_image_url?: string | null
@@ -113,6 +115,7 @@ export type Database = {
         Update: {
           address?: string
           category?: string
+          currency?: string
           created_at?: string
           customer_name?: string
           delivery_image_url?: string | null
@@ -201,6 +204,7 @@ export type Database = {
           bank_account_name: string | null
           bank_account_number: string | null
           bank_name: string | null
+          currency: string
           fb_page_id: string | null
           low_stock_threshold: number
           messenger_username: string | null
@@ -213,6 +217,7 @@ export type Database = {
           bank_account_name?: string | null
           bank_account_number?: string | null
           bank_name?: string | null
+          currency?: string
           fb_page_id?: string | null
           low_stock_threshold?: number
           messenger_username?: string | null
@@ -225,6 +230,7 @@ export type Database = {
           bank_account_name?: string | null
           bank_account_number?: string | null
           bank_name?: string | null
+          currency?: string
           fb_page_id?: string | null
           low_stock_threshold?: number
           messenger_username?: string | null
@@ -327,6 +333,7 @@ export type Database = {
         Returns: {
           category: string
           code: string
+          currency: string
           description: string
           image_url: string
           messenger_username: string
@@ -353,6 +360,7 @@ export type Database = {
           address: string
           category: string
           created_at: string
+          currency: string
           customer_name: string
           delivery_image_url: string | null
           delivery_notified_at: string | null

@@ -14,7 +14,7 @@ export const Route = createFileRoute("/shop/$code")({
   head: ({ loaderData, params }) => {
     if (!loaderData?.product) return { meta: [{ title: "ပစ္စည်းမတွေ့ပါ" }] };
     const p = loaderData.product;
-    const title = `${p.name} — ${money(p.price)}`;
+    const title = `${p.name} — ${money(p.price, p.currency)}`;
     const desc = p.description?.slice(0, 160) || `${p.name} · ${p.category} · Order on Messenger with code ${p.code}`;
     const img = p.image_url ? `${loaderData.origin}${productImageUrl(p.code, p.image_url)}` : null;
     return {
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/shop/$code")({
         { name: "twitter:card", content: "summary_large_image" },
         { property: "og:url", content: `${loaderData.origin}/shop/${params.code}` },
         { property: "product:price:amount", content: String(p.price) },
-        { property: "product:price:currency", content: "MMK" },
+        { property: "product:price:currency", content: p.currency ?? "MMK" },
         ...(img ? [{ property: "og:image", content: img }, { name: "twitter:image", content: img }] : []),
       ],
       links: [{ rel: "canonical", href: `/shop/${params.code}` }],
@@ -50,7 +50,7 @@ function ProductPage() {
         <div className="flex flex-col justify-center gap-5">
           <div className="text-sm font-semibold uppercase tracking-widest text-primary">{p.shop_name ?? "ဈေးဆိုင်"} · {p.category}</div>
           <h1 className="text-4xl font-extrabold md:text-5xl">{p.name}</h1>
-          <div className="font-display text-3xl font-bold">{money(p.price)}</div>
+          <div className="font-display text-3xl font-bold">{money(p.price, p.currency)}</div>
           {typeof p.sold_count === "number" && <div className="text-sm text-muted-foreground">{p.sold_count.toLocaleString("en-US")} ခု ရောင်းပြီး</div>}
           <div className={p.stock > 0 ? "text-success" : "text-destructive"}>{p.stock > 0 ? `${p.stock} လက်ကျန်` : "လက်ကျန်ကုန်ပြီ"}</div>
           {p.description && <p className="whitespace-pre-line text-muted-foreground">{p.description}</p>}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { productsQuery, productImageUrl, productPageUrl, type Product } from "@/lib/shop-data";
+import { productsQuery, settingsQuery, productImageUrl, productPageUrl, type Product } from "@/lib/shop-data";
 import { money } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,12 +23,13 @@ export const Route = createFileRoute("/_authenticated/admin/products")({
     { name: "twitter:card", content: "summary_large_image" },
     { name: "robots", content: "noindex" },
   ] }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(productsQuery),
+  loader: ({ context }) => Promise.all([context.queryClient.ensureQueryData(productsQuery), context.queryClient.ensureQueryData(settingsQuery)]),
   component: ProductsPage,
 });
 
 function ProductsPage() {
   const { data: products } = useSuspenseQuery(productsQuery);
+  const { data: settings } = useSuspenseQuery(settingsQuery);
   const [edit, setEdit] = useState<Product | "new" | null>(null);
   const [stock, setStock] = useState<{ p: Product; mode: "increase" | "adjust" } | null>(null);
 
@@ -74,7 +75,7 @@ function ProductsPage() {
                   <div className="font-bold">{p.name}</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold">{money(p.price)}</div>
+                  <div className="font-bold">{money(p.price, settings?.currency)}</div>
                   <div className={`text-sm ${p.stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>{p.stock} လက်ကျန်</div>
                 </div>
               </div>
@@ -90,13 +91,13 @@ function ProductsPage() {
         ))}
       </div>
       {!products.length && <p className="text-muted-foreground">ပစ္စည်းမရှိသေးပါ။ ပထမဆုံးပစ္စည်းကို ထည့်ပါ။</p>}
-      {edit && <ProductDialog product={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
+      {edit && <ProductDialog product={edit === "new" ? null : edit} currency={settings?.currency} onClose={() => setEdit(null)} />}
       {stock && <StockDialog {...stock} onClose={() => setStock(null)} />}
     </div>
   );
 }
 
-function ProductDialog({ product, onClose }: { product: Product | null; onClose: () => void }) {
+function ProductDialog({ product, currency, onClose }: { product: Product | null; currency?: string | null; onClose: () => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({
     code: product?.code ?? "",
@@ -151,7 +152,7 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
           <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="111" /></div>
           <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
-          <div className="space-y-1"><Label>ဈေးနှုန်း (ကျပ်)</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
+          <div className="space-y-1"><Label>ဈေးနှုန်း ({currency === "THB" ? "฿" : "ကျပ်"})</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
           {!product && <div className="space-y-1"><Label>အရေအတွက်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}
           <div className="col-span-2 space-y-1"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
           <div className="col-span-2 space-y-1"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={set("description")} /></div>

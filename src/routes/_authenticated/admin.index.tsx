@@ -3,6 +3,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { isSameDay, isSameMonth } from "date-fns";
 import { ordersQuery, productsQuery, settingsQuery } from "@/lib/shop-data";
 import { money } from "@/lib/export";
+import { sumByCurrency } from "@/lib/currency";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({ meta: [
@@ -23,11 +24,12 @@ export const Route = createFileRoute("/_authenticated/admin/")({
   component: Reports,
 });
 
-function group<T>(items: T[], key: (t: T) => string, val: (t: T) => number) {
-  const m = new Map<string, { total: number; qty: number }>();
+function group<T>(items: T[], key: (t: T) => string, val: (t: T) => number, currency: (t: T) => string) {
+  const m = new Map<string, { total: number; qty: number; currency: string }>();
   for (const i of items) {
-    const k = key(i);
-    const e = m.get(k) ?? { total: 0, qty: 0 };
+    const unit = currency(i);
+    const k = `${unit} · ${key(i)}`;
+    const e = m.get(k) ?? { total: 0, qty: 0, currency: unit };
     e.total += val(i);
     e.qty += 1;
     m.set(k, e);
@@ -44,18 +46,18 @@ function Reports() {
   const returned = valid.filter((o) => o.delivery_status === "returned");
   const sales = valid.filter((o) => o.delivery_status !== "returned");
   const now = new Date();
-  const sum = (l: typeof valid) => l.reduce((s, o) => s + Number(o.total), 0);
+  const totalText = (rows: typeof valid) => sumByCurrency(rows.map((o) => ({ total: o.total, currency: o.currency ?? settings?.currency })), settings?.currency);
   const today = sales.filter((o) => isSameDay(new Date(o.created_at), now));
   const month = sales.filter((o) => isSameMonth(new Date(o.created_at), now));
-  const byProduct = group(sales, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total));
+  const byProduct = group(sales, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total), (o) => o.currency ?? settings?.currency ?? "MMK");
   const low = products.filter((p) => p.active && p.stock <= threshold);
 
   const stats = [
-    { l: "ယနေ့ရောင်းအား", v: money(sum(today)), s: `${today.length} အော်ဒါ` },
-    { l: "ယခုလ", v: money(sum(month)), s: `${month.length} အော်ဒါ` },
-    { l: "စုစုပေါင်းရောင်းအား", v: money(sum(sales)), s: `${sales.length} အော်ဒါ` },
+    { l: "ယနေ့ရောင်းအား", v: totalText(today), s: `${today.length} အော်ဒါ` },
+    { l: "ယခုလ", v: totalText(month), s: `${month.length} အော်ဒါ` },
+    { l: "စုစုပေါင်းရောင်းအား", v: totalText(sales), s: `${sales.length} အော်ဒါ` },
     { l: "မပို့ရသေးသောအော်ဒါ", v: String(sales.filter((o) => !o.sent).length), s: "ပို့ဆောင်ရန်စောင့်နေသည်" },
-    { l: "ပို့ဆောင်မှုမအောင်မြင်သည့်အရှုံး", v: money(sum(returned)), s: `${returned.length} အော်ဒါ` },
+    { l: "ပို့ဆောင်မှုမအောင်မြင်သည့်အရှုံး", v: totalText(returned), s: `${returned.length} အော်ဒါ` },
   ];
 
   return (
@@ -73,13 +75,13 @@ function Reports() {
       {returned.length > 0 && <section className="rounded-2xl border border-destructive/40 bg-card p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-bold">ပို့ဆောင်မှုမအောင်မြင်သည့်စာရင်း (အရှုံး)</h2>
-          <b className="text-destructive">အရှုံးစုစုပေါင်း: {money(sum(returned))}</b>
+          <b className="text-destructive">အရှုံးစုစုပေါင်း: {totalText(returned)}</b>
         </div>
         <div className="space-y-2 text-sm">
           {returned.map((o) => (
             <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
               <span>Order ID: {o.public_order_id} · {new Date(o.created_at).toLocaleDateString("en-GB")} · {o.product_name} · {o.quantity}ထုပ်</span>
-              <b className="text-destructive">-{money(o.total)}</b>
+              <b className="text-destructive">-{money(o.total, o.currency ?? settings?.currency)}</b>
             </div>
           ))}
         </div>
@@ -117,7 +119,7 @@ function Reports() {
   );
 }
 
-function Breakdown({ title, rows }: { title: string; rows: [string, { total: number; qty: number }][] }) {
+function Breakdown({ title, rows }: { title: string; rows: [string, { total: number; qty: number; currency: string }][] }) {
   const max = Math.max(1, ...rows.map((r) => r[1].total));
   return (
     <section className="rounded-2xl border bg-card p-5">
@@ -126,7 +128,7 @@ function Breakdown({ title, rows }: { title: string; rows: [string, { total: num
       <div className="space-y-3">
         {rows.map(([k, v]) => (
           <div key={k}>
-            <div className="flex justify-between text-sm"><span>{k}</span><span className="font-semibold">{money(v.total)} <span className="font-normal text-muted-foreground">({v.qty})</span></span></div>
+            <div className="flex justify-between text-sm"><span>{k}</span><span className="font-semibold">{money(v.total, v.currency)} <span className="font-normal text-muted-foreground">({v.qty})</span></span></div>
             <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${(v.total / max) * 100}%` }} /></div>
           </div>
         ))}

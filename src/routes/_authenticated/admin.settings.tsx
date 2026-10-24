@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { settingsQuery } from "@/lib/shop-data";
+import type { ShopCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,7 @@ function SettingsPage() {
   const { user } = Route.useRouteContext();
   const [f, setF] = useState({
     shop_name: s?.shop_name ?? "My Shop",
+    currency: s?.currency === "THB" ? "THB" : "MMK",
     fb_page_id: s?.fb_page_id ?? "",
     messenger_username: s?.messenger_username ?? "",
     bank_name: s?.bank_name ?? "",
@@ -39,7 +41,7 @@ function SettingsPage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    const { error } = await supabase.from("shop_settings").upsert({
+    const baseValues = {
       owner_id: user.id,
       shop_name: f.shop_name.trim() || "My Shop",
       fb_page_id: f.fb_page_id.trim() || null,
@@ -49,7 +51,15 @@ function SettingsPage() {
       bank_account_number: f.bank_account_number.trim() || null,
       low_stock_threshold: Math.max(0, parseInt(f.low_stock_threshold, 10) || 0),
       updated_at: new Date().toISOString(),
-    });
+    };
+    const { error } = await supabase.from("shop_settings").upsert({ ...baseValues, currency: f.currency });
+    if (error && ["42703", "PGRST204"].includes(error.code)) {
+      const { error: legacyError } = await supabase.from("shop_settings").upsert(baseValues);
+      if (legacyError) return void toast.error(legacyError.code === "23505" ? "ဤ Facebook Page ကို အခြားဈေးဆိုင်တွင် ချိတ်ထားပြီးပါပြီ" : legacyError.message);
+      toast.warning("အခြားဆက်တင်များ သိမ်းပြီးပါပြီ။ ငွေကြေးပြောင်းရန် database migration 0015 ကို အရင်အသုံးချပါ။");
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      return;
+    }
     if (error) return void toast.error(error.code === "23505" ? "ဤ Facebook Page ကို အခြားဈေးဆိုင်တွင် ချိတ်ထားပြီးပါပြီ" : error.message);
     toast.success("ဆက်တင်များ သိမ်းပြီးပါပြီ");
     qc.invalidateQueries({ queryKey: ["settings"] });
@@ -62,6 +72,14 @@ function SettingsPage() {
       <form onSubmit={save} className="space-y-4 rounded-2xl border bg-card p-6">
         <h2 className="text-lg font-bold">ဈေးဆိုင်နှင့် Messenger</h2>
         <div className="space-y-1"><Label>ဈေးဆိုင်အမည်</Label><Input value={f.shop_name} onChange={set("shop_name")} /></div>
+        <div className="space-y-1">
+          <Label htmlFor="shop-currency">ဈေးနှုန်းသုံးငွေကြေး</Label>
+          <select id="shop-currency" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value as ShopCurrency })}>
+            <option value="MMK">ကျပ် (MMK)</option>
+            <option value="THB">ဘတ် (THB)</option>
+          </select>
+          <p className="text-xs text-muted-foreground">ရွေးထားသောငွေကြေးသည် ပစ္စည်းများ၊ အော်ဒါစာရင်းနှင့် Messenger စာများတွင် အသုံးပြုပါမည်။ ငွေကြေးပြောင်းလဲခြင်းကြောင့် ဈေးနှုန်းကို အလိုအလျောက်လဲလှယ်မည်မဟုတ်ပါ။</p>
+        </div>
         <div className="space-y-1"><Label>Facebook Page ID</Label><Input value={f.fb_page_id} onChange={set("fb_page_id")} placeholder="e.g. 1029384756" /></div>
         <div className="space-y-1"><Label>Page username (m.me အော်ဒါခလုတ်အတွက်)</Label><Input value={f.messenger_username} onChange={set("messenger_username")} placeholder="yourshoppage" /></div>
         <div className="border-t pt-4 text-sm font-semibold">ကြိုတင်ငွေလွှဲရန် ဘဏ်အချက်အလက်</div>
