@@ -5,10 +5,13 @@ describe("parseLowStockPairPin", () => {
   it("accepts the documented PIN command", () => {
     expect(parseLowStockPairPin("PIN 123456")).toBe("123456");
     expect(parseLowStockPairPin(" pin 00123456 ")).toBe("00123456");
+    expect(parseLowStockPairPin("123456", true)).toBe("123456");
+    expect(parseLowStockPairPin("00123456", true)).toBe("00123456");
   });
 
   it("does not treat product codes or invalid PIN lengths as pairing commands", () => {
     expect(parseLowStockPairPin("123456")).toBeNull();
+    expect(parseLowStockPairPin("123456", false)).toBeNull();
     expect(parseLowStockPairPin("PIN 12345")).toBeNull();
     expect(parseLowStockPairPin("PIN 123456789")).toBeNull();
   });

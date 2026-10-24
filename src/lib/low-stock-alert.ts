@@ -1,5 +1,8 @@
-export function parseLowStockPairPin(message: string): string | null {
-  return message.trim().match(/^PIN\s+([0-9]{6,8})$/i)?.[1] ?? null;
+export function parseLowStockPairPin(message: string, allowBarePin = false): string | null {
+  const normalized = message.trim();
+  const prefixedPin = normalized.match(/^PIN\s+([0-9]{6,8})$/i)?.[1];
+  if (prefixedPin) return prefixedPin;
+  return allowBarePin ? normalized.match(/^([0-9]{6,8})$/)?.[1] ?? null : null;
 }
 
 export function formatLowStockAlertMessage(alert: {

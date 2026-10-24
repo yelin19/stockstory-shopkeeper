@@ -135,7 +135,7 @@ function SettingsPage() {
         </div>
         <Button type="button" onClick={saveAlertPin} disabled={savingAlertPin}>{savingAlertPin ? "သိမ်းနေသည်..." : s?.low_stock_alert_psid ? "လက်ခံမည့်အကောင့် ပြောင်းမည်" : "PIN သတ်မှတ်မည်"}</Button>
         {s?.low_stock_alert_pin_hash && !s?.low_stock_alert_psid && <div className="space-y-1 text-sm">
-          <p>PIN သတ်မှတ်ပြီးပါက လက်ခံစေလိုသော Messenger အကောင့်မှ ဆိုင် Page ကိုဖွင့်ပြီး <b>PIN 123456</b> ပုံစံဖြင့် ပို့ပါ။ အဲဒီအကောင့်ကို သတိပေးစာလက်ခံမည့်အကောင့်အဖြစ် ချိတ်ပါမည်။ PIN ကို တစ်ကြိမ်သာ အသုံးပြုနိုင်ပါသည်။</p>
+          <p>PIN သတ်မှတ်ပြီးပါက လက်ခံစေလိုသော Messenger အကောင့်မှ ဆိုင် Page ကိုဖွင့်ပြီး <b>PIN 123456</b> ပုံစံဖြင့် သို့မဟုတ် PIN နံပါတ်သက်သက် ပို့ပါ။ PIN နံပါတ်သက်သက်ကို ချိတ်ဆက်မှု စောင့်နေချိန်တွင်သာ လက်ခံပါမည်။ အဲဒီအကောင့်ကို သတိပေးစာလက်ခံမည့်အကောင့်အဖြစ် ချိတ်ပါမည်။ PIN ကို တစ်ကြိမ်သာ အသုံးပြုနိုင်ပါသည်။</p>
           {f.messenger_username.trim() && <a className="font-semibold text-primary underline" href={`https://m.me/${encodeURIComponent(f.messenger_username.trim().replace(/^@/, ""))}`} target="_blank" rel="noreferrer">ဆိုင် Page Messenger ကိုဖွင့်ရန်</a>}
         </div>}
         <p className="text-xs text-muted-foreground">Messenger က ပုံမှန်အားဖြင့် အကောင့်က Page ဆီ စာပို့ပြီး ၂၄ နာရီအတွင်းသာ မက်ဆေ့ခ်ျပို့ခွင့်ပေးနိုင်ပါသည်။ အဲဒီအချိန်ကျော်လို့ မပို့နိုင်ပါက လက်ကျန်နည်းစာရင်းကို Dashboard မှာ ဆက်မြင်နိုင်ပြီး၊ လက်ခံမည့်အကောင့်က Page ဆီ ထပ်စာပို့ပါက ပြန်ပို့ရန် ကြိုးစားပါမည်။</p>

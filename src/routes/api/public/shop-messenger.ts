@@ -70,9 +70,9 @@ function parseCustomerDetails(msg: string) {
 async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
-  const { data: shopCurrency } = await db.from("shop_settings").select("currency").eq("owner_id", owner).maybeSingle();
+  const { data: shopCurrency } = await db.from("shop_settings").select("currency,low_stock_alert_pin_hash,low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
   const fmt = (amount: number) => formatCurrency(amount, shopCurrency?.currency);
-  const pairingPin = parseLowStockPairPin(msg);
+  const pairingPin = parseLowStockPairPin(msg, Boolean(shopCurrency?.low_stock_alert_pin_hash && !shopCurrency.low_stock_alert_psid));
   if (pairingPin) {
     const { data: paired, error } = await callShopRpc(db, "pair_low_stock_alert_recipient", {
       _owner: owner, _psid: psid, _pin: pairingPin,
@@ -82,8 +82,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     await retryLowStockAlerts(owner);
     return text(psid, lowStockPairingConfirmation());
   }
-  const { data: alertSettings, error: alertSettingsError } = await db.from("shop_settings").select("low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
-  if (!alertSettingsError && alertSettings?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
+  if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
 
