@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileSpreadsheet, Copy, Truck, Undo2 } from "lucide-react";
+import { FileSpreadsheet, Copy, Truck, Undo2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ordersQuery, type Order } from "@/lib/shop-data";
 import { exportXlsx, money, type Row } from "@/lib/export";
@@ -23,6 +23,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
   const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
   const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
+  const [approvingPaymentId, setApprovingPaymentId] = useState<string | null>(null);
 
   const isShipped = (o: Order) => Boolean(o.tracking_number?.trim() && o.tracking_url?.trim());
   const scopedOrders = useMemo(
@@ -112,6 +113,22 @@ export function OrdersView({ mode }: { mode: Mode }) {
     }
   }
 
+  async function approvePayment(o: Order) {
+    if (approvingPaymentId) return;
+    setApprovingPaymentId(o.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+      const response = await fetch("/api/admin/order-shipping", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ order_id: o.id, payment_status: "approved" }) });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "ငွေပေးချေမှုအတည်ပြုမရပါ");
+      toast.success(`Order ID ${o.public_order_id} ၏ ငွေပေးချေမှုကို အတည်ပြုပြီးပါပြီ`);
+      qc.invalidateQueries();
+    } catch (err) { toast.error((err as Error).message); }
+    finally { setApprovingPaymentId(null); }
+  }
+
   // group by category → product for print
   const grouped = useMemo(() => {
     const m = new Map<string, Map<string, Order[]>>();
@@ -189,9 +206,11 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
                           {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပို့ဆောင်မှုမအောင်မြင်ပါ" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}
                         </span>
+                        {o.payment_status === "proof_submitted" && o.payment_proof_url && <a className="mt-1 block text-xs font-semibold text-primary underline" href={o.payment_proof_url} target="_blank" rel="noreferrer">ငွေလွှဲဖြတ်ပိုင်း ကြည့်မည်</a>}
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
                         {mode === "orders" && o.status !== "cancelled" && (
                           <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
+                            {o.payment_status === "proof_submitted" && <Button size="sm" variant="default" className="h-8 px-2 text-xs" title="ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အတည်ပြုမည်" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "ငွေပေးချေမှု အတည်ပြုမည်"}</Button>}
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ဝယ်ယူသူ၏ ပို့ဆောင်မည့်လိပ်စာကို Copy လုပ်မည်" onClick={() => copyAddress(o)}><Copy /> လိပ်စာ Copy</Button>
                           </div>

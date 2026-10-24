@@ -43,6 +43,13 @@ const confirmation = (psid: string, t: string) => send(psid, {
   ],
 });
 const fmt = (n: number) => Number(n).toLocaleString("en-US") + " Ks";
+const paymentChoices = (psid: string, t: string) => send(psid, {
+  text: t,
+  quick_replies: [
+    { content_type: "text", title: "ငွေကြိုလွှဲပါမည်", payload: "PREPAY" },
+    { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
+  ],
+});
 const orderCommand = (msg: string, words: string[]) => msg.trim().match(new RegExp(`^(?:${words.join("|")})\\s+([0-9]{6})$`, "i"))?.[1];
 const orderIsLocked = (o: { sent?: boolean; delivery_status?: string }) => Boolean(o.sent || ["shipped", "in_transit", "delivered", "returned"].includes(o.delivery_status ?? ""));
 
@@ -73,7 +80,16 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     const history = returnedOrders.map((o: { public_order_id: string; product_name: string; quantity: number; created_at: string }) =>
       `Order ID: ${o.public_order_id}\nရက်စွဲ: ${new Date(o.created_at).toLocaleDateString("en-GB")}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်`,
     ).join("\n\n");
-    return text(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်သို့ နောက်ထပ်ပစ္စည်း မရောင်းတော့ပါ။`);
+    const data = s.data as Record<string, unknown>;
+    if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
+      await save({ state: "idle", data: { prepay_allowed: true } });
+      return text(psid, "ကြိုတင်ငွေလွှဲစနစ်ကို ရွေးချယ်ပြီးပါပြီ။ ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ 111=2");
+    }
+    if (msg.trim() === "NO_BUY" || msg.trim() === "မဝယ်တော့ပါ") {
+      await save({ state: "idle", data: {} });
+      return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
+    }
+    if (!data.prepay_allowed) return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
   }
 
   const editOrderId = orderCommand(msg, ["ပြင်", "ပြင်ဆင်", "edit"]);
@@ -146,6 +162,12 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
       const o = order as unknown as { public_order_id?: string; order_no: number; total: number };
       const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
+      if ((d as Draft & { prepay_allowed?: boolean }).prepay_allowed) {
+        await db.from("orders").update({ payment_method: "prepaid", payment_status: "awaiting_payment" }).eq("owner_id", owner).eq("public_order_id", orderId).eq("psid", psid);
+        const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
+        await save({ state: "awaiting_payment_proof", data: { order_id: orderId } });
+        return text(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${d.qty}ထုပ်\nပေးချေရန်ပမာဏ: ${fmt(Number(o.total))}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ Admin စစ်ဆေးအတည်ပြုရန် ခဏစောင့်ပေးပါ။ Admin က အတည်ပြုခလုတ်နှိပ်မှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။`);
+      }
       await text(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${d.qty}ထုပ်\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ ပြင်လိုပါက — ပြင် ${orderId}\nအော်ဒါဖျက်လိုပါက — ဖျက် ${orderId}`);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
@@ -165,8 +187,16 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
   if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
-  return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty },
+  return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: Boolean((s.data as Record<string, unknown>).prepay_allowed) },
     `🛒 ${p.name}\n💰 တစ်ခုဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${req.qty}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
+}
+
+async function handlePaymentProof(db: Admin, owner: string, psid: string, imageUrl: string) {
+  const { data: order } = await db.from("orders").select("public_order_id").eq("owner_id", owner).eq("psid", psid).eq("payment_status", "awaiting_payment").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!order) return text(psid, "ငွေပေးချေရန်စောင့်နေသော Order မတွေ့ပါ။ အရင်ဆုံး ပစ္စည်းအော်ဒါတင်ပါရှင်။");
+  const { error } = await db.from("orders").update({ payment_status: "proof_submitted", payment_proof_url: imageUrl, payment_submitted_at: new Date().toISOString() }).eq("owner_id", owner).eq("public_order_id", order.public_order_id).eq("psid", psid);
+  if (error) return text(psid, "ဖြတ်ပိုင်းသိမ်းရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်ပို့ပါရှင်။");
+  return text(psid, `Order ID: ${order.public_order_id}\nငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။ Admin က စစ်ဆေးနေပါသဖြင့် ခဏစောင့်ပေးပါ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။`);
 }
 
 export const Route = createFileRoute("/api/public/shop-messenger")({
@@ -191,7 +221,13 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id, messenger_username").eq("fb_page_id", entry.id).maybeSingle();
           if (!shop) continue;
           for (const ev of entry.messaging ?? []) {
-            const t = ev.message?.is_echo ? undefined : (ev.message?.text ?? ev.message?.quick_reply?.payload ?? ev.postback?.payload);
+            const message = ev.message as unknown as { is_echo?: boolean; text?: string; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> } | undefined;
+            const t = message?.is_echo ? undefined : (message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
+            const imageUrl = message?.attachments?.find((a) => a.type === "image")?.payload?.url;
+            if (imageUrl) {
+              await handlePaymentProof(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl);
+              continue;
+            }
             if (!t) continue;
             try {
               await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);

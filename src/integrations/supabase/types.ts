@@ -51,6 +51,11 @@ export type Database = {
           delivery_notified_at: string | null
           delivery_status: string
           id: string
+          payment_approved_at: string | null
+          payment_method: string
+          payment_proof_url: string | null
+          payment_status: string
+          payment_submitted_at: string | null
           note: string | null
           order_no: number
           owner_id: string
@@ -80,6 +85,11 @@ export type Database = {
           delivery_notified_at?: string | null
           delivery_status?: string
           id?: string
+          payment_approved_at?: string | null
+          payment_method?: string
+          payment_proof_url?: string | null
+          payment_status?: string
+          payment_submitted_at?: string | null
           note?: string | null
           order_no?: number
           owner_id: string
@@ -109,6 +119,11 @@ export type Database = {
           delivery_notified_at?: string | null
           delivery_status?: string
           id?: string
+          payment_approved_at?: string | null
+          payment_method?: string
+          payment_proof_url?: string | null
+          payment_status?: string
+          payment_submitted_at?: string | null
           note?: string | null
           order_no?: number
           owner_id?: string
@@ -183,6 +198,9 @@ export type Database = {
       }
       shop_settings: {
         Row: {
+          bank_account_name: string | null
+          bank_account_number: string | null
+          bank_name: string | null
           fb_page_id: string | null
           low_stock_threshold: number
           messenger_username: string | null
@@ -192,6 +210,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
           fb_page_id?: string | null
           low_stock_threshold?: number
           messenger_username?: string | null
@@ -201,6 +222,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
           fb_page_id?: string | null
           low_stock_threshold?: number
           messenger_username?: string | null

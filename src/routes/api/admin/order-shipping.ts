@@ -12,6 +12,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
         const parsed = z.object({
           order_id: z.string().uuid(),
+          payment_status: z.enum(["approved", "rejected"]).optional(),
           delivery_status: z.enum(["confirmed", "preparing", "shipped", "in_transit", "delivered", "returned", "cancelled"]).optional(),
           tracking_number: z.string().trim().max(200).nullish(),
           tracking_url: z.string().trim().max(2000).nullish(),
@@ -28,10 +29,22 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const { data: userData, error: userError } = await authClient.auth.getUser(token);
         if (userError || !userData.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, product_name, delivery_status, status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
+        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, product_name, total, delivery_status, payment_status, status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
         if (orderError) return Response.json({ error: orderError.message }, { status: 500 });
         if (!order) return Response.json({ error: "Order not found" }, { status: 404 });
         if (order.status === "cancelled") return Response.json({ error: "Order is cancelled" }, { status: 409 });
+
+        if (body.payment_status) {
+          if (body.payment_status === "approved" && !order.psid) return Response.json({ error: "ဒီအော်ဒါမှာ Messenger customer မရှိပါ" }, { status: 400 });
+          const now = new Date().toISOString();
+          const { error: paymentError } = await authClient.from("orders").update({ payment_status: body.payment_status, payment_approved_at: body.payment_status === "approved" ? now : null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          if (paymentError) return Response.json({ error: paymentError.message }, { status: 500 });
+          if (body.payment_status === "approved" && order.psid) {
+            const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
+            if (tokenValue) await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: `✅ Order ID: ${order.public_order_id} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းအမည်: ${order.product_name}\nပေးချေပြီးငွေ: ${Number(order.total).toLocaleString("en-US")} Ks\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။` } }) });
+          }
+          return Response.json({ ok: true, payment_status: body.payment_status });
+        }
 
         const trackingUrl = body.tracking_url?.trim() || null;
         const trackingNumber = body.tracking_number?.trim() || null;
