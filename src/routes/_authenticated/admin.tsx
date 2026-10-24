@@ -1,6 +1,8 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { BarChart3, Package, ShoppingBag, MapPin, History, Settings, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { settingsQuery } from "@/lib/shop-data";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -23,16 +25,17 @@ const nav = [
   { to: "/admin/orders", label: "အော်ဒါများ", icon: ShoppingBag },
   { to: "/admin/addresses", label: "ပို့ပြီးသော Order များ", icon: MapPin },
   { to: "/admin/stock", label: "လက်ကျန်မှတ်တမ်း", icon: History },
-  { to: "/admin/settings", label: "ဆက်တင်များနှင့် PIN", icon: Settings },
+  { to: "/admin/settings", label: "ဆက်တင်များနှင့် Messenger", icon: Settings },
 ] as const;
 
 function AdminLayout() {
   const { user } = Route.useRouteContext();
+  const { data: settings } = useSuspenseQuery(settingsQuery);
   const navigate = useNavigate();
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="no-print flex shrink-0 flex-col bg-sidebar text-sidebar-foreground md:w-60">
-        <div className="px-5 py-5 font-display text-lg font-bold">Messenger ဈေးဆိုင်</div>
+        <div className="px-5 py-5 font-display text-lg font-bold">{settings?.shop_name || "Messenger ဈေးဆိုင်"}</div>
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col">
           {nav.map((n) => (
             <Link

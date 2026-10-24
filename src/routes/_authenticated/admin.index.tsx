@@ -60,7 +60,7 @@ function Reports() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-3xl font-bold">ရောင်းအားအစီရင်ခံစာ</h1>
+      <div><div className="text-sm font-semibold text-primary">{settings?.shop_name || "Messenger ဈေးဆိုင်"}</div><h1 className="text-3xl font-bold">ရောင်းအားအစီရင်ခံစာ</h1></div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((s) => (
           <div key={s.l} className="rounded-2xl border bg-card p-5">
