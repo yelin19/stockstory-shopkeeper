@@ -89,10 +89,11 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (!f.price.trim()) return void toast.error("ဈေးနှုန်းထည့်ရန်လိုအပ်ပါသည် (အခမဲ့ဖြစ်ပါက 0 ဟုထည့်ပါ)");
     const price = Number(f.price);
     const stock = parseInt(f.stock, 10);
     if (!/^[A-Za-z0-9_-]{1,32}$/.test(f.code)) return void toast.error("Code တွင် အက္ခရာ/ဂဏန်းများသာ ထည့်ပါ၊ space မထည့်ပါနှင့်");
-    if (!f.name.trim() || !(price >= 0)) return void toast.error("အမည်နှင့် မှန်ကန်သောဈေးနှုန်း ထည့်ရန်လိုပါသည်");
+    if (!f.name.trim() || !Number.isFinite(price) || !(price >= 0)) return void toast.error("အမည်နှင့် မှန်ကန်သောဈေးနှုန်း ထည့်ရန်လိုပါသည်");
     if (!product && !(stock >= 0)) return void toast.error("အရေအတွက်သည် အနုတ်မဖြစ်ရပါ");
     setBusy(true);
     try {
@@ -126,7 +127,7 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
           <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="111" /></div>
           <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
-          <div className="space-y-1"><Label>ဈေးနှုန်း (ကျပ်)</Label><Input type="number" min="0" step="any" value={f.price} onChange={set("price")} /></div>
+          <div className="space-y-1"><Label>ဈေးနှုန်း (ကျပ်)</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
           {!product && <div className="space-y-1"><Label>အရေအတွက်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}
           <div className="col-span-2 space-y-1"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
           <div className="col-span-2 space-y-1"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={set("description")} /></div>
@@ -138,24 +139,75 @@ function ProductDialog({ product, onClose }: { product: Product | null; onClose:
   );
 }
 
+type PendingStockAction = { requestId: string; delta: number; note: string };
+
+function readPendingStockAction(key: string): PendingStockAction | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PendingStockAction>;
+    return typeof value.requestId === "string" && typeof value.delta === "number" && Number.isInteger(value.delta) && typeof value.note === "string"
+      ? value as PendingStockAction
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function storePendingStockAction(key: string, action: PendingStockAction | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (action) window.sessionStorage.setItem(key, JSON.stringify(action));
+    else window.sessionStorage.removeItem(key);
+  } catch {
+    // The in-memory retry state still protects the current dialog if storage is unavailable.
+  }
+}
+
 function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adjust"; onClose: () => void }) {
   const qc = useQueryClient();
-  const [qty, setQty] = useState("");
-  const [note, setNote] = useState("");
+  const storageKey = `shop-stock-action:${p.id}:${mode}`;
+  const [initialAction] = useState(() => readPendingStockAction(storageKey));
+  const [pendingAction, setPendingAction] = useState<PendingStockAction | null>(initialAction);
+  const [qty, setQty] = useState(initialAction ? String(initialAction.delta) : "");
+  const [note, setNote] = useState(initialAction?.note ?? "");
   const [saving, setSaving] = useState(false);
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (saving) return;
     const n = parseInt(qty, 10);
     if (!n || (mode === "increase" && n <= 0)) return void toast.error("မှန်ကန်သောအရေအတွက် ထည့်ပါ");
+    const action = pendingAction ?? { requestId: crypto.randomUUID(), delta: n, note };
+    if (!pendingAction) {
+      setPendingAction(action);
+      storePendingStockAction(storageKey, action);
+    }
     setSaving(true);
     try {
-      const requestId = crypto.randomUUID();
-      const { error } = await supabase.rpc("change_stock", { _product_id: p.id, _delta: n, _reason: mode, _note: note, _request_id: requestId });
-      if (error) return void toast.error(error.message);
+      const { error } = await supabase.rpc("change_stock", { _product_id: p.id, _delta: action.delta, _reason: mode, _note: action.note, _request_id: action.requestId });
+      if (error) {
+        const outcomeUnknown = !/^[0-9A-Z]{5}$/.test(error.code);
+        if (outcomeUnknown) {
+          setPendingAction(action);
+          storePendingStockAction(storageKey, action);
+          toast.error("ရလဒ်ကို မသေချာပါ။ လက်ကျန်နှစ်ခါမပြောင်းစေရန် ယခုလုပ်ဆောင်ချက်ကို ထပ်စမ်းပါ။");
+        } else {
+          setPendingAction(null);
+          storePendingStockAction(storageKey, null);
+          toast.error(error.message);
+        }
+        return;
+      }
+      setPendingAction(null);
+      storePendingStockAction(storageKey, null);
       toast.success("လက်ကျန်ပြင်ပြီးပါပြီ");
       qc.invalidateQueries();
       onClose();
+    } catch (err) {
+      setPendingAction(action);
+      storePendingStockAction(storageKey, action);
+      toast.error("ရလဒ်ကို မသေချာပါ။ တူညီသော request ID ဖြင့် ထပ်စမ်းပါ။");
     } finally {
       setSaving(false);
     }
@@ -168,10 +220,10 @@ function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adj
           <p className="text-sm text-muted-foreground">လက်ရှိလက်ကျန်: <b>{p.stock}</b></p>
           <div className="space-y-1">
             <Label>{mode === "increase" ? "ထပ်ဖြည့်မည့်အရေအတွက်" : "ပြောင်းလဲမည့်အရေအတွက် (ဖယ်ရန် -2 ကဲ့သို့ အနုတ်သုံးပါ)"}</Label>
-            <Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} disabled={saving || Boolean(pendingAction)} />
           </div>
-          <div className="space-y-1"><Label>မှတ်ချက်</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="မဖြစ်မနေမဟုတ်ပါ" /></div>
-          <Button className="w-full" type="submit" disabled={saving}>{saving ? "သိမ်းနေသည်..." : "သိမ်းမည်"}</Button>
+          <div className="space-y-1"><Label>မှတ်ချက်</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="မဖြစ်မနေမဟုတ်ပါ" disabled={saving || Boolean(pendingAction)} /></div>
+          <Button className="w-full" type="submit" disabled={saving}>{saving ? "သိမ်းနေသည်..." : pendingAction ? "တူညီသောလုပ်ဆောင်ချက်ကို ထပ်စမ်းမည်" : "သိမ်းမည်"}</Button>
         </form>
       </DialogContent>
     </Dialog>

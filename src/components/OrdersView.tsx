@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { FileSpreadsheet, Copy, Truck, Undo2, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { ordersQuery, type Order } from "@/lib/shop-data";
+import { isOrderShipped, ordersQuery, type Order } from "@/lib/shop-data";
 import { exportXlsx, money, type Row } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
   const [approvingPaymentId, setApprovingPaymentId] = useState<string | null>(null);
 
-  const isShipped = (o: Order) => Boolean(o.tracking_number?.trim() && o.tracking_url?.trim());
   const scopedOrders = useMemo(
-    () => orders.filter((o) => mode === "orders" ? !isShipped(o) : isShipped(o)),
+    () => orders.filter((o) => mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o)),
     [orders, mode],
   );
   const uniq = (f: (o: Order) => string) => [...new Set(scopedOrders.map(f))].sort();
@@ -53,8 +52,9 @@ export function OrdersView({ mode }: { mode: Mode }) {
       : {
           "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Total: Number(o.total), Note: o.note ?? "",
-        },
+      },
   );
+  const exportRows = rows.filter((_, index) => filtered[index]?.status !== "cancelled");
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
   async function copyAddress(o: Order) {
@@ -150,7 +150,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
           <p className="mt-1 text-sm text-muted-foreground">{mode === "orders" ? "မပို့ရသေးသော Order များသာ ပြထားသည်" : "ပို့ပြီးသော Order များကိုသာ ပြန်ရှာနိုင်သည်"}</p>
         </div>
         {mode === "orders" && <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportXlsx(rows, `${fname}.xlsx`)} disabled={!rows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
+          <Button variant="outline" size="sm" onClick={() => exportXlsx(exportRows, `${fname}.xlsx`)} disabled={!exportRows.length}><FileSpreadsheet /> Excel ထုတ်မည်</Button>
         </div>}
       </div>
 
@@ -287,9 +287,10 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
         body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
       });
-      const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean };
+      const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean; notified?: boolean; delivery_status?: string };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
-      toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ` : result.accepted ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို လက်ခံထားအဖြစ် သိမ်းပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို Messenger ဆီ ပို့ပြီးပါပြီ`);
+      const label = deliveryLabels[result.delivery_status ?? "confirmed"] ?? result.delivery_status ?? "confirmed";
+      toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ` : result.notified ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ${label} အဖြစ်သိမ်းပြီး Messenger ဆီ ပို့ပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို ${label} အဖြစ်သိမ်းပြီးပါပြီ`);
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);

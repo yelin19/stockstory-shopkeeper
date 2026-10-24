@@ -30,27 +30,28 @@ async function save(tracking_number: string, tracking_url: string) {
   if (!mocks.post) throw new Error("Shipping handler missing");
   return mocks.post({ request: new Request("http://localhost/api/admin/order-shipping", { method: "POST", headers: { authorization: "Bearer test-session", "content-type": "application/json" }, body: JSON.stringify({ order_id: "00000000-0000-4000-8000-000000000001", tracking_number, tracking_url, delivery_status: "delivered" }) }) });
 }
-it("keeps the order accepted and sends no Messenger message when Tracking ID is missing", async () => {
+it("saves the selected delivery status but sends no Messenger message when Tracking ID is missing", async () => {
   const result = await save("   ", "https://tracking.test/100001");
   expect(result.status).toBe(200);
   expect(await result.json()).toMatchObject({ accepted: true });
-  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ delivery_status: "confirmed", sent: false, sent_at: null, delivery_notified_at: null }));
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ delivery_status: "delivered", sent: false, sent_at: null, delivery_notified_at: null }));
   expect(mocks.send).not.toHaveBeenCalled();
 });
-it("keeps the order accepted and sends no Messenger message when Tracking link is missing", async () => {
+it("saves the selected delivery status but sends no Messenger message when Tracking link is missing", async () => {
   const result = await save("TRACK-100001", "   ");
   expect(result.status).toBe(200);
-  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ delivery_status: "confirmed", sent: false }));
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ delivery_status: "delivered", sent: false }));
   expect(mocks.send).not.toHaveBeenCalled();
 });
-it("marks shipped and sends tracking to Messenger only when both fields are provided", async () => {
+it("persists the selected status and sends tracking to Messenger only when both fields are provided", async () => {
   const result = await save(" TRACK-100001 ", " https://tracking.test/100001 ");
   expect(result.status).toBe(200);
   expect(mocks.send).toHaveBeenCalledTimes(1);
   const payload = JSON.parse(mocks.send.mock.calls[0]?.[1]?.body ?? "{}");
   expect(payload.message.text).toContain("TRACK-100001");
   expect(payload.message.text).toContain("https://tracking.test/100001");
-  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ delivery_status: "shipped", sent: true }));
+  expect(payload.message.text).toContain("ပစ္စည်းရောက်ရှိပြီးပါပြီ");
+  expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ delivery_status: "delivered", sent: true }));
 });
 it("does not mark shipped if Messenger rejects the notification", async () => {
   mocks.send.mockResolvedValue(new Response("{}", { status: 400 }));

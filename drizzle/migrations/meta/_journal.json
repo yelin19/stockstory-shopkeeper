@@ -15,6 +15,27 @@
       "when": 1792490393760,
       "tag": "0001_image_policy_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792842017350,
+      "tag": "0012_secure_order_updates_and_messenger_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792853515360,
+      "tag": "0013_stock_action_request_lock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792854386815,
+      "tag": "0014_public_product_sold_count",
+      "breakpoints": true
     }
   ]
 }

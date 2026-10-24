@@ -49,7 +49,7 @@ function AdminLayout() {
             </Link>
           ))}
         </nav>
-        <div className="mt-auto hidden border-t border-sidebar-border p-4 text-xs md:block">
+        <div className="mt-auto border-t border-sidebar-border p-4 text-xs">
           <div className="opacity-70">{(user.user_metadata as { username?: string })?.username ?? "admin"}</div>
           <button
             className="mt-2 flex items-center gap-2 opacity-80 hover:opacity-100"

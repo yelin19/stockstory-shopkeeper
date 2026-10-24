@@ -19,7 +19,8 @@ export const getPublicProduct = createServerFn({ method: "GET" })
         },
       },
     });
-    const { data: rows } = await sb.rpc("get_public_product", { _code: data.code });
+    const { data: rows, error } = await sb.rpc("get_public_product", { _code: data.code });
+    if (error) throw error;
     const req = getRequest();
     const url = new URL(req.url);
     const sandboxHost = url.hostname === "localhost" ? req.headers.get("x-forwarded-host") : null;

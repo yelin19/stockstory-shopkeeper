@@ -333,6 +333,7 @@ export type Database = {
           name: string
           price: number
           shop_name: string
+          sold_count: number
           stock: number
         }[]
       }

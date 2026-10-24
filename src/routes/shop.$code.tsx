@@ -16,7 +16,7 @@ export const Route = createFileRoute("/shop/$code")({
     const p = loaderData.product;
     const title = `${p.name} — ${money(p.price)}`;
     const desc = p.description?.slice(0, 160) || `${p.name} · ${p.category} · Order on Messenger with code ${p.code}`;
-    const img = p.image_url ? `${loaderData.origin}${productImageUrl(p.code)}` : null;
+    const img = p.image_url ? `${loaderData.origin}${productImageUrl(p.code, p.image_url)}` : null;
     return {
       meta: [
         { title },
@@ -40,20 +40,22 @@ export const Route = createFileRoute("/shop/$code")({
 function ProductPage() {
   const { product: p } = Route.useLoaderData();
   if (!p) return null;
-  const mme = p.messenger_username ? `https://m.me/${p.messenger_username}?text=${encodeURIComponent(`${p.code} 1`)}` : null;
+  const mme = p.messenger_username && p.stock > 0 ? `https://m.me/${p.messenger_username}?text=${encodeURIComponent(`${p.code} 1`)}` : null;
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto grid max-w-5xl gap-8 px-5 py-10 md:grid-cols-2 md:py-16">
         <div className="overflow-hidden rounded-3xl bg-muted">
-          {p.image_url ? <img src={productImageUrl(p.code)} alt={p.name} className="aspect-square size-full object-cover" /> : <div className="aspect-square" />}
+          {p.image_url ? <img src={productImageUrl(p.code, p.image_url)} alt={p.name} className="aspect-square size-full object-cover" /> : <div className="aspect-square" />}
         </div>
         <div className="flex flex-col justify-center gap-5">
           <div className="text-sm font-semibold uppercase tracking-widest text-primary">{p.shop_name ?? "ဈေးဆိုင်"} · {p.category}</div>
           <h1 className="text-4xl font-extrabold md:text-5xl">{p.name}</h1>
           <div className="font-display text-3xl font-bold">{money(p.price)}</div>
+          {typeof p.sold_count === "number" && <div className="text-sm text-muted-foreground">{p.sold_count.toLocaleString("en-US")} ခု ရောင်းပြီး</div>}
           <div className={p.stock > 0 ? "text-success" : "text-destructive"}>{p.stock > 0 ? `${p.stock} လက်ကျန်` : "လက်ကျန်ကုန်ပြီ"}</div>
           {p.description && <p className="whitespace-pre-line text-muted-foreground">{p.description}</p>}
-          <div className="rounded-xl bg-secondary p-4 text-sm">ပစ္စည်း Code <b className="font-mono text-lg">{p.code}</b> — Messenger တွင် <b>{p.code} 2</b> ပို့ပြီး ၂ ခု အော်ဒါတင်ပါ။</div>
+          {p.stock > 0 && <div className="rounded-xl bg-secondary p-4 text-sm">ပစ္စည်း Code <b className="font-mono text-lg">{p.code}</b> — Messenger တွင် <b>{p.code} 1</b> ပို့ပြီး ၁ ခု အော်ဒါတင်ပါ။</div>}
+          {p.stock > 0 && !p.messenger_username && <p className="text-sm text-muted-foreground">Messenger မှာမှာယူရန် ဆိုင်၏ Page username ကို ဆိုင်ရှင်ထံမှ ရယူပါ။</p>}
           {mme && (
             <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
               <a href={mme} target="_blank" rel="noreferrer"><MessageCircle /> Messenger မှ အော်ဒါတင်မည်</a>

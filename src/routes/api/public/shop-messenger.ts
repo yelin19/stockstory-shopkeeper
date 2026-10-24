@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { parseProductRequest, isYes, isNo } from "@/lib/messenger-parse";
+import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSignature } from "@/lib/messenger-webhook";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -10,19 +11,6 @@ type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["su
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
 const callShopRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
   (db.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
-
-async function verifySignature(body: string, header: string | null) {
-  const secret = envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET");
-  if (!secret || !header?.startsWith("sha256=")) return false;
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)));
-  const hex = [...sig].map((b) => b.toString(16).padStart(2, "0")).join("");
-  const given = header.slice(7);
-  if (given.length !== hex.length) return false;
-  let diff = 0;
-  for (let i = 0; i < hex.length; i++) diff |= hex.charCodeAt(i) ^ given.charCodeAt(i);
-  return diff === 0;
-}
 
 async function send(psid: string, message: Record<string, unknown>) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
@@ -89,8 +77,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     ).join("\n\n");
     const data = s.data as Record<string, unknown>;
     if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
-      const pendingCode = typeof data.pending_code === "string" ? data.pending_code : "";
-      const pendingQty = typeof data.pending_qty === "number" ? data.pending_qty : null;
+      const pendingCode = typeof data["pending_code"] === "string" ? data["pending_code"] : "";
+      const pendingQty = typeof data["pending_qty"] === "number" ? data["pending_qty"] : null;
       if (pendingCode && pendingQty) {
         const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
         if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
@@ -111,7 +99,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       await save({ state: "prepay_choice", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
       return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
     }
-    if (!data.prepay_allowed) {
+    if (!data["prepay_allowed"]) {
       const nextData = incoming?.qty ? { pending_code: incoming.code, pending_qty: incoming.qty } : {};
       await save({ state: "prepay_choice", data: nextData });
       return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
@@ -184,7 +172,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
-      const { data: order, error } = await db.rpc("place_order", {
+      const { data: order, error } = await callShopRpc(db, "place_order_from_messenger", {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? ""),
       });
@@ -217,7 +205,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
   if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
-  if ((s.data as Record<string, unknown>).prepay_allowed) {
+  if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
     const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
     return next("awaiting_payment_proof", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: true },
       `🛒 ${p.name}\nအရေအတွက်: ${req.qty}ထုပ်\nပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * req.qty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
@@ -249,15 +237,28 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
       GET: async ({ request }) => {
         const u = new URL(request.url);
         const expected = envFirst("SHOP_FB_VERIFY_TOKEN", "FB_VERIFY_TOKEN");
-        if (expected && u.searchParams.get("hub.mode") === "subscribe" && u.searchParams.get("hub.verify_token") === expected) {
-          return new Response(u.searchParams.get("hub.challenge") ?? "", { status: 200 });
+        const parsed = messengerVerificationSchema.safeParse({
+          mode: u.searchParams.get("hub.mode"),
+          token: u.searchParams.get("hub.verify_token"),
+          challenge: u.searchParams.get("hub.challenge"),
+        });
+        if (expected && parsed.success && parsed.data.token === expected) {
+          return new Response(parsed.data.challenge, { status: 200 });
         }
         return new Response("Forbidden", { status: 403 });
       },
       POST: async ({ request }) => {
         const body = await request.text();
-        if (!(await verifySignature(body, request.headers.get("x-hub-signature-256")))) return new Response("Invalid signature", { status: 401 });
-        const payload = JSON.parse(body) as { object?: string; entry?: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string } }; postback?: { payload?: string } }[] }[] };
+        if (!(await verifyMessengerSignature(body, request.headers.get("x-hub-signature-256"), envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET")))) return new Response("Invalid signature", { status: 401 });
+        let json: unknown;
+        try {
+          json = JSON.parse(body);
+        } catch {
+          return new Response("Invalid JSON", { status: 400 });
+        }
+        const parsed = messengerPayloadSchema.safeParse(json);
+        if (!parsed.success) return new Response("Invalid Messenger payload", { status: 400 });
+        const payload = parsed.data as unknown as { object: string; entry: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[] }[] };
         if (payload.object !== "page") return new Response("ok");
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
@@ -277,6 +278,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
               await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
             } catch (e) {
               console.error("shop-messenger handler error", (e as Error).message);
+              return new Response("Temporary processing error", { status: 500 });
             }
           }
         }

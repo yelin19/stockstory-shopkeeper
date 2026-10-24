@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const parsed = z.object({
           order_id: z.string().uuid(),
           payment_status: z.enum(["approved", "rejected"]).optional(),
-          delivery_status: z.enum(["confirmed", "preparing", "shipped", "in_transit", "delivered", "returned", "cancelled"]).optional(),
+          delivery_status: z.enum(["confirmed", "preparing", "shipped", "in_transit", "delivered", "returned"]).optional(),
           tracking_number: z.string().trim().max(200).nullish(),
           tracking_url: z.string().trim().max(2000).nullish(),
           image_url: z.string().trim().url().max(2000).nullish(),
@@ -52,15 +52,15 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         if (body.delivery_status === "returned") {
           const { error: returnedError } = await authClient.from("orders").update({ delivery_status: "returned", updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (returnedError) return Response.json({ error: returnedError.message }, { status: 500 });
-          return Response.json({ ok: true, returned: true, message: "ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ" });
+          return Response.json({ ok: true, returned: true, delivery_status: "returned", message: "ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ" });
         }
         const readyToShip = Boolean(trackingNumber && trackingUrl);
-        const deliveryStatus = readyToShip ? "shipped" : "confirmed";
+        const deliveryStatus = body.delivery_status ?? (readyToShip ? "shipped" : "confirmed");
         const now = new Date().toISOString();
         if (!readyToShip) {
-          const { error: acceptedError } = await authClient.from("orders").update({ delivery_status: "confirmed", sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          const { error: acceptedError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (acceptedError) return Response.json({ error: acceptedError.message }, { status: 500 });
-          return Response.json({ ok: true, accepted: true, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် လက်ခံထားအဖြစ်သိမ်းပြီးပါပြီ" });
+          return Response.json({ ok: true, accepted: true, delivery_status: deliveryStatus, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် အခြေအနေကိုသိမ်းပြီးပါပြီ" });
         }
         if (!order.psid) return Response.json({ error: "ဒီအော်ဒါမှာ Messenger customer မရှိပါ" }, { status: 400 });
         if (!/^https?:\/\//i.test(trackingUrl ?? "")) return Response.json({ error: "Invalid tracking link" }, { status: 400 });
@@ -68,7 +68,14 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         if (!tokenValue) return Response.json({ error: "Facebook Page Access Token မတွေ့ပါ" }, { status: 500 });
 
         const orderId = order.public_order_id ?? String(order.order_no).padStart(6, "0");
-        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ပို့ဆောင်ပေးနေပါပြီ\nပစ္စည်းအမည်: ${order.product_name}\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
+        const statusMessage: Record<string, string> = {
+          confirmed: "အော်ဒါလက်ခံပြီးပါပြီ",
+          preparing: "ပစ္စည်းပြင်ဆင်နေပါပြီ",
+          shipped: "ပို့ဆောင်ပေးနေပါပြီ",
+          in_transit: "ပို့ဆောင်နေပါပြီ",
+          delivered: "ပစ္စည်းရောက်ရှိပြီးပါပြီ",
+        };
+        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ${statusMessage[deliveryStatus] ?? statusMessage["shipped"]}\nပစ္စည်းအမည်: ${order.product_name}\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
         const sendText = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: message } }),
         });
@@ -82,7 +89,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
 
         const { error: updateError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
-        return Response.json({ ok: true, public_order_id: orderId });
+        return Response.json({ ok: true, public_order_id: orderId, delivery_status: deliveryStatus, notified: true });
       },
     },
   },
