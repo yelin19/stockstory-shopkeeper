@@ -222,7 +222,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (customer) {
     const oldDraft = { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, name: customer.name, phone: customer.phone, address: customer.address, note: "" };
     await save({ state: "confirm", data: oldDraft });
-    return confirmation(psid, `အရင်အသုံးပြုထားသော အချက်အလက်\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
+    return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${p.name}=${req.qty}ထုပ်\n\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
   }
   return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: false },
     `🛒 ${p.name}\n💰 တစ်ခုဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${req.qty}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
