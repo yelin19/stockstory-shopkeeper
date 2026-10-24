@@ -2,9 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink } from "lucide-react";
+import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { productsQuery, productImageUrl, type Product } from "@/lib/shop-data";
+import { productsQuery, productImageUrl, productPageUrl, type Product } from "@/lib/shop-data";
 import { money } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,29 @@ function ProductsPage() {
   const { data: products } = useSuspenseQuery(productsQuery);
   const [edit, setEdit] = useState<Product | "new" | null>(null);
   const [stock, setStock] = useState<{ p: Product; mode: "increase" | "adjust" } | null>(null);
+
+  async function copyProductLink(code: string) {
+    const link = productPageUrl(code, window.location.origin);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = link;
+        field.setAttribute("readonly", "true");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        const copied = document.execCommand("copy");
+        field.remove();
+        if (!copied) throw new Error("Clipboard copy failed");
+      }
+      toast.success("ပစ္စည်းလင့်ခ်ကို ကူးယူပြီးပါပြီ။ Facebook comment ထဲမှာ ထည့်နိုင်ပါတယ်။");
+    } catch {
+      toast.error("လင့်ခ်ကူးမရပါ။ ပြန်စမ်းကြည့်ပါ။");
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -59,6 +82,7 @@ function ProductsPage() {
                 <Button size="sm" onClick={() => setStock({ p, mode: "increase" })}><PackagePlus /> လက်ကျန်ထပ်ဖြည့်မည်</Button>
                 <Button size="sm" variant="outline" onClick={() => setStock({ p, mode: "adjust" })}><SlidersHorizontal /> လက်ကျန်ပြင်မည်</Button>
                 <Button size="sm" variant="ghost" onClick={() => setEdit(p)}><Pencil /></Button>
+                <Button size="sm" variant="outline" title="ပစ္စည်းလင့်ခ်ကူးယူမည်" aria-label={`${p.name} ပစ္စည်းလင့်ခ်ကူးယူမည်`} onClick={() => void copyProductLink(p.code)}><Copy /> လင့်ခ်ကူးယူမည်</Button>
                 <Button size="sm" variant="ghost" asChild><Link to="/shop/$code" params={{ code: p.code }} target="_blank"><ExternalLink /></Link></Button>
               </div>
             </div>

@@ -98,6 +98,10 @@ export const settingsQuery = queryOptions({
   },
 });
 
+export function productPageUrl(code: string, origin: string) {
+  return new URL(`/shop/${encodeURIComponent(code)}`, origin).toString();
+}
+
 export function productImageUrl(code: string, version?: string | null) {
   return `/api/public/product-image/${encodeURIComponent(code)}${version ? `?v=${encodeURIComponent(version)}` : ""}`;
 }
