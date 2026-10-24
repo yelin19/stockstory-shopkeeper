@@ -4,6 +4,7 @@ import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSig
 import { formatCurrency } from "@/lib/currency";
 import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
 import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
+import { productPageUrl } from "@/lib/shop-data";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -34,6 +35,24 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+async function sendProductCard(
+  psid: string,
+  product: { code: string; name: string; price: number; stock: number; image_url: string | null },
+  origin: string,
+  formatPrice: (amount: number) => string,
+) {
+  const url = productPageUrl(product.code, origin);
+  const element: Record<string, unknown> = {
+    title: product.name.slice(0, 80),
+    subtitle: `${formatPrice(Number(product.price))} · လက်ကျန် ${product.stock} ခု`,
+    default_action: { type: "web_url", url, webview_height_ratio: "tall" },
+    buttons: [{ type: "web_url", url, title: "ပစ္စည်းကို ကြည့်ရန်" }],
+  };
+  if (product.image_url) {
+    element["image_url"] = `${origin}/api/public/product-image/${encodeURIComponent(product.code)}`;
+  }
+  await send(psid, { attachment: { type: "template", payload: { template_type: "generic", elements: [element] } } });
+}
 const confirmation = (psid: string, t: string) => send(psid, {
   text: t,
   quick_replies: [
@@ -225,13 +244,12 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
   if (!p) return text(psid, `Code ${req.code} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
   const { data: shop } = await db.from("shop_settings").select("shop_name").eq("owner_id", owner).maybeSingle();
+  await sendProductCard(psid, p, origin, fmt);
 
   if (req.qty === null) {
-    if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
     return text(psid, `🏪 ${shop?.shop_name ?? "ဈေးဆိုင်"}\n\n${p.name}\n💰 ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `လက်ကျန် ${p.stock}` : "လက်ကျန်ကုန်ပါပြီ"}${p.description ? `\n\n${p.description}` : ""}\n\nအော်ဒါတင်ရန် ${p.code} 1 သို့မဟုတ် ${p.code}=2 ပို့ပါ။`);
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
-  if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
     const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
     return next("awaiting_payment_proof", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: true },
