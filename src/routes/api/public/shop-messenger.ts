@@ -181,7 +181,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? ""),
       });
-      await save({ state: "idle", data: {} });
+      await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
       const o = order as unknown as { public_order_id?: string; order_no: number; total: number };
       const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
@@ -217,8 +217,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
     .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (previous) {
-    const oldDraft = { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address, note: "" };
+  const lastCustomer = (s.data as { last_customer?: { name?: string; phone?: string; address?: string } }).last_customer;
+  const customer = previous ? { name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address } : lastCustomer?.name && lastCustomer.phone && lastCustomer.address ? lastCustomer : null;
+  if (customer) {
+    const oldDraft = { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, name: customer.name, phone: customer.phone, address: customer.address, note: "" };
     await save({ state: "confirm", data: oldDraft });
     return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${p.name}=${req.qty}ထုပ်\n\nအရင်အသုံးပြုထားသော အချက်အလက်\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
   }
