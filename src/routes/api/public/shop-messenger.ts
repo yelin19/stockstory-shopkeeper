@@ -50,6 +50,13 @@ const paymentChoices = (psid: string, t: string) => send(psid, {
     { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
   ],
 });
+const orderActions = (psid: string, t: string, orderId: string) => send(psid, {
+  text: t,
+  quick_replies: [
+    { content_type: "text", title: "ပြင်မည်", payload: `ပြင် ${orderId}` },
+    { content_type: "text", title: "ဖျက်မည်", payload: `ဖျက် ${orderId}` },
+  ],
+});
 const orderCommand = (msg: string, words: string[]) => msg.trim().match(new RegExp(`^(?:${words.join("|")})\\s+([0-9]{6})$`, "i"))?.[1];
 const orderIsLocked = (o: { sent?: boolean; delivery_status?: string }) => Boolean(o.sent || ["shipped", "in_transit", "delivered", "returned"].includes(o.delivery_status ?? ""));
 
@@ -190,7 +197,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         await db.from("orders").update({ payment_method: "prepaid", payment_status: "proof_submitted", payment_proof_url: proofUrl || null, payment_submitted_at: new Date().toISOString() }).eq("owner_id", owner).eq("public_order_id", orderId).eq("psid", psid);
         return text(psid, `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။`);
       }
-      await text(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${d.qty}ထုပ်\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ ပြင်လိုပါက — ပြင် ${orderId}\nအော်ဒါဖျက်လိုပါက — ဖျက် ${orderId}`);
+      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${d.qty}ထုပ်\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
