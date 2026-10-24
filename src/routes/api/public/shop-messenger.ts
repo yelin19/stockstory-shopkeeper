@@ -82,6 +82,16 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     ).join("\n\n");
     const data = s.data as Record<string, unknown>;
     if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
+      const pendingCode = typeof data.pending_code === "string" ? data.pending_code : "";
+      const pendingQty = typeof data.pending_qty === "number" ? data.pending_qty : null;
+      if (pendingCode && pendingQty) {
+        const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
+        if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
+        if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+        const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
+        await save({ state: "awaiting_payment_proof", data: { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: pendingQty, prepay_allowed: true } });
+        return text(psid, `🛒 ပစ္စည်းအမည်: ${p.name}\n🔢 အရေအတွက်: ${pendingQty}ထုပ်\n💰 တစ်ထုပ်ဈေး: ${fmt(Number(p.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * pendingQty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
+      }
       await save({ state: "idle", data: { prepay_allowed: true } });
       return text(psid, "ကြိုတင်ငွေလွှဲစနစ်ကို ရွေးချယ်ပြီးပါပြီ။ ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ 111=2");
     }
@@ -89,7 +99,12 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       await save({ state: "idle", data: {} });
       return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
     }
-    if (!data.prepay_allowed) return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
+    if (!data.prepay_allowed) {
+      const pending = parseProductRequest(msg);
+      const nextData = pending?.qty ? { pending_code: pending.code, pending_qty: pending.qty } : {};
+      await save({ state: "prepay_choice", data: nextData });
+      return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
+    }
   }
 
   const editOrderId = orderCommand(msg, ["ပြင်", "ပြင်ဆင်", "edit"]);
