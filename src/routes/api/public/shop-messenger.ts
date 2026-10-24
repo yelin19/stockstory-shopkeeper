@@ -126,6 +126,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${order.quantity}ထုပ်\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
   }
 
+  if (s.state === "confirm" && isNo(msg)) {
+    await save({ state: "ask_customer_details", data: s.data });
+    return text(psid, "အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+  }
   if (isNo(msg) && s.state !== "idle") {
     if (s.state === "cancel_order") {
       await save({ state: "idle", data: {} });
@@ -210,6 +214,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
     return next("awaiting_payment_proof", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: true },
       `🛒 ${p.name}\nအရေအတွက်: ${req.qty}ထုပ်\nပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * req.qty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
+  }
+  const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
+    .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (previous) {
+    const oldDraft = { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address, note: "" };
+    await save({ state: "confirm", data: oldDraft });
+    return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${p.name}=${req.qty}ထုပ်\n\nအရင်အသုံးပြုထားသော အချက်အလက်\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
   }
   return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: false },
     `🛒 ${p.name}\n💰 တစ်ခုဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${req.qty}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
