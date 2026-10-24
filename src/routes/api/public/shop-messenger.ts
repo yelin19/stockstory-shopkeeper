@@ -99,9 +99,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       await save({ state: "idle", data: {} });
       return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
     }
+    const incoming = parseProductRequest(msg);
+    if (s.state === "idle" && incoming?.qty) {
+      await save({ state: "prepay_choice", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
+      return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
+    }
     if (!data.prepay_allowed) {
-      const pending = parseProductRequest(msg);
-      const nextData = pending?.qty ? { pending_code: pending.code, pending_qty: pending.qty } : {};
+      const nextData = incoming?.qty ? { pending_code: incoming.code, pending_qty: incoming.qty } : {};
       await save({ state: "prepay_choice", data: nextData });
       return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
     }
