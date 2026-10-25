@@ -57,6 +57,13 @@
       "when": 1792887159977,
       "tag": "0017_product_quantity_units",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792933254536,
+      "tag": "0018_date_range_data_cleanup",
+      "breakpoints": true
     }
   ]
 }

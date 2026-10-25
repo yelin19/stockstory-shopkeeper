@@ -8,6 +8,7 @@ import type { ShopCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DataCleanupSection } from "@/components/DataCleanupSection";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
   head: () => ({ meta: [
@@ -169,6 +170,7 @@ function SettingsPage() {
         <p>Facebook App (Messenger → Webhooks) တွင် ထည့်ရန် Callback URL — <b>messages</b> ကို subscribe လုပ်ပါ:</p>
         <code className="block break-all rounded bg-card p-2">{webhook}</code>
       </div>
+      <DataCleanupSection />
     </div>
   );
 }

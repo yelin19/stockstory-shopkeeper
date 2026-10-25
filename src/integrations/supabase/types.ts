@@ -433,6 +433,22 @@ export type Database = {
         Args: { _owner: string; _pin: string }
         Returns: boolean
       }
+      preview_order_history_cleanup: {
+        Args: { _end_at: string; _start_at: string }
+        Returns: { eligible_count: number; protected_count: number }[]
+      }
+      delete_order_history_range: {
+        Args: { _end_at: string; _expected_count: number; _start_at: string }
+        Returns: number
+      }
+      preview_stock_history_cleanup: {
+        Args: { _end_at: string; _start_at: string }
+        Returns: { record_count: number }[]
+      }
+      delete_stock_history_range: {
+        Args: { _end_at: string; _expected_count: number; _start_at: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
