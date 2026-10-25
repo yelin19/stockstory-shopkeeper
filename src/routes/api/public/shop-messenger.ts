@@ -126,11 +126,17 @@ async function handlePaymentReviewAction(
 
   if (action === "CANCEL") {
     await send(adminPsid, {
-      text: `Order ID: ${orderId} ကို ပယ်ဖျက်မှာ သေချာပါသလား။ အတည်ပြုပြီးပါက လက်ကျန်ကို အလိုအလျောက်ပြန်ဖြည့်ပါမည်။`,
-      quick_replies: [
-        { content_type: "text", title: "ပယ်ဖျက်ရန် အတည်ပြု", payload: `PAYMENT_REVIEW_CANCEL_CONFIRM:${orderId}` },
-        { content_type: "text", title: "မလုပ်တော့ပါ", payload: `PAYMENT_REVIEW_CANCEL_KEEP:${orderId}` },
-      ],
+      attachment: {
+        type: "template",
+        payload: {
+          template_type: "button",
+          text: `Order ID: ${orderId} ကို ပယ်ဖျက်မှာ သေချာပါသလား။ အတည်ပြုလျှင် လက်ကျန်ကို ပြန်ဖြည့်ပါမည်။`,
+          buttons: [
+            { type: "postback", title: "ပယ်ဖျက်ရန် အတည်ပြု", payload: `PAYMENT_REVIEW_CANCEL_CONFIRM:${orderId}` },
+            { type: "postback", title: "မလုပ်တော့ပါ", payload: `PAYMENT_REVIEW_CANCEL_KEEP:${orderId}` },
+          ],
+        },
+      },
     });
     return;
   }
