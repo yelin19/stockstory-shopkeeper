@@ -3,7 +3,6 @@ import { MessageCircle } from "lucide-react";
 import { getPublicProduct } from "@/lib/public-shop.functions";
 import { productImageUrl } from "@/lib/shop-data";
 import { money } from "@/lib/export";
-import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/shop/$code")({
@@ -52,11 +51,10 @@ function ProductPage() {
         <div className="flex flex-col justify-center gap-5">
           <div className="text-sm font-semibold uppercase tracking-widest text-primary">{p.shop_name ?? "ဈေးဆိုင်"} · {p.category}</div>
           <h1 className="text-4xl font-extrabold md:text-5xl">{p.name}</h1>
-          <div className="font-display text-3xl font-bold">1{normalizeProductUnit(p.unit)}ဈေး: {money(p.price, p.currency)}</div>
-          {typeof p.sold_count === "number" && <div className="text-sm text-muted-foreground">{formatQuantity(p.sold_count, p.unit)} ရောင်းပြီး</div>}
-          <div className={p.stock > 0 ? "text-success" : "text-destructive"}>{p.stock > 0 ? `${formatQuantity(p.stock, p.unit)} လက်ကျန်` : "လက်ကျန်ကုန်ပြီ"}</div>
+          <div className="font-display text-3xl font-bold">ဈေးနှုန်း: {money(p.price, p.currency)}</div>
+          {p.stock <= 0 && <div className="text-destructive">လက်ကျန်ကုန်ပြီ</div>}
           {p.description && <p className="whitespace-pre-line text-muted-foreground">{p.description}</p>}
-          {p.stock > 0 && <div className="rounded-xl bg-secondary p-4 text-sm">ပစ္စည်း Code <b className="font-mono text-lg">{p.code}</b> — Messenger တွင် <b>{p.code} 1</b> ပို့ပြီး ၁{normalizeProductUnit(p.unit)} မှာယူပါ။</div>}
+          {p.stock > 0 && <div className="rounded-xl bg-secondary p-4 text-sm">ပစ္စည်း Code <b className="font-mono text-lg">{p.code}</b> — Messenger တွင် <b>{p.code} 1</b> ပို့ပြီး အော်ဒါတင်ပါ။</div>}
           {p.stock > 0 && !p.messenger_username && <p className="text-sm text-muted-foreground">Messenger မှာမှာယူရန် ဆိုင်၏ Page username ကို ဆိုင်ရှင်ထံမှ ရယူပါ။</p>}
           {mme && (
             <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90">
