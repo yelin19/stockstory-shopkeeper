@@ -38,6 +38,22 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+async function sendUpdate(psid: string, messageText: string) {
+  const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
+  if (!token) return false;
+  try {
+    const response = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ recipient: { id: psid }, messaging_type: "UPDATE", message: { text: messageText } }),
+    });
+    if (!response.ok) console.error("Messenger order review update failed", response.status);
+    return response.ok;
+  } catch (error) {
+    console.error("Messenger order review update failed", (error as Error).message);
+    return false;
+  }
+}
 async function sendProductCard(
   psid: string,
   product: { code: string; name: string; price: number; stock: number; unit: string; image_url: string | null },
@@ -90,6 +106,64 @@ function parseCustomerDetails(msg: string) {
   return { name: name.slice(0, 100), phone: phone.slice(0, 20), address: address.slice(0, 500) };
 }
 
+async function handlePaymentReviewAction(
+  db: Admin,
+  owner: string,
+  adminPsid: string,
+  action: "APPROVE" | "CANCEL" | "CANCEL_CONFIRM" | "CANCEL_KEEP",
+  orderId: string,
+  currency?: string | null,
+) {
+  const { data: order, error: orderError } = await db.from("orders")
+    .select("id, psid, public_order_id, order_no, product_name, total, status, payment_status, product_id, delivery_status, sent")
+    .eq("owner_id", owner).eq("public_order_id", orderId).maybeSingle();
+  if (orderError) return text(adminPsid, "Order အချက်အလက်ကို ဖတ်မရပါ။ အက်ပ်ထဲတွင် စစ်ဆေးပါ။");
+  if (!order) return text(adminPsid, `Order ID: ${orderId} ကို မတွေ့ပါ။`);
+  if (action === "CANCEL_KEEP") return text(adminPsid, `Order ID: ${orderId} ကို မပယ်ဖျက်တော့ပါ။`);
+  if (order.status === "cancelled") return text(adminPsid, `Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးဖြစ်ပါသည်။`);
+  if (order.payment_status !== "proof_submitted") return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
+  if (orderIsLocked(order)) return text(adminPsid, `Order ID: ${orderId} ကို ပို့ဆောင်ရေးအခြေအနေကြောင့် ယခု မပြင်ဆင်နိုင်ပါ။`);
+
+  if (action === "CANCEL") {
+    await send(adminPsid, {
+      text: `Order ID: ${orderId} ကို ပယ်ဖျက်မှာ သေချာပါသလား။ အတည်ပြုပြီးပါက လက်ကျန်ကို အလိုအလျောက်ပြန်ဖြည့်ပါမည်။`,
+      quick_replies: [
+        { content_type: "text", title: "ပယ်ဖျက်ရန် အတည်ပြု", payload: `PAYMENT_REVIEW_CANCEL_CONFIRM:${orderId}` },
+        { content_type: "text", title: "မလုပ်တော့ပါ", payload: `PAYMENT_REVIEW_CANCEL_KEEP:${orderId}` },
+      ],
+    });
+    return;
+  }
+
+  if (action === "APPROVE") {
+    const now = new Date().toISOString();
+    const { data: approved, error: approvalError } = await db.from("orders")
+      .update({ payment_status: "approved", payment_approved_at: now, updated_at: now })
+      .eq("id", order.id).eq("owner_id", owner).eq("payment_status", "proof_submitted")
+      .select("id").maybeSingle();
+    if (approvalError) return text(adminPsid, "ငွေပေးချေမှုကို အတည်ပြုမရပါ။ အက်ပ်ထဲတွင် ထပ်စစ်ပါ။");
+    if (!approved) return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
+    const buyerMessage = `✅ Order ID: ${orderId} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းအမည်: ${order.product_name}\nပေးချေပြီးငွေ: ${formatCurrency(Number(order.total), currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။`;
+    if (order.psid && !(await sendUpdate(order.psid, buyerMessage))) console.error("Could not notify customer that prepaid order was approved");
+    await text(adminPsid, `✅ Order ID: ${orderId} ကို အတည်ပြုပြီး ဝယ်သူထံ အကြောင်းကြားပါပြီ။`);
+    return;
+  }
+
+  if (!order.psid) return text(adminPsid, `Order ID: ${orderId} တွင် ဝယ်သူ Messenger မရှိပါ၊ ပယ်ဖျက်မရပါ။`);
+  const { data: cancelled, error: cancelError } = await callShopRpc(db, "cancel_order_by_customer", {
+    _owner: owner, _psid: order.psid, _public_order_id: orderId,
+  });
+  if (cancelError || !cancelled) return text(adminPsid, "Order ကို ပယ်ဖျက်မရပါ။ ပို့ဆောင်ရေးအခြေအနေကို အက်ပ်ထဲတွင် စစ်ဆေးပါ။");
+  const now = new Date().toISOString();
+  const { error: paymentError } = await db.from("orders").update({ payment_status: "rejected", updated_at: now })
+    .eq("id", order.id).eq("owner_id", owner).eq("payment_status", "proof_submitted");
+  if (paymentError) console.error("Could not mark cancelled payment proof as rejected", paymentError.message);
+  if (order.product_id) await retryLowStockAlerts(owner, order.product_id);
+  const buyerMessage = `Order ID: ${orderId} ကို ဆိုင်ဘက်မှ ပယ်ဖျက်လိုက်ပါပြီရှင်။ ငွေလွှဲပြီးသားဖြစ်ပါက ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။`;
+  if (!(await sendUpdate(order.psid, buyerMessage))) console.error("Could not notify customer that prepaid order was cancelled");
+  await text(adminPsid, `❌ Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးပါပြီ။`);
+}
+
 async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
@@ -104,6 +178,18 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (paired !== true) return text(psid, "PIN မမှန်ပါ၊ သက်တမ်းကုန်နေပါသည်၊ သို့မဟုတ် ထပ်မံကြိုးစားမှုများလွန်းနေပါသည်။ ဆက်တင်များတွင် PIN အသစ်သတ်မှတ်ပါ။");
     await retryLowStockAlerts(owner);
     return text(psid, lowStockPairingConfirmation());
+  }
+  const paymentReview = msg.trim().match(/^PAYMENT_REVIEW_(CANCEL_CONFIRM|CANCEL_KEEP|APPROVE|CANCEL):([0-9]{6})$/);
+  if (paymentReview) {
+    if (shopCurrency?.low_stock_alert_psid !== psid) return text(psid, "ဤလုပ်ဆောင်ချက်ကို Messenger ချိတ်ဆက်ထားသော ဆိုင်ရှင်အကောင့်မှသာ လုပ်နိုင်ပါသည်။");
+    return handlePaymentReviewAction(
+      db,
+      owner,
+      psid,
+      paymentReview[1] as "APPROVE" | "CANCEL" | "CANCEL_CONFIRM" | "CANCEL_KEEP",
+      paymentReview[2]!,
+      shopCurrency.currency,
+    );
   }
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
@@ -246,7 +332,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
             phone: String(d.phone ?? ""),
             address: String(d.address ?? ""),
           });
-          const delivery = await sendPaymentProofNotification(shopCurrency.low_stock_alert_psid, reviewMessage, proofUrl);
+          const delivery = await sendPaymentProofNotification(shopCurrency.low_stock_alert_psid, reviewMessage, proofUrl, orderId);
           if (!delivery.textSent || !delivery.receiptSent) {
             console.error("Could not deliver prepaid order review to the configured Messenger recipient", delivery.reason);
           }

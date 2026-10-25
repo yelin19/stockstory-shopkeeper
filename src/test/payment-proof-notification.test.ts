@@ -37,25 +37,33 @@ describe("payment proof review notification", () => {
   });
 
   it("sends an UPDATE text and the payment receipt image to the configured recipient", async () => {
-    const result = await sendPaymentProofNotification("paired-admin-psid", "Order ID: 100021", "https://receipt.test/proof.jpg");
+    const result = await sendPaymentProofNotification("paired-admin-psid", "Order ID: 100021", "https://receipt.test/proof.jpg", "100021");
 
     expect(result).toEqual({ textSent: true, receiptSent: true });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const sent = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)) as {
       recipient: { id: string };
       messaging_type: string;
-      message: { text?: string; attachment?: { payload?: { url?: string } } };
+      message: {
+        text?: string;
+        attachment?: { payload?: { url?: string } };
+        quick_replies?: { title: string; payload: string }[];
+      };
     });
     expect(sent.every((payload) => payload.recipient.id === "paired-admin-psid" && payload.messaging_type === "UPDATE")).toBe(true);
-    expect(sent[0]?.message.text).toBe("Order ID: 100021");
-    expect(sent[1]?.message.attachment?.payload?.url).toBe("https://receipt.test/proof.jpg");
+    expect(sent[0]?.message.attachment?.payload?.url).toBe("https://receipt.test/proof.jpg");
+    expect(sent[1]?.message.text).toBe("Order ID: 100021");
+    expect(sent[1]?.message.quick_replies).toEqual([
+      { content_type: "text", title: "✅ အတည်ပြု", payload: "PAYMENT_REVIEW_APPROVE:100021" },
+      { content_type: "text", title: "❌ ပယ်ဖျက်", payload: "PAYMENT_REVIEW_CANCEL:100021" },
+    ]);
   });
 
   it("does not call Messenger if the Page token or receipt URL is missing", async () => {
     vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "");
-    expect(await sendPaymentProofNotification("paired-admin-psid", "review", "https://receipt.test/proof.jpg")).toMatchObject({ reason: "missing_page_token" });
+    expect(await sendPaymentProofNotification("paired-admin-psid", "review", "https://receipt.test/proof.jpg", "100021")).toMatchObject({ reason: "missing_page_token" });
     vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "test-page-token");
-    expect(await sendPaymentProofNotification("paired-admin-psid", "review", "")).toMatchObject({ reason: "missing_receipt" });
+    expect(await sendPaymentProofNotification("paired-admin-psid", "review", "", "100021")).toMatchObject({ reason: "missing_receipt" });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
