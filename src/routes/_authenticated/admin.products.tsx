@@ -188,7 +188,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
       <DialogContent>
         <DialogHeader><DialogTitle>{product ? "ပစ္စည်းပြင်မည်" : "ပစ္စည်းအသစ်"}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
-          <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="ဥပမာ ဖိနပ်-၁ သို့မဟုတ် ABC-01" /><p className="text-xs text-muted-foreground">ဘာသာစကားအမျိုးမျိုးမှ စာလုံးနှင့် နံပါတ်များ သုံးနိုင်ပါသည်။ ကွက်လပ်မပါ၊ အများဆုံး ၃၂ လုံး။</p></div>
+          <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="ဥပမာ ဖိနပ်-၁၊ အင်္ကျီ-၂ သို့မဟုတ် ABC-01" /><p className="text-xs text-muted-foreground">မြန်မာစာလုံး၊ မြန်မာဂဏန်း သို့မဟုတ် အခြားဘာသာစကားမှ စာလုံးနှင့် နံပါတ်များ သုံးနိုင်ပါသည်။ ကွက်လပ်မပါ၊ အများဆုံး ၃၂ လုံး။</p></div>
           <div className="space-y-1"><Label>အရေအတွက်ယူနစ်</Label><Input value={f.unit} onChange={set("unit")} placeholder="ခု၊ ထုပ်၊ ပုံး၊ အိတ်၊ ဖာ" maxLength={32} /><p className="text-xs text-muted-foreground">အရေအတွက်နောက်တွင် ပြရန် ယူနစ်ကို ရေးပါ။</p></div>
           <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
           <div className="space-y-1"><Label>ဈေးနှုန်း ({currency === "THB" ? "฿" : "ကျပ်"})</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
