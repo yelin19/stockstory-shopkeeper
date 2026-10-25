@@ -106,7 +106,7 @@ function ProductsPage() {
                   <div className="font-bold">{p.name}</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold">{money(p.price, settings?.currency)} / 1{p.unit}</div>
+                  <div className="font-bold">{money(p.price, settings?.currency)}</div>
                   <div className={`text-sm ${p.stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatQuantity(p.stock, p.unit)} လက်ကျန်</div>
                 </div>
               </div>
