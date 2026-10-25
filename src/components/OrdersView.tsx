@@ -218,7 +218,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="py-2 text-right">{formatQuantity(o.quantity, o.product_unit)} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
-                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပို့ဆောင်မှုမအောင်မြင်ပါ" : o.tracking_number?.trim() && o.tracking_url?.trim() ? "ပို့ပြီး" : "လက်ခံထား"}
+                          {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပို့ဆောင်မှုမအောင်မြင်ပါ" : o.sent ? ["confirmed", "preparing"].includes(o.delivery_status) ? "ပို့ဆောင်နေပါသည်" : deliveryLabels[o.delivery_status] ?? "ပို့ဆောင်နေပါသည်" : "လက်ခံထား"}
                         </span>
                         {o.payment_status === "proof_submitted" && o.payment_proof_url && <a className="mt-1 block text-xs font-semibold text-primary underline" href={o.payment_proof_url} target="_blank" rel="noreferrer">ငွေလွှဲဖြတ်ပိုင်း ကြည့်မည်</a>}
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
@@ -257,7 +257,7 @@ const deliveryLabels: Record<string, string> = {
   confirmed: "အော်ဒါလက်ခံပြီး",
   preparing: "ပစ္စည်းပြင်ဆင်နေသည်",
   shipped: "ပို့ဆောင်ပြီး",
-  in_transit: "ပို့ဆောင်နေသည်",
+  in_transit: "ပို့ဆောင်နေပါသည်",
   delivered: "ရောက်ရှိပြီး",
   returned: "ပို့ဆောင်မှုမအောင်မြင်ပါ",
   cancelled: "ပယ်ဖျက်ပြီး",
