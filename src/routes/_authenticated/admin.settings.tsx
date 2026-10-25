@@ -138,7 +138,7 @@ function SettingsPage() {
         <div className="space-y-1"><Label>ဘဏ်အမည်</Label><Input value={f.bank_name} onChange={set("bank_name")} placeholder="ဥပမာ KBZ" /></div>
         <div className="space-y-1"><Label>အကောင့်အမည်</Label><Input value={f.bank_account_name} onChange={set("bank_account_name")} /></div>
         <div className="space-y-1"><Label>အကောင့်နံပါတ်</Label><Input value={f.bank_account_number} onChange={set("bank_account_number")} /></div>
-        <div className="space-y-1"><Label>လက်ကျန်နည်းကြောင်း သတိပေးမည့်အရေအတွက်</Label><Input type="number" min="0" value={f.low_stock_threshold} onChange={set("low_stock_threshold")} /></div>
+        <div className="space-y-1"><Label>လက်ကျန်နည်းကြောင်း သတိပေးမည့်အရေအတွက်</Label><Input type="number" min="0" value={f.low_stock_threshold} onChange={set("low_stock_threshold")} /><p className="text-xs text-muted-foreground">ပစ္စည်းတစ်ခုချင်းစီ၏ သတ်မှတ်ထားသော အရေအတွက်ယူနစ်အလိုက် တွက်ပါမည်။</p></div>
         <Button>ဆက်တင်များ သိမ်းမည်</Button>
       </form>
       <section className="space-y-3 rounded-2xl border bg-card p-6">

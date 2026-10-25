@@ -19,8 +19,8 @@ describe("parseLowStockPairPin", () => {
 
 describe("formatLowStockAlertMessage", () => {
   it("includes product, current stock, and threshold", () => {
-    expect(formatLowStockAlertMessage({ product_code: "2233", product_name: "Shampoo", stock: 3, threshold: 5 }))
-      .toBe("⚠️ လက်ကျန်နည်းနေပါပြီ\nပစ္စည်း: Shampoo (2233)\nလက်ကျန်: 3 ခု\nသတိပေးအရေအတွက်: 5 ခု");
+    expect(formatLowStockAlertMessage({ product_code: "2233", product_name: "Shampoo", stock: 3, unit: "ထုပ်", threshold: 5 }))
+      .toBe("⚠️ လက်ကျန်နည်းနေပါပြီ\nပစ္စည်း: Shampoo (2233)\nလက်ကျန်: 3ထုပ်\nသတိပေးအရေအတွက်: 5ထုပ်");
   });
 });
 

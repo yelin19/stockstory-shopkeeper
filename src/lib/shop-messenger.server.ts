@@ -1,6 +1,7 @@
 import { parseProductRequest, isYes, isNo } from "@/lib/messenger-parse";
 import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSignature } from "@/lib/messenger-webhook";
 import { formatCurrency } from "@/lib/currency";
+import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 
@@ -42,7 +43,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, "Order cancelled. Send a product code any time.");
   }
 
-  type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; note?: string };
+  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; note?: string };
   const d = s.data as Draft;
   const next = async (state: string, data: Record<string, unknown>, prompt: string) => {
     await save({ state, data });
@@ -65,7 +66,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return next(
         "confirm",
         nd,
-        `🧾 Order summary\n${nd.code} · ${nd.product}\nQty: ${nd.qty} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nName: ${nd.name}\nPhone: ${nd.phone}\nTownship: ${nd.township}\nAddress: ${nd.address}${nd.note ? `\nNote: ${nd.note}` : ""}\n\nReply YES to confirm or NO to cancel.`,
+        `🧾 Order summary\n${nd.code} · ${nd.product}\nQty: ${formatQuantity(nd.qty ?? 0, nd.unit)} × ${fmt(Number(nd.price))} = ${fmt(total)}\n\nName: ${nd.name}\nPhone: ${nd.phone}\nTownship: ${nd.township}\nAddress: ${nd.address}${nd.note ? `\nNote: ${nd.note}` : ""}\n\nReply YES to confirm or NO to cancel.`,
       );
     }
     case "confirm": {
@@ -89,11 +90,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
 
   if (req.qty === null) {
     if (p.image_url) await send(psid, { attachment: { type: "image", payload: { url: `${origin}/api/public/product-image/${encodeURIComponent(p.code)}`, is_reusable: true } } });
-    return text(psid, `${p.name}\n💰 ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `${p.stock} in stock` : "Out of stock"}${p.description ? `\n\n${p.description}` : ""}\n\nTo order send: ${p.code} 1  (or ${p.code}=2)`);
+    return text(psid, `${p.name}\n💰 ${fmt(Number(p.price))} / 1${normalizeProductUnit(p.unit)}\n📦 ${p.stock > 0 ? `${formatQuantity(p.stock, p.unit)} in stock` : "Out of stock"}${p.description ? `\n\n${p.description}` : ""}\n\nTo order send: ${p.code} 1  (or ${p.code}=2)`);
   }
-  if (p.stock < req.qty) return text(psid, p.stock ? `Only ${p.stock} left for ${p.name}.` : `${p.name} is out of stock.`);
-  return next("ask_name", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty },
-    `🛒 ${req.qty} × ${p.name} (${fmt(Number(p.price) * req.qty)})\n\n👤 Your name?  (send NO anytime to cancel)`);
+  if (p.stock < req.qty) return text(psid, p.stock ? `Only ${formatQuantity(p.stock, p.unit)} left for ${p.name}.` : `${p.name} is out of stock.`);
+  return next("ask_name", { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty },
+    `🛒 ${formatQuantity(req.qty, p.unit)} × ${p.name} (${fmt(Number(p.price) * req.qty)})\n\n👤 Your name?  (send NO anytime to cancel)`);
 }
 
 export const messengerHandlers = {

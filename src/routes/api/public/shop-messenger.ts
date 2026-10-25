@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/currency";
 import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
 import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
 import { productPageUrl } from "@/lib/shop-data";
+import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -37,14 +38,14 @@ async function send(psid: string, message: Record<string, unknown>) {
 const text = (psid: string, t: string) => send(psid, { text: t });
 async function sendProductCard(
   psid: string,
-  product: { code: string; name: string; price: number; stock: number; image_url: string | null },
+  product: { code: string; name: string; price: number; stock: number; unit: string; image_url: string | null },
   origin: string,
   formatPrice: (amount: number) => string,
 ) {
   const url = productPageUrl(product.code, origin);
   const element: Record<string, unknown> = {
     title: product.name.slice(0, 80),
-    subtitle: `${formatPrice(Number(product.price))} · လက်ကျန် ${product.stock} ခု`,
+    subtitle: `တစ်${normalizeProductUnit(product.unit)}ဈေး ${formatPrice(Number(product.price))} · လက်ကျန် ${formatQuantity(product.stock, product.unit)}`,
     default_action: { type: "web_url", url, webview_height_ratio: "tall" },
     buttons: [{ type: "web_url", url, title: "ပစ္စည်းကို ကြည့်ရန်" }],
   };
@@ -107,15 +108,15 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
 
   const { data: returnedOrders } = await db.from("orders")
-    .select("public_order_id, product_code, product_name, unit_price, quantity, created_at")
+    .select("public_order_id, product_code, product_name, product_unit, unit_price, quantity, created_at")
     .eq("owner_id", owner)
     .eq("psid", psid)
     .eq("delivery_status", "returned")
     .order("created_at", { ascending: false })
     .limit(20);
   if (returnedOrders?.length) {
-    const history = returnedOrders.map((o: { public_order_id: string; product_name: string; quantity: number; created_at: string }) =>
-      `Order ID: ${o.public_order_id}\nရက်စွဲ: ${new Date(o.created_at).toLocaleDateString("en-GB")}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်`,
+    const history = returnedOrders.map((o: { public_order_id: string; product_name: string; product_unit: string; quantity: number; created_at: string }) =>
+      `Order ID: ${o.public_order_id}\nရက်စွဲ: ${new Date(o.created_at).toLocaleDateString("en-GB")}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${formatQuantity(o.quantity, d.unit)}`,
     ).join("\n\n");
     const data = s.data as Record<string, unknown>;
     if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
@@ -124,10 +125,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (pendingCode && pendingQty) {
         const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
         if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
-        if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+        if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
         const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
-        await save({ state: "awaiting_payment_proof", data: { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: pendingQty, prepay_allowed: true } });
-        return text(psid, `🛒 ပစ္စည်းအမည်: ${p.name}\n🔢 အရေအတွက်: ${pendingQty}ထုပ်\n💰 တစ်ထုပ်ဈေး: ${fmt(Number(p.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * pendingQty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
+        await save({ state: "awaiting_payment_proof", data: { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: pendingQty, unit: p.unit, prepay_allowed: true } });
+        return text(psid, `🛒 ပစ္စည်းအမည်: ${p.name}\n🔢 အရေအတွက်: ${formatQuantity(pendingQty, p.unit)}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * pendingQty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
       }
       await save({ state: "idle", data: { prepay_allowed: true } });
       return text(psid, "ကြိုတင်ငွေလွှဲစနစ်ကို ရွေးချယ်ပြီးပါပြီ။ ဒီနေ့ အော်ဒါအသစ်အတွက် ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ 111=2");
@@ -156,11 +157,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
-      await save({ state: "cancel_order", data: { public_order_id: publicOrderId, product: order.product_name, quantity: order.quantity } });
-      return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${order.quantity}ထုပ်\n\nဒီအော်ဒါကို ဖျက်မည်မှာ သေချာပါသလား။`);
+      await save({ state: "cancel_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
+      return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nဒီအော်ဒါကို ဖျက်မည်မှာ သေချာပါသလား။`);
     }
-    await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, quantity: order.quantity } });
-    return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${order.quantity}ထုပ်\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
+    await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
+    return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
   }
 
   if (s.state === "confirm" && isNo(msg)) {
@@ -177,7 +178,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
 
-  type Draft = { product_id?: string; code?: string; product?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string };
+  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string };
   const d = s.data as Draft;
   const next = async (state: string, data: Record<string, unknown>, prompt: string) => {
     await save({ state, data });
@@ -195,7 +196,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါအရေအတွက်ပြင်ရာတွင် အမှားဖြစ်ပါသည်။");
       const o = updated as unknown as { public_order_id: string; product_name: string; quantity: number; product_id: string | null };
       if (o.product_id) await retryLowStockAlerts(owner, o.product_id);
-      return text(psid, `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${o.quantity}ထုပ်\n\nအော်ဒါအရေအတွက်ကို ပြင်ဆင်ပြီးပါပြီ။`);
+      return text(psid, `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${formatQuantity(o.quantity, d.unit)}\n\nအော်ဒါအရေအတွက်ကို ပြင်ဆင်ပြီးပါပြီ။`);
     }
     case "cancel_order": {
       if (!isYes(msg)) return text(psid, "အော်ဒါဖျက်ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
@@ -213,7 +214,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
       const nd: Draft = { ...d, ...details, note: "" };
       await save({ state: "confirm", data: nd });
-      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${nd.qty}ထုပ်\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
+      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
@@ -231,7 +232,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         await db.from("orders").update({ payment_method: "prepaid", payment_status: "proof_submitted", payment_proof_url: proofUrl || null, payment_submitted_at: new Date().toISOString() }).eq("owner_id", owner).eq("public_order_id", orderId).eq("psid", psid);
         return text(psid, `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။`);
       }
-      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${d.qty}ထုပ်\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
+      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
@@ -247,25 +248,25 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   await sendProductCard(psid, p, origin, fmt);
 
   if (req.qty === null) {
-    return text(psid, `🏪 ${shop?.shop_name ?? "ဈေးဆိုင်"}\n\n${p.name}\n💰 ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `လက်ကျန် ${p.stock}` : "လက်ကျန်ကုန်ပါပြီ"}${p.description ? `\n\n${p.description}` : ""}\n\nအော်ဒါတင်ရန် ${p.code} 1 သို့မဟုတ် ${p.code}=2 ပို့ပါ။`);
+    return text(psid, `🏪 ${shop?.shop_name ?? "ဈေးဆိုင်"}\n\n${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `လက်ကျန် ${formatQuantity(p.stock, p.unit)}` : "လက်ကျန်ကုန်ပါပြီ"}${p.description ? `\n\n${p.description}` : ""}\n\nအော်ဒါတင်ရန် ${p.code} 1 သို့မဟုတ် ${p.code}=2 ပို့ပါ။`);
   }
-  if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${p.stock} ခုသာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+  if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
     const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
-    return next("awaiting_payment_proof", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: true },
-      `🛒 ${p.name}\nအရေအတွက်: ${req.qty}ထုပ်\nပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * req.qty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
+    return next("awaiting_payment_proof", { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty, prepay_allowed: true },
+      `🛒 ${p.name}\nအရေအတွက်: ${formatQuantity(req.qty, p.unit)}\nပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * req.qty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
   }
   const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
     .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const lastCustomer = (s.data as { last_customer?: { name?: string; phone?: string; address?: string } }).last_customer;
   const customer = previous ? { name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address } : lastCustomer?.name && lastCustomer.phone && lastCustomer.address ? lastCustomer : null;
   if (customer) {
-    const oldDraft = { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, name: customer.name, phone: customer.phone, address: customer.address, note: "" };
+    const oldDraft = { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty, name: customer.name, phone: customer.phone, address: customer.address, note: "" };
     await save({ state: "confirm", data: oldDraft });
-    return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${p.name}=${req.qty}ထုပ်\n\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
+    return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${p.name}=${formatQuantity(req.qty, p.unit)}\n\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
   }
-  return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: req.qty, prepay_allowed: false },
-    `🛒 ${p.name}\n💰 တစ်ခုဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${req.qty}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
+  return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty, prepay_allowed: false },
+    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
 }
 
 async function handlePaymentProof(db: Admin, owner: string, psid: string, imageUrl: string) {

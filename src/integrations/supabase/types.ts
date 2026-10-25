@@ -64,6 +64,7 @@ export type Database = {
           product_code: string
           product_id: string | null
           product_name: string
+          product_unit: string
           psid: string | null
           public_order_id: string
           quantity: number
@@ -99,6 +100,7 @@ export type Database = {
           product_code: string
           product_id?: string | null
           product_name: string
+          product_unit?: string
           psid?: string | null
           public_order_id: string
           quantity: number
@@ -134,6 +136,7 @@ export type Database = {
           product_code?: string
           product_id?: string | null
           product_name?: string
+          product_unit?: string
           psid?: string | null
           public_order_id?: string
           quantity?: number
@@ -171,6 +174,7 @@ export type Database = {
           owner_id: string
           price: number
           stock: number
+          unit: string
         }
         Insert: {
           active?: boolean
@@ -185,6 +189,7 @@ export type Database = {
           owner_id?: string
           price: number
           stock?: number
+          unit?: string
         }
         Update: {
           active?: boolean
@@ -199,6 +204,7 @@ export type Database = {
           owner_id?: string
           price?: number
           stock?: number
+          unit?: string
         }
         Relationships: []
       }
@@ -336,6 +342,7 @@ export type Database = {
           recipient_psid: string
           stock: number
           threshold: number
+          unit: string
         }[]
       }
       change_stock: {
@@ -362,6 +369,7 @@ export type Database = {
           shop_name: string
           sold_count: number
           stock: number
+          unit: string
         }[]
       }
       pair_low_stock_alert_recipient: {
@@ -397,6 +405,7 @@ export type Database = {
           product_code: string
           product_id: string | null
           product_name: string
+          product_unit: string
           psid: string | null
           public_order_id: string
           quantity: number

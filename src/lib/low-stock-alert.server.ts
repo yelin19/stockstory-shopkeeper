@@ -6,6 +6,7 @@ type LowStockAlert = {
   product_code: string;
   product_name: string;
   stock: number;
+  unit: string;
   threshold: number;
   recipient_psid: string;
 };

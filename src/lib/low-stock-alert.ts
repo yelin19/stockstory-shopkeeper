@@ -10,8 +10,10 @@ export function formatLowStockAlertMessage(alert: {
   product_name: string;
   stock: number;
   threshold: number;
+  unit?: string | null;
 }) {
-  return `⚠️ လက်ကျန်နည်းနေပါပြီ\nပစ္စည်း: ${alert.product_name} (${alert.product_code})\nလက်ကျန်: ${alert.stock} ခု\nသတိပေးအရေအတွက်: ${alert.threshold} ခု`;
+  const unit = alert.unit?.trim() || "ခု";
+  return `⚠️ လက်ကျန်နည်းနေပါပြီ\nပစ္စည်း: ${alert.product_name} (${alert.product_code})\nလက်ကျန်: ${alert.stock}${unit}\nသတိပေးအရေအတွက်: ${alert.threshold}${unit}`;
 }
 
 export function lowStockPairingConfirmation() {

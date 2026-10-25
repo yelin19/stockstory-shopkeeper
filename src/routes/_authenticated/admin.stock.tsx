@@ -3,7 +3,8 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { format } from "date-fns";
 import { FileDown, FileSpreadsheet } from "lucide-react";
-import { stockQuery } from "@/lib/shop-data";
+import { productsQuery, stockQuery } from "@/lib/shop-data";
+import { normalizeProductUnit } from "@/lib/product-unit";
 import { exportCsv, exportXlsx } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/admin/stock")({
     { name: "twitter:card", content: "summary_large_image" },
     { name: "robots", content: "noindex" },
   ] }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(stockQuery),
+  loader: ({ context }) => Promise.all([context.queryClient.ensureQueryData(stockQuery), context.queryClient.ensureQueryData(productsQuery)]),
   component: StockPage,
 });
 
@@ -25,10 +26,12 @@ const labels: Record<string, string> = { initial: "ဖန်တီးထား�
 
 function StockPage() {
   const { data } = useSuspenseQuery(stockQuery);
+  const { data: products } = useSuspenseQuery(productsQuery);
   const [reason, setReason] = useState("");
   const [code, setCode] = useState("");
   const list = data.filter((h) => (!reason || h.reason === reason) && (!code || h.product_code === code));
-  const rows = list.map((h) => ({ Date: format(new Date(h.created_at), "yyyy-MM-dd HH:mm"), Code: h.product_code, Type: labels[h.reason], Change: h.change, Balance: h.balance, Note: h.note ?? "" }));
+  const unitFor = (productId: string | null) => normalizeProductUnit(products.find((product) => product.id === productId)?.unit);
+  const rows = list.map((h) => ({ Date: format(new Date(h.created_at), "yyyy-MM-dd HH:mm"), Code: h.product_code, Type: labels[h.reason], Change: h.change, Unit: unitFor(h.product_id), Balance: h.balance, Note: h.note ?? "" }));
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -55,8 +58,8 @@ function StockPage() {
                 <td className="px-4 py-2 text-muted-foreground">{format(new Date(h.created_at), "MMM d, HH:mm")}</td>
                 <td className="font-mono">{h.product_code}</td>
                 <td>{labels[h.reason]}</td>
-                <td className={`text-right font-semibold ${h.change < 0 ? "text-destructive" : "text-success"}`}>{h.change > 0 ? "+" : ""}{h.change}</td>
-                <td className="text-right">{h.balance}</td>
+                <td className={`text-right font-semibold ${h.change < 0 ? "text-destructive" : "text-success"}`}>{h.change > 0 ? "+" : ""}{h.change}{unitFor(h.product_id)}</td>
+                <td className="text-right">{h.balance}{unitFor(h.product_id)}</td>
                 <td className="px-4 text-muted-foreground">{h.note}</td>
               </tr>
             ))}

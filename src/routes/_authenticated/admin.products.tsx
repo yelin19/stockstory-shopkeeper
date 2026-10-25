@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink, Copy, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isValidProductCode, normalizeProductCode } from "@/lib/product-code";
+import { formatQuantity, isValidProductUnit, normalizeProductUnit } from "@/lib/product-unit";
 import { productsQuery, settingsQuery, productImageUrl, productPageUrl, type Product } from "@/lib/shop-data";
 import { money } from "@/lib/export";
 import { Button } from "@/components/ui/button";
@@ -105,8 +106,8 @@ function ProductsPage() {
                   <div className="font-bold">{p.name}</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-bold">{money(p.price, settings?.currency)}</div>
-                  <div className={`text-sm ${p.stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>{p.stock} လက်ကျန်</div>
+                  <div className="font-bold">{money(p.price, settings?.currency)} / 1{p.unit}</div>
+                  <div className={`text-sm ${p.stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatQuantity(p.stock, p.unit)} လက်ကျန်</div>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -133,6 +134,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
   const [f, setF] = useState({
     code: product?.code ?? "",
     name: product?.name ?? "",
+    unit: product?.unit ?? "ခု",
     category: product?.category ?? "General",
     price: String(product?.price ?? ""),
     stock: "0",
@@ -149,7 +151,9 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
     const price = Number(f.price);
     const stock = parseInt(f.stock, 10);
     const code = normalizeProductCode(f.code);
+    const unit = normalizeProductUnit(f.unit);
     if (!isValidProductCode(code)) return void toast.error("Code တွင် ဘာသာစကားအမျိုးမျိုးမှ အက္ခရာ၊ နံပါတ်၊ - သို့မဟုတ် _ ကို အများဆုံး ၃၂ လုံး ထည့်ပါ။ ကွက်လပ်မထည့်ပါနှင့်။");
+    if (!isValidProductUnit(f.unit)) return void toast.error("အရေအတွက်ယူနစ်ကို အလွတ်မထားဘဲ ၃၂ လုံးအတွင်း ထည့်ပါ။");
     if (!f.name.trim() || !Number.isFinite(price) || !(price >= 0)) return void toast.error("အမည်နှင့် မှန်ကန်သောဈေးနှုန်း ထည့်ရန်လိုပါသည်");
     if (!product && !(stock >= 0)) return void toast.error("အရေအတွက်သည် အနုတ်မဖြစ်ရပါ");
     setBusy(true);
@@ -162,7 +166,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
         if (error) throw error;
         image_url = path;
       }
-      const row = { code, name: f.name.trim(), category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url };
+      const row = { code, name: f.name.trim(), unit, category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url };
       const { error } = product
         ? await supabase.from("products").update(row).eq("id", product.id)
         : await supabase.from("products").insert({ ...row, stock });
@@ -171,7 +175,9 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
       qc.invalidateQueries();
       onClose();
     } catch (err) {
-      toast.error((err as Error).message);
+      const error = err as Error & { code?: string };
+      if (["42703", "PGRST204"].includes(error.code ?? "")) toast.error("ပစ္စည်းယူနစ်သိမ်းရန် SQL migration 0017 ကို အရင် run လုပ်ပါ။");
+      else toast.error(error.message);
     } finally {
       setBusy(false);
     }
@@ -183,6 +189,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
         <DialogHeader><DialogTitle>{product ? "ပစ္စည်းပြင်မည်" : "ပစ္စည်းအသစ်"}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
           <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="ဥပမာ ဖိနပ်-၁ သို့မဟုတ် ABC-01" /><p className="text-xs text-muted-foreground">ဘာသာစကားအမျိုးမျိုးမှ စာလုံးနှင့် နံပါတ်များ သုံးနိုင်ပါသည်။ ကွက်လပ်မပါ၊ အများဆုံး ၃၂ လုံး။</p></div>
+          <div className="space-y-1"><Label>အရေအတွက်ယူနစ်</Label><Input value={f.unit} onChange={set("unit")} placeholder="ခု၊ ထုပ်၊ ပုံး၊ အိတ်၊ ဖာ" maxLength={32} /><p className="text-xs text-muted-foreground">အရေအတွက်နောက်တွင် ပြရန် ယူနစ်ကို ရေးပါ။</p></div>
           <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
           <div className="space-y-1"><Label>ဈေးနှုန်း ({currency === "THB" ? "฿" : "ကျပ်"})</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
           {!product && <div className="space-y-1"><Label>အရေအတွက်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}
@@ -304,9 +311,9 @@ function StockDialog({ p, mode, onClose }: { p: Product; mode: "increase" | "adj
       <DialogContent>
         <DialogHeader><DialogTitle>{mode === "increase" ? "လက်ကျန်ထပ်ဖြည့်မည်" : "ကိုယ်တိုင်ပြင်ဆင်ခြင်း"} — {p.name}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="space-y-3">
-          <p className="text-sm text-muted-foreground">လက်ရှိလက်ကျန်: <b>{p.stock}</b></p>
+          <p className="text-sm text-muted-foreground">လက်ရှိလက်ကျန်: <b>{formatQuantity(p.stock, p.unit)}</b></p>
           <div className="space-y-1">
-            <Label>{mode === "increase" ? "ထပ်ဖြည့်မည့်အရေအတွက်" : "ပြောင်းလဲမည့်အရေအတွက် (ဖယ်ရန် -2 ကဲ့သို့ အနုတ်သုံးပါ)"}</Label>
+            <Label>{mode === "increase" ? `ထပ်ဖြည့်မည့်အရေအတွက် (${normalizeProductUnit(p.unit)})` : `ပြောင်းလဲမည့်အရေအတွက် (${normalizeProductUnit(p.unit)}၊ ဖယ်ရန် -2 ကဲ့သို့ အနုတ်သုံးပါ)`}</Label>
             <Input type="number" value={qty} onChange={(e) => setQty(e.target.value)} disabled={saving || Boolean(pendingAction)} />
           </div>
           <div className="space-y-1"><Label>မှတ်ချက်</Label><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="မဖြစ်မနေမဟုတ်ပါ" disabled={saving || Boolean(pendingAction)} /></div>

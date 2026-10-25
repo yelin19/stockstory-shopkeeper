@@ -4,6 +4,7 @@ import { isSameDay, isSameMonth } from "date-fns";
 import { ordersQuery, productsQuery, settingsQuery } from "@/lib/shop-data";
 import { money } from "@/lib/export";
 import { sumByCurrency } from "@/lib/currency";
+import { formatQuantity } from "@/lib/product-unit";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({ meta: [
@@ -24,14 +25,15 @@ export const Route = createFileRoute("/_authenticated/admin/")({
   component: Reports,
 });
 
-function group<T>(items: T[], key: (t: T) => string, val: (t: T) => number, currency: (t: T) => string) {
-  const m = new Map<string, { total: number; qty: number; currency: string }>();
+function group<T>(items: T[], key: (t: T) => string, val: (t: T) => number, currency: (t: T) => string, quantity: (t: T) => number, unit: (t: T) => string) {
+  const m = new Map<string, { total: number; qty: number; currency: string; unit: string }>();
   for (const i of items) {
-    const unit = currency(i);
-    const k = `${unit} · ${key(i)}`;
-    const e = m.get(k) ?? { total: 0, qty: 0, currency: unit };
+    const currencyCode = currency(i);
+    const unitLabel = unit(i);
+    const k = `${currencyCode} · ${key(i)} · ${unitLabel}`;
+    const e = m.get(k) ?? { total: 0, qty: 0, currency: currencyCode, unit: unitLabel };
     e.total += val(i);
-    e.qty += 1;
+    e.qty += quantity(i);
     m.set(k, e);
   }
   return [...m.entries()].sort((a, b) => b[1].total - a[1].total);
@@ -49,7 +51,7 @@ function Reports() {
   const totalText = (rows: typeof valid) => sumByCurrency(rows.map((o) => ({ total: o.total, currency: o.currency ?? settings?.currency })), settings?.currency);
   const today = sales.filter((o) => isSameDay(new Date(o.created_at), now));
   const month = sales.filter((o) => isSameMonth(new Date(o.created_at), now));
-  const byProduct = group(sales, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total), (o) => o.currency ?? settings?.currency ?? "MMK");
+  const byProduct = group(sales, (o) => `${o.product_code} · ${o.product_name}`, (o) => Number(o.total), (o) => o.currency ?? settings?.currency ?? "MMK", (o) => o.quantity, (o) => o.product_unit);
   const low = products.filter((p) => p.active && p.stock <= threshold);
 
   const stats = [
@@ -80,7 +82,7 @@ function Reports() {
         <div className="space-y-2 text-sm">
           {returned.map((o) => (
             <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
-              <span>Order ID: {o.public_order_id} · {new Date(o.created_at).toLocaleDateString("en-GB")} · {o.product_name} · {o.quantity}ထုပ်</span>
+              <span>Order ID: {o.public_order_id} · {new Date(o.created_at).toLocaleDateString("en-GB")} · {o.product_name} · {formatQuantity(o.quantity, o.product_unit)}</span>
               <b className="text-destructive">-{money(o.total, o.currency ?? settings?.currency)}</b>
             </div>
           ))}
@@ -97,7 +99,7 @@ function Reports() {
                   <td className="py-2 font-mono text-xs">{p.code}</td>
                   <td>{p.name}</td>
                   <td className="text-muted-foreground">{p.category}</td>
-                  <td className={`text-right font-semibold ${p.stock <= threshold ? "text-destructive" : ""}`}>{p.stock}</td>
+                  <td className={`text-right font-semibold ${p.stock <= threshold ? "text-destructive" : ""}`}>{formatQuantity(p.stock, p.unit)}</td>
                 </tr>
               ))}
             </tbody>
@@ -109,7 +111,7 @@ function Reports() {
           {low.length ? (
             <ul className="space-y-2 text-sm">
               {low.map((p) => (
-                <li key={p.id} className="flex justify-between"><span>{p.code} · {p.name}</span><b className="text-destructive">{p.stock} ကျန်</b></li>
+                <li key={p.id} className="flex justify-between"><span>{p.code} · {p.name}</span><b className="text-destructive">{formatQuantity(p.stock, p.unit)} ကျန်</b></li>
               ))}
             </ul>
           ) : <p className="text-sm text-muted-foreground">ပစ္စည်းအားလုံး လုံလောက်ပါသည်။</p>}
@@ -119,7 +121,7 @@ function Reports() {
   );
 }
 
-function Breakdown({ title, rows }: { title: string; rows: [string, { total: number; qty: number; currency: string }][] }) {
+function Breakdown({ title, rows }: { title: string; rows: [string, { total: number; qty: number; currency: string; unit: string }][] }) {
   const max = Math.max(1, ...rows.map((r) => r[1].total));
   return (
     <section className="rounded-2xl border bg-card p-5">
@@ -128,7 +130,7 @@ function Breakdown({ title, rows }: { title: string; rows: [string, { total: num
       <div className="space-y-3">
         {rows.map(([k, v]) => (
           <div key={k}>
-            <div className="flex justify-between text-sm"><span>{k}</span><span className="font-semibold">{money(v.total, v.currency)} <span className="font-normal text-muted-foreground">({v.qty})</span></span></div>
+            <div className="flex justify-between text-sm"><span>{k}</span><span className="font-semibold">{money(v.total, v.currency)} <span className="font-normal text-muted-foreground">({formatQuantity(v.qty, v.unit)})</span></span></div>
             <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-primary" style={{ width: `${(v.total / max) * 100}%` }} /></div>
           </div>
         ))}
