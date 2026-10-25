@@ -7,6 +7,7 @@ import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-sto
 import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
+import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -228,7 +229,28 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
       if ((d as Draft & { prepay_allowed?: boolean }).prepay_allowed) {
         const proofUrl = String((d as Draft & { payment_proof_url?: string }).payment_proof_url ?? "");
-        await db.from("orders").update({ payment_method: "prepaid", payment_status: "proof_submitted", payment_proof_url: proofUrl || null, payment_submitted_at: new Date().toISOString() }).eq("owner_id", owner).eq("public_order_id", orderId).eq("psid", psid);
+        const { data: submittedProof, error: proofUpdateError } = await db.from("orders")
+          .update({ payment_method: "prepaid", payment_status: "proof_submitted", payment_proof_url: proofUrl || null, payment_submitted_at: new Date().toISOString() })
+          .eq("owner_id", owner).eq("public_order_id", orderId).eq("psid", psid)
+          .neq("payment_status", "proof_submitted").select("id").maybeSingle();
+        if (proofUpdateError) console.error("Could not save prepaid payment proof", proofUpdateError.message);
+        if (submittedProof && shopCurrency?.low_stock_alert_psid && proofUrl) {
+          const reviewMessage = formatPaymentProofReviewMessage({
+            orderId,
+            product: String(d.product ?? "ပစ္စည်း"),
+            quantity: Number(d.qty ?? 0),
+            unit: String(d.unit ?? "ခု"),
+            total: Number(o.total),
+            currency: shopCurrency.currency,
+            customerName: String(d.name ?? ""),
+            phone: String(d.phone ?? ""),
+            address: String(d.address ?? ""),
+          });
+          const delivery = await sendPaymentProofNotification(shopCurrency.low_stock_alert_psid, reviewMessage, proofUrl);
+          if (!delivery.textSent || !delivery.receiptSent) {
+            console.error("Could not deliver prepaid order review to the configured Messenger recipient", delivery.reason);
+          }
+        }
         return text(psid, `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။`);
       }
       await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
