@@ -11,6 +11,13 @@ describe("parseProductRequest", () => {
   it("reads '111=2' as two units", () => {
     expect(parseProductRequest("111=2")).toEqual({ code: "111", qty: 2 });
   });
+  it("reads product codes written in Burmese and Thai", () => {
+    expect(parseProductRequest("ဖိနပ်-၁ 2")).toEqual({ code: "ဖိနပ်-၁", qty: 2 });
+    expect(parseProductRequest("รองเท้า_02")).toEqual({ code: "รองเท้า_02", qty: null });
+  });
+  it("normalizes canonically equivalent Unicode codes", () => {
+    expect(parseProductRequest("cafe\u0301")).toEqual({ code: "café", qty: null });
+  });
   it("rejects zero quantity", () => {
     expect(parseProductRequest("111=0")).toBeNull();
   });

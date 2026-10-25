@@ -3,9 +3,12 @@ import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { isValidProductCode, normalizeProductCode } from "@/lib/product-code";
 
 export const getPublicProduct = createServerFn({ method: "GET" })
-  .inputValidator((d: { code: string }) => z.object({ code: z.string().min(1).max(32) }).parse(d))
+  .inputValidator((d: { code: string }) => z.object({
+    code: z.string().max(64).transform(normalizeProductCode).refine(isValidProductCode, "Invalid product code"),
+  }).parse(d))
   .handler(async ({ data }) => {
     const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
     const sb = createClient<Database>(process.env["SUPABASE_URL"]!, key, {

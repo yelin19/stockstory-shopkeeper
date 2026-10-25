@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, PackagePlus, SlidersHorizontal, Pencil, ExternalLink, Copy, Share2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { isValidProductCode, normalizeProductCode } from "@/lib/product-code";
 import { productsQuery, settingsQuery, productImageUrl, productPageUrl, type Product } from "@/lib/shop-data";
 import { money } from "@/lib/export";
 import { Button } from "@/components/ui/button";
@@ -147,7 +148,8 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
     if (!f.price.trim()) return void toast.error("ဈေးနှုန်းထည့်ရန်လိုအပ်ပါသည် (အခမဲ့ဖြစ်ပါက 0 ဟုထည့်ပါ)");
     const price = Number(f.price);
     const stock = parseInt(f.stock, 10);
-    if (!/^[A-Za-z0-9_-]{1,32}$/.test(f.code)) return void toast.error("Code တွင် အက္ခရာ/ဂဏန်းများသာ ထည့်ပါ၊ space မထည့်ပါနှင့်");
+    const code = normalizeProductCode(f.code);
+    if (!isValidProductCode(code)) return void toast.error("Code တွင် ဘာသာစကားအမျိုးမျိုးမှ အက္ခရာ၊ နံပါတ်၊ - သို့မဟုတ် _ ကို အများဆုံး ၃၂ လုံး ထည့်ပါ။ ကွက်လပ်မထည့်ပါနှင့်။");
     if (!f.name.trim() || !Number.isFinite(price) || !(price >= 0)) return void toast.error("အမည်နှင့် မှန်ကန်သောဈေးနှုန်း ထည့်ရန်လိုပါသည်");
     if (!product && !(stock >= 0)) return void toast.error("အရေအတွက်သည် အနုတ်မဖြစ်ရပါ");
     setBusy(true);
@@ -160,7 +162,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
         if (error) throw error;
         image_url = path;
       }
-      const row = { code: f.code.trim(), name: f.name.trim(), category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url };
+      const row = { code, name: f.name.trim(), category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url };
       const { error } = product
         ? await supabase.from("products").update(row).eq("id", product.id)
         : await supabase.from("products").insert({ ...row, stock });
@@ -180,7 +182,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
       <DialogContent>
         <DialogHeader><DialogTitle>{product ? "ပစ္စည်းပြင်မည်" : "ပစ္စည်းအသစ်"}</DialogTitle></DialogHeader>
         <form onSubmit={save} className="grid grid-cols-2 gap-3">
-          <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="111" /></div>
+          <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="ဥပမာ ဖိနပ်-၁ သို့မဟုတ် ABC-01" /><p className="text-xs text-muted-foreground">ဘာသာစကားအမျိုးမျိုးမှ စာလုံးနှင့် နံပါတ်များ သုံးနိုင်ပါသည်။ ကွက်လပ်မပါ၊ အများဆုံး ၃၂ လုံး။</p></div>
           <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
           <div className="space-y-1"><Label>ဈေးနှုန်း ({currency === "THB" ? "฿" : "ကျပ်"})</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
           {!product && <div className="space-y-1"><Label>အရေအတွက်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}

@@ -17,6 +17,7 @@ export const Route = createFileRoute("/shop/$code")({
     const title = `${p.name} — ${money(p.price, p.currency)}`;
     const desc = p.description?.slice(0, 160) || `${p.name} · ${p.category} · Order on Messenger with code ${p.code}`;
     const img = p.image_url ? `${loaderData.origin}${productImageUrl(p.code, p.image_url)}` : null;
+    const productPath = `/shop/${encodeURIComponent(params.code)}`;
     return {
       meta: [
         { title },
@@ -25,12 +26,12 @@ export const Route = createFileRoute("/shop/$code")({
         { property: "og:description", content: desc },
         { property: "og:type", content: "product" },
         { name: "twitter:card", content: "summary_large_image" },
-        { property: "og:url", content: `${loaderData.origin}/shop/${params.code}` },
+        { property: "og:url", content: `${loaderData.origin}${productPath}` },
         { property: "product:price:amount", content: String(p.price) },
         { property: "product:price:currency", content: p.currency ?? "MMK" },
         ...(img ? [{ property: "og:image", content: img }, { name: "twitter:image", content: img }] : []),
       ],
-      links: [{ rel: "canonical", href: `/shop/${params.code}` }],
+      links: [{ rel: "canonical", href: productPath }],
     };
   },
   notFoundComponent: () => <div className="grid min-h-screen place-items-center text-muted-foreground">ဤပစ္စည်းကို မရရှိနိုင်ပါ။</div>,

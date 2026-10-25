@@ -1,6 +1,8 @@
+import { normalizeProductCode } from "@/lib/product-code";
+
 // Parses a customer message like "111", "111 2", "111=2" into code + quantity.
 export function parseProductRequest(text: string): { code: string; qty: number | null } | null {
-  const m = text.trim().match(/^([A-Za-z0-9_-]{1,32})\s*(?:(?:=|\s|x|×|\*)\s*(\d{1,4}))?$/i);
+  const m = normalizeProductCode(text).match(/^([\p{L}\p{M}\p{N}_-]{1,32})\s*(?:(?:=|\s|x|×|\*)\s*(\d{1,4}))?$/iu);
   if (!m) return null;
   const qty = m[2] ? parseInt(m[2], 10) : null;
   if (qty !== null && qty <= 0) return null;
