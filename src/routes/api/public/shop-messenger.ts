@@ -6,6 +6,7 @@ import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
 import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
 import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
+import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -115,9 +116,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     .order("created_at", { ascending: false })
     .limit(20);
   if (returnedOrders?.length) {
-    const history = returnedOrders.map((o: { public_order_id: string; product_name: string; product_unit: string; quantity: number; created_at: string }) =>
-      `Order ID: ${o.public_order_id}\nရက်စွဲ: ${new Date(o.created_at).toLocaleDateString("en-GB")}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${formatQuantity(o.quantity, d.unit)}`,
-    ).join("\n\n");
+    const history = returnedOrders.map(formatReturnedOrderHistory).join("\n\n");
     const data = s.data as Record<string, unknown>;
     if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
       const pendingCode = typeof data["pending_code"] === "string" ? data["pending_code"] : "";
