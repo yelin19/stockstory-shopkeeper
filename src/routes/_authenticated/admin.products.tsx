@@ -146,7 +146,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
   });
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (k: "code" | "name" | "unit" | "category" | "price" | "description") => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((current) => ({ ...current, [k]: e.target.value }));
+  const set = (k: "code" | "name" | "unit" | "category" | "price" | "description" | "stock") => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((current) => ({ ...current, [k]: e.target.value }));
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
