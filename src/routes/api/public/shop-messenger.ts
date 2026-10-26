@@ -11,6 +11,7 @@ import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@
 import { customerPaymentChoices, getProductPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
+import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -54,6 +55,9 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။ ပုံကိုဖတ်ရန် Google Gemini ကို အသုံးပြုပါမည်။";
+const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
+const customerDetailsRequest = (intro: string) => `${intro}\n${customerDetailsExample}\n\n${customerDetailsPhotoDisclosure}`;
 async function sendUpdate(psid: string, messageText: string) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
   if (!token) return false;
@@ -119,7 +123,7 @@ const deliveryPaymentChoices = (psid: string, t: string, choices = customerPayme
   ],
 });
 const reuseCustomerDetailsChoice = (psid: string, customer: CustomerDetails) => send(psid, {
-  text: `အရင်အော်ဒါက အမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို ဒီအော်ဒါအတွက် ပြန်သုံးမလား။\nအမည်: ${customer.name}\nဖုန်း: ${customer.phone}\nလိပ်စာ: ${customer.address}`,
+  text: `အရင်အော်ဒါက အမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို ဒီအော်ဒါအတွက် ပြန်သုံးမလား။\nအမည်: ${customer.name}\nဖုန်း: ${customer.phone}\nလိပ်စာ: ${customer.address}\n\n${customerDetailsPhotoDisclosure}`,
   quick_replies: [
     { content_type: "text", title: "အဟောင်းသုံးမည်", payload: "REUSE_CUSTOMER_DETAILS" },
     { content_type: "text", title: "အသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
@@ -209,7 +213,7 @@ async function handlePaymentReviewAction(
   await text(adminPsid, `❌ Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးပါပြီ။`);
 }
 
-async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null) {
+async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null, detailsFromImage = false) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
   const { data: shopCurrency } = await db.from("shop_settings").select("currency,low_stock_alert_pin_hash,low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
@@ -264,7 +268,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     });
     const followUp = previousCustomer
       ? "ဖြတ်ပိုင်းရပြီးနောက် အရင်အော်ဒါက အချက်အလက်ကို ပြန်သုံးမလား မေးပါမယ်ရှင်။"
-      : "ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။";
+      : `ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။ ${customerDetailsPhotoDisclosure}`;
     return text(
       psid,
       `🛒 ပစ္စည်းအမည်: ${product.name}\n🔢 အရေအတွက်: ${formatQuantity(quantity, product.unit)}\n💰 တစ်${normalizeProductUnit(product.unit)}ဈေး: ${fmt(Number(product.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(product.price) * quantity)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${bank?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${bank?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${bank?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ${followUp}`,
@@ -327,7 +331,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
 
   if (s.state === "confirm" && isNo(msg)) {
     await save({ state: "ask_customer_details", data: s.data });
-    return text(psid, "အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+    return text(psid, customerDetailsRequest("အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။"));
   }
   if (s.state === "confirm") {
     const confirmData = s.data as { prepay_allowed?: boolean; payment_method?: string };
@@ -362,7 +366,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const previousCustomer = previousCustomerFromDraft(d);
       if (!previousCustomer) {
         await save({ state: "ask_customer_details", data: clearCustomerDetails(d) });
-        return text(psid, "ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+        return text(psid, customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။"));
       }
       const choice = parseCustomerDetailsChoice(msg);
       if (choice === "reuse") {
@@ -373,7 +377,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       }
       if (choice === "new") {
         await save({ state: "ask_customer_details", data: clearCustomerDetails(d) });
-        return text(psid, "အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+        return text(psid, customerDetailsRequest("အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။"));
       }
       return reuseCustomerDetailsChoice(psid, previousCustomer);
     }
@@ -411,7 +415,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         return reuseCustomerDetailsChoice(psid, previousCustomer);
       }
       await save({ state: "ask_customer_details", data: nd });
-      return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
+      return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\n${customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။")}`);
     }
     case "edit_order": {
       const quantity = Number(msg.trim());
@@ -438,11 +442,12 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     }
     case "ask_customer_details": {
       const details = parseCustomerDetails(msg);
-      if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+      if (!details) return text(psid, customerDetailsRequest("အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။"));
       const nd: Draft = { ...d, ...details, note: "" };
       await save({ state: "confirm", data: nd });
       const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
-      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
+      const imageNotice = detailsFromImage ? "📷 ပုံမှ ဖတ်ထုတ်ထားသော အချက်အလက်ဖြစ်ပါသည်။ အောက်ပါအချက်အလက်များကို စစ်ဆေးပေးပါ။\n\n" : "";
+      return confirmation(psid, `${imageNotice}🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
@@ -558,7 +563,47 @@ async function handlePaymentProof(db: Admin, owner: string, psid: string, imageU
   const previousCustomer = readCustomerDetails(data["previous_customer"]);
   await db.from("messenger_sessions").upsert({ ...s, state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
   if (previousCustomer) return reuseCustomerDetailsChoice(psid, previousCustomer);
-  return text(psid, "ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။ အခု နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+  return text(psid, `ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။\n${customerDetailsRequest("အခု နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါရှင်။")}`);
+}
+
+async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string, imageUrl: string, origin: string, pageUsername?: string | null) {
+  const { data: existing, error: sessionError } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
+  if (sessionError) {
+    console.error("Could not check Messenger customer-details state");
+    await text(psid, "ပုံကို လုပ်ဆောင်မရပါ။ ခဏနေပြီး နာမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။");
+    return true;
+  }
+  const session = existing as Session | null;
+  if (!session || !["ask_customer_details", "reuse_customer_details"].includes(session.state)) return false;
+
+  if (session.state === "reuse_customer_details") {
+    const data = { ...session.data };
+    delete data["previous_customer"];
+    delete data["name"];
+    delete data["phone"];
+    delete data["address"];
+    const { error } = await db.from("messenger_sessions").upsert({ ...session, state: "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
+    if (error) {
+      console.error("Could not prepare new Messenger customer details");
+      await text(psid, "အချက်အလက်အသစ်ကို လုပ်ဆောင်မရပါ။ ခဏနေပြီး ထပ်ပို့ပါရှင်။");
+      return true;
+    }
+  }
+
+  const extracted = await extractCustomerDetailsFromImageUrl(imageUrl);
+  if (!extracted.ok) {
+    if (extracted.reason === "missing_key") console.error("GEMINI_API_KEY is not configured for customer-details image extraction");
+    else if (extracted.reason === "provider_error") console.error("Gemini customer-details image extraction failed");
+    const retryText = extracted.reason === "missing_key"
+      ? "ပုံမှ အချက်အလက်ဖတ်ရှုမှုကို မဖွင့်ထားသေးပါ။ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။"
+      : "ပုံထဲက အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဖတ်မရပါ။ ပိုရှင်းသောပုံတစ်ပုံ ထပ်ပို့ပါ၊ သို့မဟုတ် အောက်ပါပုံစံဖြင့် စာသားပို့ပါ။\n" + customerDetailsExample;
+    await text(psid, retryText);
+    return true;
+  }
+
+  const detailsMessage = `အမည်: ${extracted.details.name}\nဖုန်း: ${extracted.details.phone}\nလိပ်စာ: ${extracted.details.address}`;
+  await handleText(db, owner, psid, detailsMessage, origin, pageUsername, true);
+  return true;
 }
 
 export const Route = createFileRoute("/api/public/shop-messenger")({
@@ -600,7 +645,13 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
             const t = message?.is_echo ? undefined : (message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
             const imageUrl = message?.attachments?.find((a) => a.type === "image")?.payload?.url;
             if (imageUrl) {
-              await handlePaymentProof(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl);
+              try {
+                const customerDetailsImageHandled = await handleCustomerDetailsImage(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl, origin, shop.messenger_username);
+                if (!customerDetailsImageHandled) await handlePaymentProof(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl);
+              } catch (error) {
+                console.error("shop-messenger image handler error", (error as Error).message);
+                await text(ev.sender.id, "ပုံကို လုပ်ဆောင်မရပါ။ နာမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။");
+              }
               continue;
             }
             if (!t) continue;
