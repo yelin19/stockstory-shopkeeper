@@ -285,7 +285,9 @@ export async function extractCustomerDetailsFromImageUrl(
     if (!text) return { ok: false, reason: "unreadable" };
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      parsed = JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text);
     } catch {
       return { ok: false, reason: "unreadable" };
     }
