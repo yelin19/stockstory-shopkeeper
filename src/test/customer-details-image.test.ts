@@ -84,9 +84,54 @@ describe("extractCustomerDetailsFromImageUrl", () => {
           httpStatus: 429,
           providerStatus: "RESOURCE_EXHAUSTED",
           providerCode: 429,
+          providerReason: "UNKNOWN",
         }),
       );
       expect(JSON.stringify(logError.mock.calls)).not.toContain("private detail");
+      expect(JSON.stringify(logError.mock.calls)).not.toContain("test-secret");
+    } finally {
+      logError.mockRestore();
+    }
+  });
+
+  it("recognizes a 400 API_KEY_INVALID reason without logging the provider message", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(imageResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              status: "INVALID_ARGUMENT",
+              message: "API key not valid. Please pass a valid API key.",
+              details: [
+                {
+                  "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                  reason: "API_KEY_INVALID",
+                  domain: "googleapis.com",
+                },
+              ],
+            },
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      );
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      await expect(
+        extractCustomerDetailsFromImageUrl(imageUrl, { apiKey: "test-secret", fetcher }),
+      ).resolves.toEqual({ ok: false, reason: "api_key_rejected" });
+      expect(logError).toHaveBeenCalledWith(
+        "Gemini customer-details API error",
+        JSON.stringify({
+          httpStatus: 400,
+          providerStatus: "INVALID_ARGUMENT",
+          providerCode: 400,
+          providerReason: "API_KEY_INVALID",
+        }),
+      );
+      expect(JSON.stringify(logError.mock.calls)).not.toContain("API key not valid");
       expect(JSON.stringify(logError.mock.calls)).not.toContain("test-secret");
     } finally {
       logError.mockRestore();

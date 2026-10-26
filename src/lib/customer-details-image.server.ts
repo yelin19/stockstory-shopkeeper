@@ -165,26 +165,38 @@ function parseDetails(value: unknown): ImageCustomerDetails | null {
 async function classifyGeminiHttpError(response: Response): Promise<ImageCustomerDetailsResult> {
   let providerStatus = "UNKNOWN";
   let providerCode: number | null = null;
+  let providerReason = "UNKNOWN";
   try {
     const payload = (await response.json()) as {
-      error?: { status?: unknown; code?: unknown };
+      error?: { status?: unknown; code?: unknown; details?: unknown };
     };
     if (typeof payload.error?.status === "string")
       providerStatus = payload.error.status.slice(0, 80);
     if (typeof payload.error?.code === "number") providerCode = payload.error.code;
+    if (Array.isArray(payload.error?.details)) {
+      for (const detail of payload.error.details) {
+        if (!detail || typeof detail !== "object" || Array.isArray(detail)) continue;
+        const detailReason = (detail as Record<string, unknown>)["reason"];
+        if (typeof detailReason === "string" && /^[A-Z0-9_]{1,80}$/.test(detailReason)) {
+          providerReason = detailReason;
+          break;
+        }
+      }
+    }
   } catch {
     // Keep the HTTP status even when the provider response is not JSON.
   }
   console.error(
     "Gemini customer-details API error",
-    JSON.stringify({ httpStatus: response.status, providerStatus, providerCode }),
+    JSON.stringify({ httpStatus: response.status, providerStatus, providerCode, providerReason }),
   );
   if (response.status === 429 || providerStatus === "RESOURCE_EXHAUSTED") {
     return { ok: false, reason: "rate_limited" };
   }
   if (
     [401, 403].includes(response.status) ||
-    ["UNAUTHENTICATED", "PERMISSION_DENIED", "API_KEY_INVALID"].includes(providerStatus)
+    ["UNAUTHENTICATED", "PERMISSION_DENIED"].includes(providerStatus) ||
+    ["API_KEY_INVALID", "API_KEY_SERVICE_BLOCKED"].includes(providerReason)
   ) {
     return { ok: false, reason: "api_key_rejected" };
   }
