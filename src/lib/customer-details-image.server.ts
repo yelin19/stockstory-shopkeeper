@@ -217,7 +217,7 @@ export async function extractCustomerDetailsFromImageUrl(
   url: string,
   options: ExtractOptions = {},
 ): Promise<ImageCustomerDetailsResult> {
-  const apiKey = (options.apiKey ?? process.env.LOVABLE_API_KEY)?.trim();
+  const apiKey = (options.apiKey ?? process.env["LOVABLE_API_KEY"])?.trim();
   if (!apiKey) return { ok: false, reason: "missing_key" };
   if (!isTrustedMessengerImageUrl(url)) return { ok: false, reason: "invalid_url" };
 
