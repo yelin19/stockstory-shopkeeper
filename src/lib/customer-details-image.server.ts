@@ -250,7 +250,7 @@ export async function extractCustomerDetailsFromImageUrl(
           model,
           stream: true,
           temperature: 0,
-          max_tokens: 300,
+          max_tokens: 2000,
           messages: [
             {
               role: "user",
