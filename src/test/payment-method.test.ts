@@ -1,35 +1,39 @@
 import { describe, expect, it } from "vitest";
 import {
-  cashPaymentChoices,
-  parseCashPaymentChoice,
+  customerPaymentChoices,
+  parsePaymentChoice,
   paymentMethodInstruction,
   paymentMethodLabel,
 } from "@/lib/payment-method";
 
-describe("cash payment choices", () => {
-  it("offers separate courier COD and seller-delivery cash choices", () => {
-    expect(cashPaymentChoices.map((choice) => choice.method)).toEqual([
-      "courier_cod",
+describe("customer payment choices", () => {
+  it("offers advance transfer and seller-delivery cash as separate choices", () => {
+    expect(customerPaymentChoices.map((choice) => choice.method)).toEqual([
+      "prepaid",
       "seller_delivery_cash",
     ]);
-    expect(parseCashPaymentChoice("PAY_COURIER_COD")).toBe("courier_cod");
-    expect(parseCashPaymentChoice("PAY_SELLER_DELIVERY_CASH")).toBe("seller_delivery_cash");
+    expect(parsePaymentChoice("PREPAY")).toBe("prepaid");
+    expect(parsePaymentChoice("PAY_SELLER_DELIVERY_CASH")).toBe("seller_delivery_cash");
   });
 
-  it("accepts the visible quick-reply titles but rejects unknown choices", () => {
-    for (const choice of cashPaymentChoices) {
-      expect(parseCashPaymentChoice(choice.quickReplyTitle)).toBe(choice.method);
+  it("treats existing COD quick replies as advance payment for compatibility", () => {
+    expect(parsePaymentChoice("PAY_COURIER_COD")).toBe("prepaid");
+    expect(parsePaymentChoice("🚚 COD")).toBe("prepaid");
+  });
+
+  it("accepts visible quick-reply titles and rejects unknown choices", () => {
+    for (const choice of customerPaymentChoices) {
+      expect(parsePaymentChoice(choice.quickReplyTitle)).toBe(choice.method);
     }
-    expect(parseCashPaymentChoice("PREPAY")).toBeNull();
-    expect(parseCashPaymentChoice("NO_BUY")).toBeNull();
+    expect(parsePaymentChoice("NO_BUY")).toBeNull();
   });
 
-  it("uses Burmese labels and distinguishes who collects the money", () => {
-    expect(paymentMethodLabel("courier_cod")).toContain("ပို့ဆောင်ရေးကုမ္ပဏီ");
-    expect(paymentMethodLabel("cod")).toContain("စနစ်ဟောင်း");
-    expect(paymentMethodLabel("seller_delivery_cash")).toContain("ဆိုင်ဘက်မှ");
+  it("keeps Burmese payment labels and historical COD descriptions", () => {
     expect(paymentMethodLabel("prepaid")).toBe("ကြိုတင်ငွေလွှဲ");
-    expect(paymentMethodInstruction("courier_cod")).toContain("ပြန်လွှဲပါမည်");
+    expect(paymentMethodLabel("seller_delivery_cash")).toContain("ဆိုင်ဘက်မှ");
+    expect(paymentMethodLabel("cod")).toContain("စနစ်ဟောင်း");
+    expect(paymentMethodInstruction("prepaid")).toContain("ဖြတ်ပိုင်း");
     expect(paymentMethodInstruction("seller_delivery_cash")).toContain("တိုက်ရိုက်ငွေချေ");
+    expect(paymentMethodInstruction("courier_cod")).toContain("စနစ်ဟောင်း");
   });
 });

@@ -8,7 +8,7 @@ import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
-import { cashPaymentChoices, parseCashPaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod } from "@/lib/payment-method";
+import { customerPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -90,7 +90,7 @@ const paymentChoices = (psid: string, t: string) => send(psid, {
 const deliveryPaymentChoices = (psid: string, t: string) => send(psid, {
   text: t,
   quick_replies: [
-    ...cashPaymentChoices.map((choice) => ({
+    ...customerPaymentChoices.map((choice) => ({
       content_type: "text",
       title: choice.quickReplyTitle,
       payload: choice.payload,
@@ -212,6 +212,32 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
+  const startPrepaidPayment = async (
+    product: { id: string; code: string; name: string; price: number; unit: string },
+    quantity: number,
+  ) => {
+    const { data: bank } = await db.from("shop_settings")
+      .select("bank_name, bank_account_name, bank_account_number")
+      .eq("owner_id", owner)
+      .maybeSingle();
+    await save({
+      state: "awaiting_payment_proof",
+      data: {
+        product_id: product.id,
+        code: product.code,
+        product: product.name,
+        price: Number(product.price),
+        qty: quantity,
+        unit: product.unit,
+        prepay_allowed: true,
+        payment_method: "prepaid",
+      },
+    });
+    return text(
+      psid,
+      `🛒 ပစ္စည်းအမည်: ${product.name}\n🔢 အရေအတွက်: ${formatQuantity(quantity, product.unit)}\n💰 တစ်${normalizeProductUnit(product.unit)}ဈေး: ${fmt(Number(product.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(product.price) * quantity)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${bank?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${bank?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${bank?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`,
+    );
+  };
 
   const { data: returnedOrders } = await db.from("orders")
     .select("public_order_id, product_code, product_name, product_unit, unit_price, quantity, created_at")
@@ -230,9 +256,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
         if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
         if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
-        const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
-        await save({ state: "awaiting_payment_proof", data: { product_id: p.id, code: p.code, product: p.name, price: Number(p.price), qty: pendingQty, unit: p.unit, prepay_allowed: true } });
-        return text(psid, `🛒 ပစ္စည်းအမည်: ${p.name}\n🔢 အရေအတွက်: ${formatQuantity(pendingQty, p.unit)}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * pendingQty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
+        return startPrepaidPayment(p, pendingQty);
       }
       await save({ state: "idle", data: { prepay_allowed: true } });
       return text(psid, "ကြိုတင်ငွေလွှဲစနစ်ကို ရွေးချယ်ပြီးပါပြီ။ ဒီနေ့ အော်ဒါအသစ်အတွက် ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ 111=2");
@@ -274,7 +298,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   if (s.state === "confirm") {
     const confirmData = s.data as { prepay_allowed?: boolean; payment_method?: string };
-    if (!confirmData.prepay_allowed && !["courier_cod", "seller_delivery_cash"].includes(confirmData.payment_method ?? "")) {
+    if (!confirmData.prepay_allowed && !["prepaid", "seller_delivery_cash"].includes(confirmData.payment_method ?? "")) {
       await save({ state: "payment_method_choice", data: s.data });
       return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို မရွေးရသေးပါ။ အောက်ပါနည်းလမ်းနှစ်မျိုးထဲမှ ရွေးပါ။");
     }
@@ -289,12 +313,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
 
-  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string; payment_method?: CashPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
+  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
   const d = s.data as Draft;
-  const next = async (state: string, data: Record<string, unknown>, prompt: string) => {
-    await save({ state, data });
-    return text(psid, prompt);
-  };
 
   switch (s.state) {
     case "payment_method_choice": {
@@ -302,9 +322,23 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         await save({ state: "idle", data: {} });
         return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
       }
-      const paymentMethod = parseCashPaymentChoice(msg);
+      const paymentMethod = parsePaymentChoice(msg);
       if (!paymentMethod) {
         return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို ရွေးချယ်ရန် အောက်ပါခလုတ်တစ်ခုကို နှိပ်ပါ။");
+      }
+      if (paymentMethod === "prepaid") {
+        const { data: p } = await db.from("products")
+          .select("*")
+          .eq("owner_id", owner)
+          .eq("id", String(d.product_id))
+          .eq("active", true)
+          .maybeSingle();
+        if (!p) return text(psid, "ဒီပစ္စည်းကို ထပ်မှာယူ၍မရတော့ပါ။ ပစ္စည်း Code နဲ့ အရေအတွက်ကို ပြန်ပို့ပါရှင်။");
+        const quantity = Number(d.qty ?? 0);
+        if (p.stock < quantity) {
+          return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+        }
+        return startPrepaidPayment(p, quantity);
       }
       const nd: Draft = { ...d, payment_method: paymentMethod, prepay_allowed: false };
       if (nd.name && nd.phone && nd.address) {
@@ -351,7 +385,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? ""),
       };
-      const isPrepaid = Boolean(d.prepay_allowed);
+      const isPrepaid = Boolean(d.prepay_allowed || d.payment_method === "prepaid");
       const paymentMethod: CashPaymentMethod = d.payment_method === "seller_delivery_cash" ? "seller_delivery_cash" : "courier_cod";
       const { data: order, error } = isPrepaid
         ? await callShopRpc(db, "place_order_from_messenger", baseArgs)
@@ -361,7 +395,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const o = order as unknown as { public_order_id?: string; order_no: number; total: number; product_id: string | null };
       if (o.product_id) await retryLowStockAlerts(owner, o.product_id);
       const orderId = o.public_order_id ?? String(o.order_no).padStart(6, "0");
-      if ((d as Draft & { prepay_allowed?: boolean }).prepay_allowed) {
+      if (isPrepaid) {
         const proofUrl = String((d as Draft & { payment_proof_url?: string }).payment_proof_url ?? "");
         const { data: submittedProof, error: proofUpdateError } = await db.from("orders")
           .update({ payment_method: "prepaid", payment_status: "proof_submitted", payment_proof_url: proofUrl || null, payment_submitted_at: new Date().toISOString() })
@@ -407,9 +441,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
-    const { data: shop } = await db.from("shop_settings").select("bank_name, bank_account_name, bank_account_number").eq("owner_id", owner).maybeSingle();
-    return next("awaiting_payment_proof", { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty, prepay_allowed: true },
-      `🛒 ${p.name}\nအရေအတွက်: ${formatQuantity(req.qty, p.unit)}\nပေးချေရန်ပမာဏ: ${fmt(Number(p.price) * req.qty)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${shop?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${shop?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${shop?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`);
+    return startPrepaidPayment(p, req.qty);
   }
   const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
     .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -429,7 +461,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   await save({ state: "payment_method_choice", data: draft });
   return deliveryPaymentChoices(
     psid,
-    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nငွေပေးချေနည်းလမ်းကို ရွေးပါ။\n🚚 COD — ပို့ဆောင်ရေးကုမ္ပဏီက ငွေကောက်ပြီး ဆိုင်သို့ ပြန်လွှဲပေးပါမည်။\n🏠 ဆိုင်မှအိမ်အရောက် — ဆိုင်ဘက်ပို့သူကို ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။`,
+    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nငွေပေးချေနည်းလမ်းကို ရွေးပါ။\n💳 ငွေကြိုလွှဲပါမည် — ဘဏ်အချက်အလက်အတိုင်း ငွေလွှဲပြီး ဖြတ်ပိုင်းပို့ပါ။ Admin စစ်ဆေးအတည်ပြုပါမည်။\n🏠 ဆိုင်မှအိမ်အရောက် — ဆိုင်ဘက်ပို့သူကို ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။`,
   );
 }
 

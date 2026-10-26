@@ -1,12 +1,13 @@
 export type CashPaymentMethod = "courier_cod" | "seller_delivery_cash";
+export type CustomerPaymentChoice = "prepaid" | "seller_delivery_cash";
 export type OrderPaymentMethod = CashPaymentMethod | "cod" | "prepaid";
 
-export const cashPaymentChoices: {
-  method: CashPaymentMethod;
+export const customerPaymentChoices: {
+  method: CustomerPaymentChoice;
   payload: string;
   quickReplyTitle: string;
 }[] = [
-  { method: "courier_cod", payload: "PAY_COURIER_COD", quickReplyTitle: "🚚 COD" },
+  { method: "prepaid", payload: "PREPAY", quickReplyTitle: "ငွေကြိုလွှဲပါမည်" },
   {
     method: "seller_delivery_cash",
     payload: "PAY_SELLER_DELIVERY_CASH",
@@ -16,7 +17,7 @@ export const cashPaymentChoices: {
 
 const paymentLabels: Record<OrderPaymentMethod, string> = {
   cod: "အရင်အော်ဒါ (စနစ်ဟောင်း) — COD ကောက်ခံသူ မခွဲထားပါ",
-  courier_cod: "ပို့ဆောင်ရေးကုမ္ပဏီမှ ငွေကောက်ခံ (COD)",
+  courier_cod: "အရင်အော်ဒါ — ပို့ဆောင်ရေးကုမ္ပဏီမှ ငွေကောက်ခံ (COD)",
   seller_delivery_cash: "ဆိုင်ဘက်မှ အိမ်အရောက်ပို့ပြီး ငွေချေ",
   prepaid: "ကြိုတင်ငွေလွှဲ",
 };
@@ -35,7 +36,7 @@ export function paymentMethodLabel(method: string | null | undefined): string {
 
 export function paymentMethodInstruction(method: string | null | undefined): string {
   if (method === "courier_cod") {
-    return "ပို့ဆောင်ရေးကုမ္ပဏီက ပစ္စည်းပို့ချိန် ဝယ်သူထံမှ ငွေကောက်ခံပြီး ဆိုင်သို့ ပြန်လွှဲပါမည်။";
+    return "ဤအော်ဒါသည် စနစ်ဟောင်းမှဖြစ်၍ ပို့ဆောင်ရေးကုမ္ပဏီက ငွေကောက်ခံရန် သတ်မှတ်ထားပါသည်။";
   }
   if (method === "cod")
     return "ဤအော်ဒါသည် စနစ်ဟောင်းမှဖြစ်၍ ငွေကောက်ခံသူကို သီးခြားမှတ်တမ်းမတင်ထားပါ။";
@@ -48,9 +49,17 @@ export function paymentMethodInstruction(method: string | null | undefined): str
   return "ငွေပေးချေနည်းလမ်းကို ဆိုင်ရှင်ထံ ဆက်သွယ်အတည်ပြုပါ။";
 }
 
-export function parseCashPaymentChoice(value: string): CashPaymentMethod | null {
+export function parsePaymentChoice(value: string): CustomerPaymentChoice | null {
   const choice = value.trim().toLocaleLowerCase();
-  if (choice === "pay_courier_cod" || choice === "🚚 cod" || choice === "cod") return "courier_cod";
+  if (
+    choice === "prepay" ||
+    choice === "ငွေကြိုလွှဲပါမည်" ||
+    choice === "pay_courier_cod" ||
+    choice === "🚚 cod" ||
+    choice === "cod"
+  ) {
+    return "prepaid";
+  }
   if (
     choice === "pay_seller_delivery_cash" ||
     choice === "🏠 ဆိုင်ပို့ ငွေချေ" ||
