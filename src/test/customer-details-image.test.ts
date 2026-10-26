@@ -17,12 +17,10 @@ function imageResponse(
 }
 
 function geminiResponse(value: unknown) {
-  return new Response(
-    JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(value) }] } }] }),
-    {
-      headers: { "content-type": "application/json" },
-    },
-  );
+  const chunk = JSON.stringify({ choices: [{ delta: { content: JSON.stringify(value) } }] });
+  return new Response(`data: ${chunk}\n\ndata: [DONE]\n\n`, {
+    headers: { "content-type": "text/event-stream" },
+  });
 }
 
 describe("extractCustomerDetailsFromImageUrl", () => {
@@ -42,15 +40,16 @@ describe("extractCustomerDetailsFromImageUrl", () => {
       details: { name: "မောင်မောင်", phone: "09 123456789", address: "အမှတ် ၁၂၊ ရန်ကုန်မြို့" },
     });
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(String(fetcher.mock.calls[1]?.[0])).toContain("models/gemini-3.8-flash:generateContent");
+    expect(String(fetcher.mock.calls[1]?.[0])).toBe("https://ai.gateway.lovable.dev/v1/chat/completions");
     const request = fetcher.mock.calls[1]?.[1] as RequestInit;
-    expect(new Headers(request.headers).get("x-goog-api-key")).toBe("test-secret");
+    expect(new Headers(request.headers).get("Lovable-API-Key")).toBe("test-secret");
     const body = JSON.parse(String(request.body));
-    expect(body.contents[0].parts[0].inlineData).toEqual({ mimeType: "image/jpeg", data: "AQID" });
-    expect(body.generationConfig.responseFormat.text.mimeType).toBe("application/json");
+    expect(body.model).toBe("google/gemini-3.8-flash");
+    expect(body.messages[0].content[0].image_url.url).toBe("data:image/jpeg;base64,AQID");
+    expect(body.response_format.type).toBe("json_schema");
   });
 
-  it("does not call external services without a Gemini key", async () => {
+  it("does not call external services without an AI key", async () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(
       extractCustomerDetailsFromImageUrl(imageUrl, { apiKey: "", fetcher }),
@@ -61,77 +60,21 @@ describe("extractCustomerDetailsFromImageUrl", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("classifies Gemini free-tier quota errors and logs only safe status metadata", async () => {
+  it("classifies Lovable AI rate limits without logging private details", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(imageResponse())
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "private detail" },
-          }),
-          { status: 429, headers: { "content-type": "application/json" } },
-        ),
+        new Response(JSON.stringify({ error: { type: "rate_limited", message: "private detail" } }), {
+          status: 429,
+        }),
       );
     const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       await expect(
         extractCustomerDetailsFromImageUrl(imageUrl, { apiKey: "test-secret", fetcher }),
       ).resolves.toEqual({ ok: false, reason: "rate_limited" });
-      expect(logError).toHaveBeenCalledWith(
-        "Gemini customer-details API error",
-        JSON.stringify({
-          httpStatus: 429,
-          providerStatus: "RESOURCE_EXHAUSTED",
-          providerCode: 429,
-          providerReason: "UNKNOWN",
-        }),
-      );
       expect(JSON.stringify(logError.mock.calls)).not.toContain("private detail");
-      expect(JSON.stringify(logError.mock.calls)).not.toContain("test-secret");
-    } finally {
-      logError.mockRestore();
-    }
-  });
-
-  it("recognizes a 400 API_KEY_INVALID reason without logging the provider message", async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(imageResponse())
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            error: {
-              code: 400,
-              status: "INVALID_ARGUMENT",
-              message: "API key not valid. Please pass a valid API key.",
-              details: [
-                {
-                  "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-                  reason: "API_KEY_INVALID",
-                  domain: "googleapis.com",
-                },
-              ],
-            },
-          }),
-          { status: 400, headers: { "content-type": "application/json" } },
-        ),
-      );
-    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      await expect(
-        extractCustomerDetailsFromImageUrl(imageUrl, { apiKey: "test-secret", fetcher }),
-      ).resolves.toEqual({ ok: false, reason: "api_key_rejected" });
-      expect(logError).toHaveBeenCalledWith(
-        "Gemini customer-details API error",
-        JSON.stringify({
-          httpStatus: 400,
-          providerStatus: "INVALID_ARGUMENT",
-          providerCode: 400,
-          providerReason: "API_KEY_INVALID",
-        }),
-      );
-      expect(JSON.stringify(logError.mock.calls)).not.toContain("API key not valid");
       expect(JSON.stringify(logError.mock.calls)).not.toContain("test-secret");
     } finally {
       logError.mockRestore();
