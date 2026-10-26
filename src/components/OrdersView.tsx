@@ -8,6 +8,7 @@ import { isOrderShipped, ordersQuery, settingsQuery, type Order } from "@/lib/sh
 import { exportXlsx, money, type Row } from "@/lib/export";
 import { sumByCurrency } from "@/lib/currency";
 import { formatQuantity } from "@/lib/product-unit";
+import { paymentMethodLabel } from "@/lib/payment-method";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -47,13 +48,13 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
       ? {
-          "ဝယ်ယူမှု ID": o.public_order_id, Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Code: o.product_code,
+          "ဝယ်ယူမှု ID": o.public_order_id, "ငွေပေးချေမှုနည်းလမ်း": paymentMethodLabel(o.payment_method), Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Code: o.product_code,
           Product: o.product_name, Qty: o.quantity, Unit: o.product_unit, Currency: o.currency ?? settings?.currency ?? "MMK", "Unit price": Number(o.unit_price), Total: Number(o.total),
           Customer: o.customer_name, Phone: o.phone, Address: o.address, Note: o.note ?? "",
           Status: o.status,
         }
       : {
-          "ဝယ်ယူမှု ID": o.public_order_id, Customer: o.customer_name, Phone: o.phone, Address: o.address,
+          "ဝယ်ယူမှု ID": o.public_order_id, "ငွေပေးချေမှုနည်းလမ်း": paymentMethodLabel(o.payment_method), Customer: o.customer_name, Phone: o.phone, Address: o.address,
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Unit: o.product_unit, Currency: o.currency ?? settings?.currency ?? "MMK", Total: Number(o.total), Note: o.note ?? "",
       },
   );
@@ -215,7 +216,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
-                      <td className="py-2 text-right">{formatQuantity(o.quantity, o.product_unit)} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div></td>
+                      <td className="py-2 text-right">{formatQuantity(o.quantity, o.product_unit)} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div><div className="mt-1 text-xs text-muted-foreground">{paymentMethodLabel(o.payment_method)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>
                           {o.status === "cancelled" ? "ပယ်ဖျက်ပြီး" : o.delivery_status === "returned" ? "ပို့ဆောင်မှုမအောင်မြင်ပါ" : o.sent ? ["confirmed", "preparing"].includes(o.delivery_status) ? "ပို့ဆောင်နေပါသည်" : deliveryLabels[o.delivery_status] ?? "ပို့ဆောင်နေပါသည်" : "လက်ခံထား"}

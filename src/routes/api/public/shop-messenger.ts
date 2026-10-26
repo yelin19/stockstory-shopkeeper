@@ -8,6 +8,7 @@ import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
+import { cashPaymentChoices, parseCashPaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod } from "@/lib/payment-method";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -83,6 +84,17 @@ const paymentChoices = (psid: string, t: string) => send(psid, {
   text: t,
   quick_replies: [
     { content_type: "text", title: "ငွေကြိုလွှဲပါမည်", payload: "PREPAY" },
+    { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
+  ],
+});
+const deliveryPaymentChoices = (psid: string, t: string) => send(psid, {
+  text: t,
+  quick_replies: [
+    ...cashPaymentChoices.map((choice) => ({
+      content_type: "text",
+      title: choice.quickReplyTitle,
+      payload: choice.payload,
+    })),
     { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
   ],
 });
@@ -260,6 +272,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     await save({ state: "ask_customer_details", data: s.data });
     return text(psid, "အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
   }
+  if (s.state === "confirm") {
+    const confirmData = s.data as { prepay_allowed?: boolean; payment_method?: string };
+    if (!confirmData.prepay_allowed && !["courier_cod", "seller_delivery_cash"].includes(confirmData.payment_method ?? "")) {
+      await save({ state: "payment_method_choice", data: s.data });
+      return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို မရွေးရသေးပါ။ အောက်ပါနည်းလမ်းနှစ်မျိုးထဲမှ ရွေးပါ။");
+    }
+  }
   if (isNo(msg) && s.state !== "idle") {
     if (s.state === "cancel_order") {
       await save({ state: "idle", data: {} });
@@ -270,7 +289,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
 
-  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string };
+  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string; payment_method?: CashPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
   const d = s.data as Draft;
   const next = async (state: string, data: Record<string, unknown>, prompt: string) => {
     await save({ state, data });
@@ -278,6 +297,23 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   };
 
   switch (s.state) {
+    case "payment_method_choice": {
+      if (msg.trim() === "NO_BUY" || msg.trim() === "မဝယ်တော့ပါ") {
+        await save({ state: "idle", data: {} });
+        return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
+      }
+      const paymentMethod = parseCashPaymentChoice(msg);
+      if (!paymentMethod) {
+        return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို ရွေးချယ်ရန် အောက်ပါခလုတ်တစ်ခုကို နှိပ်ပါ။");
+      }
+      const nd: Draft = { ...d, payment_method: paymentMethod, prepay_allowed: false };
+      if (nd.name && nd.phone && nd.address) {
+        await save({ state: "confirm", data: nd });
+        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
+      }
+      await save({ state: "ask_customer_details", data: nd });
+      return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
+    }
     case "edit_order": {
       const quantity = Number(msg.trim());
       if (!/^[1-9][0-9]{0,3}$/.test(msg.trim())) return text(psid, "အရေအတွက်ကို 1 မှ 9999 အတွင်း ဂဏန်းဖြင့်သာ ပို့ပါ။");
@@ -306,14 +342,20 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (!details) return text(psid, "အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပြန်ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
       const nd: Draft = { ...d, ...details, note: "" };
       await save({ state: "confirm", data: nd });
-      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
+      const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
+      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
-      const { data: order, error } = await callShopRpc(db, "place_order_from_messenger", {
+      const baseArgs = {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? ""),
-      });
+      };
+      const isPrepaid = Boolean(d.prepay_allowed);
+      const paymentMethod: CashPaymentMethod = d.payment_method === "seller_delivery_cash" ? "seller_delivery_cash" : "courier_cod";
+      const { data: order, error } = isPrepaid
+        ? await callShopRpc(db, "place_order_from_messenger", baseArgs)
+        : await callShopRpc(db, "place_order_from_messenger_with_payment_method", { ...baseArgs, _payment_method: paymentMethod });
       await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
       if (error) return text(psid, error.message.includes("OUT_OF_STOCK") ? "😔 လက်ကျန်မလုံလောက်တော့ပါ။ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါ။" : "အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါ။");
       const o = order as unknown as { public_order_id?: string; order_no: number; total: number; product_id: string | null };
@@ -345,7 +387,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         }
         return text(psid, `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။`);
       }
-      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
+      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
@@ -373,13 +415,22 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const lastCustomer = (s.data as { last_customer?: { name?: string; phone?: string; address?: string } }).last_customer;
   const customer = previous ? { name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address } : lastCustomer?.name && lastCustomer.phone && lastCustomer.address ? lastCustomer : null;
-  if (customer) {
-    const oldDraft = { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty, name: customer.name, phone: customer.phone, address: customer.address, note: "" };
-    await save({ state: "confirm", data: oldDraft });
-    return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${p.name}=${formatQuantity(req.qty, p.unit)}\n\nအမည်: ${oldDraft.name}\nဖုန်း: ${oldDraft.phone}\nလိပ်စာ: ${oldDraft.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပြီး အချက်အလက်အသစ် ပို့ပါရှင်။`);
-  }
-  return next("ask_customer_details", { product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: req.qty, prepay_allowed: false },
-    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
+  const draft = {
+    product_id: p.id,
+    code: p.code,
+    product: p.name,
+    unit: p.unit,
+    price: Number(p.price),
+    qty: req.qty,
+    prepay_allowed: false,
+    ...(customer ?? {}),
+    note: "",
+  };
+  await save({ state: "payment_method_choice", data: draft });
+  return deliveryPaymentChoices(
+    psid,
+    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nငွေပေးချေနည်းလမ်းကို ရွေးပါ။\n🚚 COD — ပို့ဆောင်ရေးကုမ္ပဏီက ငွေကောက်ပြီး ဆိုင်သို့ ပြန်လွှဲပေးပါမည်။\n🏠 ဆိုင်မှအိမ်အရောက် — ဆိုင်ဘက်ပို့သူကို ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။`,
+  );
 }
 
 async function handlePaymentProof(db: Admin, owner: string, psid: string, imageUrl: string) {

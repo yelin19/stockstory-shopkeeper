@@ -64,6 +64,13 @@
       "when": 1792933254536,
       "tag": "0018_date_range_data_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792976018320,
+      "tag": "0019_separate_cash_payment_methods",
+      "breakpoints": true
     }
   ]
 }

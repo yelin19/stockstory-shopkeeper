@@ -426,6 +426,62 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      place_order_from_messenger_with_payment_method: {
+        Args: {
+          _address: string
+          _name: string
+          _note: string
+          _owner: string
+          _payment_method: string
+          _phone: string
+          _product_id: string
+          _psid: string
+          _qty: number
+          _township: string
+        }
+        Returns: {
+          address: string
+          category: string
+          created_at: string
+          currency: string
+          customer_name: string
+          delivery_image_url: string | null
+          delivery_notified_at: string | null
+          delivery_status: string
+          id: string
+          note: string | null
+          order_no: number
+          owner_id: string
+          payment_approved_at: string | null
+          payment_method: string
+          payment_proof_url: string | null
+          payment_status: string
+          payment_submitted_at: string | null
+          phone: string
+          product_code: string
+          product_id: string | null
+          product_name: string
+          product_unit: string
+          psid: string | null
+          public_order_id: string
+          quantity: number
+          sent: boolean
+          sent_at: string | null
+          status: string
+          total: number
+          township: string
+          tracking_number: string | null
+          tracking_url: string | null
+          unit_price: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       release_low_stock_alert: { Args: { _product_id: string }; Returns: undefined }
       set_low_stock_alert_pin: { Args: { _pin: string }; Returns: undefined }
       set_shop_pin: { Args: { _pin: string }; Returns: undefined }
