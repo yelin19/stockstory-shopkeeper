@@ -61,6 +61,38 @@ describe("extractCustomerDetailsFromImageUrl", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("classifies Gemini free-tier quota errors and logs only safe status metadata", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(imageResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "private detail" },
+          }),
+          { status: 429, headers: { "content-type": "application/json" } },
+        ),
+      );
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      await expect(
+        extractCustomerDetailsFromImageUrl(imageUrl, { apiKey: "test-secret", fetcher }),
+      ).resolves.toEqual({ ok: false, reason: "rate_limited" });
+      expect(logError).toHaveBeenCalledWith(
+        "Gemini customer-details API error",
+        JSON.stringify({
+          httpStatus: 429,
+          providerStatus: "RESOURCE_EXHAUSTED",
+          providerCode: 429,
+        }),
+      );
+      expect(JSON.stringify(logError.mock.calls)).not.toContain("private detail");
+      expect(JSON.stringify(logError.mock.calls)).not.toContain("test-secret");
+    } finally {
+      logError.mockRestore();
+    }
+  });
+
   it("rejects non-Meta image URLs before fetching", async () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(
@@ -90,13 +122,11 @@ describe("extractCustomerDetailsFromImageUrl", () => {
     });
     expect(unsupportedFetcher).toHaveBeenCalledTimes(1);
 
-    const oversizedFetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        imageResponse("image/jpeg", new Uint8Array(), {
-          "content-length": String(6 * 1024 * 1024),
-        }),
-      );
+    const oversizedFetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      imageResponse("image/jpeg", new Uint8Array(), {
+        "content-length": String(6 * 1024 * 1024),
+      }),
+    );
     await expect(
       extractCustomerDetailsFromImageUrl(imageUrl, {
         apiKey: "test-secret",

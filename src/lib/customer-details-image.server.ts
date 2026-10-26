@@ -4,7 +4,16 @@ export type ImageCustomerDetailsResult =
   | { ok: true; details: ImageCustomerDetails }
   | {
       ok: false;
-      reason: "missing_key" | "invalid_url" | "image_unavailable" | "provider_error" | "unreadable";
+      reason:
+        | "missing_key"
+        | "invalid_url"
+        | "image_unavailable"
+        | "api_key_rejected"
+        | "rate_limited"
+        | "request_rejected"
+        | "model_unavailable"
+        | "provider_error"
+        | "unreadable";
     };
 
 type ExtractOptions = { apiKey?: string; model?: string; fetcher?: typeof fetch };
@@ -153,6 +162,41 @@ function parseDetails(value: unknown): ImageCustomerDetails | null {
   return { name, phone, address };
 }
 
+async function classifyGeminiHttpError(response: Response): Promise<ImageCustomerDetailsResult> {
+  let providerStatus = "UNKNOWN";
+  let providerCode: number | null = null;
+  try {
+    const payload = (await response.json()) as {
+      error?: { status?: unknown; code?: unknown };
+    };
+    if (typeof payload.error?.status === "string")
+      providerStatus = payload.error.status.slice(0, 80);
+    if (typeof payload.error?.code === "number") providerCode = payload.error.code;
+  } catch {
+    // Keep the HTTP status even when the provider response is not JSON.
+  }
+  console.error(
+    "Gemini customer-details API error",
+    JSON.stringify({ httpStatus: response.status, providerStatus, providerCode }),
+  );
+  if (response.status === 429 || providerStatus === "RESOURCE_EXHAUSTED") {
+    return { ok: false, reason: "rate_limited" };
+  }
+  if (
+    [401, 403].includes(response.status) ||
+    ["UNAUTHENTICATED", "PERMISSION_DENIED", "API_KEY_INVALID"].includes(providerStatus)
+  ) {
+    return { ok: false, reason: "api_key_rejected" };
+  }
+  if (response.status === 404 || providerStatus === "NOT_FOUND") {
+    return { ok: false, reason: "model_unavailable" };
+  }
+  if (response.status === 400 || providerStatus === "INVALID_ARGUMENT") {
+    return { ok: false, reason: "request_rejected" };
+  }
+  return { ok: false, reason: "provider_error" };
+}
+
 export async function extractCustomerDetailsFromImageUrl(
   url: string,
   options: ExtractOptions = {},
@@ -163,37 +207,58 @@ export async function extractCustomerDetailsFromImageUrl(
 
   const fetcher = options.fetcher ?? fetch;
   const model = (options.model ?? process.env.GEMINI_MODEL ?? "gemini-3.8-flash").trim();
-  if (!/^[a-zA-Z0-9._-]{1,100}$/.test(model)) return { ok: false, reason: "provider_error" };
+  if (!/^[a-zA-Z0-9._-]{1,100}$/.test(model)) {
+    console.error("Gemini customer-details model configuration is invalid");
+    return { ok: false, reason: "model_unavailable" };
+  }
 
   try {
-    const image = await downloadMessengerImage(url, fetcher);
+    let image: Awaited<ReturnType<typeof downloadMessengerImage>>;
+    try {
+      image = await downloadMessengerImage(url, fetcher);
+    } catch (error) {
+      console.error(
+        "Messenger customer-details image download failed",
+        error instanceof Error ? error.name : "unknown",
+      );
+      return { ok: false, reason: "image_unavailable" };
+    }
     if (!image) return { ok: false, reason: "image_unavailable" };
 
-    const response = await fetcher(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { inlineData: { mimeType: image.mimeType, data: bytesToBase64(image.bytes) } },
-                { text: imageExtractionPrompt },
-              ],
+    let response: Response;
+    try {
+      response = await fetcher(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType: image.mimeType, data: bytesToBase64(image.bytes) } },
+                  { text: imageExtractionPrompt },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0,
+              maxOutputTokens: 300,
+              responseFormat: { text: { mimeType: "application/json", schema: imageTextSchema } },
             },
-          ],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 300,
-            responseFormat: { text: { mimeType: "application/json", schema: imageTextSchema } },
-          },
-        }),
-        signal: AbortSignal.timeout(12_000),
-      },
-    );
-    if (!response.ok) return { ok: false, reason: "provider_error" };
+          }),
+          signal: AbortSignal.timeout(12_000),
+        },
+      );
+    } catch (error) {
+      console.error(
+        "Gemini customer-details API network error",
+        error instanceof Error ? error.name : "unknown",
+      );
+      return { ok: false, reason: "provider_error" };
+    }
+    if (!response.ok) return classifyGeminiHttpError(response);
 
     const result = (await response.json()) as GeminiResponse;
     const text = result.candidates?.[0]?.content?.parts

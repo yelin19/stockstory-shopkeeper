@@ -596,7 +596,11 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
     else if (extracted.reason === "provider_error") console.error("Gemini customer-details image extraction failed");
     const retryText = extracted.reason === "missing_key"
       ? "ပုံမှ အချက်အလက်ဖတ်ရှုမှုကို မဖွင့်ထားသေးပါ။ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။"
-      : "ပုံထဲက အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဖတ်မရပါ။ ပိုရှင်းသောပုံတစ်ပုံ ထပ်ပို့ပါ၊ သို့မဟုတ် အောက်ပါပုံစံဖြင့် စာသားပို့ပါ။\n" + customerDetailsExample;
+      : extracted.reason === "unreadable"
+        ? "ပုံထဲက အမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဖတ်မရပါ။ ပိုရှင်းသောပုံတစ်ပုံ ထပ်ပို့ပါ၊ သို့မဟုတ် အောက်ပါပုံစံဖြင့် စာသားပို့ပါ။\n" + customerDetailsExample
+        : extracted.reason === "image_unavailable"
+          ? "Messenger မှ ပုံကို ရယူမရပါ။ ပုံကို ပြန်ပို့ပါ၊ သို့မဟုတ် အောက်ပါပုံစံဖြင့် စာသားပို့ပါ။\n" + customerDetailsExample
+          : "ပုံဖတ်ရှုမှု ယာယီအဆင်မပြေပါ။ နာမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို အောက်ပါပုံစံဖြင့် စာသားပို့ပါရှင်။\n" + customerDetailsExample;
     await text(psid, retryText);
     return true;
   }
