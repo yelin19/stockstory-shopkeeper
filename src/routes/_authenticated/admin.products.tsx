@@ -191,24 +191,24 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100%-1rem)] max-h-[calc(100dvh-1rem)] touch-pan-y overflow-y-auto overscroll-contain p-4 sm:w-full sm:max-h-[calc(100vh-3rem)] sm:p-6">
         <DialogHeader><DialogTitle>{product ? "ပစ္စည်းပြင်မည်" : "ပစ္စည်းအသစ်"}</DialogTitle></DialogHeader>
-        <form onSubmit={save} className="grid grid-cols-2 gap-3">
+        <form onSubmit={save} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1"><Label>ပစ္စည်း Code</Label><Input value={f.code} onChange={set("code")} placeholder="ဥပမာ ဖိနပ်-၁၊ အင်္ကျီ-၂ သို့မဟုတ် ABC-01" /><p className="text-xs text-muted-foreground">မြန်မာစာလုံး၊ မြန်မာဂဏန်း သို့မဟုတ် အခြားဘာသာစကားမှ စာလုံးနှင့် နံပါတ်များ သုံးနိုင်ပါသည်။ ကွက်လပ်မပါ၊ အများဆုံး ၃၂ လုံး။</p></div>
           <div className="space-y-1"><Label>အရေအတွက်ယူနစ်</Label><Input value={f.unit} onChange={set("unit")} placeholder="ခု၊ ထုပ်၊ ပုံး၊ အိတ်၊ ဖာ" maxLength={32} /><p className="text-xs text-muted-foreground">အရေအတွက်နောက်တွင် ပြရန် ယူနစ်ကို ရေးပါ။</p></div>
-          <div className="col-span-2 space-y-1"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
+          <div className="col-span-1 space-y-1 sm:col-span-2"><Label>အမည်</Label><Input value={f.name} onChange={set("name")} /></div>
           <div className="space-y-1"><Label>ဈေးနှုန်း ({currency === "THB" ? "฿" : "ကျပ်"})</Label><Input type="number" min="0" step="any" required value={f.price} onChange={set("price")} /></div>
           {!product && <div className="space-y-1"><Label>အရေအတွက်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}
-          <div className="col-span-2 space-y-1"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
-          <div className="col-span-2 space-y-1"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={set("description")} /></div>
-          <div className="col-span-2 space-y-2 rounded-lg border p-3">
+          <div className="col-span-1 space-y-1 sm:col-span-2"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
+          <div className="col-span-1 space-y-1 sm:col-span-2"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={(e) => setF((current) => ({ ...current, description: e.target.value }))} /></div>
+          <div className="col-span-1 space-y-2 rounded-lg border p-3 sm:col-span-2">
             <div><Label>ဝယ်သူအတွက် ငွေပေးချေနည်းလမ်း</Label><p className="text-xs text-muted-foreground">အနည်းဆုံး ငွေပေးချေနည်းလမ်းတစ်ခုကို ရွေးပါ။ ဖွင့်ထားသောနည်းလမ်းများကိုသာ ဝယ်သူက Messenger တွင် မြင်ရပါမည်။</p></div>
             <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_prepaid} onCheckedChange={(v) => setF((current) => ({ ...current, allow_prepaid: v }))} /> COD (ငွေကြိုလွှဲပြီး ဘောက်ချာပို့ကာ Admin အတည်ပြု)</label>
             <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_seller_delivery_cash} onCheckedChange={(v) => setF((current) => ({ ...current, allow_seller_delivery_cash: v }))} /> ဆိုင်ပို့ အိမ်ရောက်ငွေချေ (ဆိုင်ဘက်ပို့သူထံ တိုက်ရိုက်ချေ)</label>
             <p className="text-xs text-muted-foreground">အလယ်ခံငွေကောက်ခံသူမရှိသောကြောင့် COD ကို ကြိုတင်ငွေလွှဲပြီး Admin အတည်ပြုသည့်ပုံစံဖြင့် လုပ်ဆောင်ပါမည်။</p>
           </div>
-          <label className="col-span-2 flex items-center gap-2 text-sm"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /> ဖွင့်ထားသည် (ဝယ်သူများမြင်ရမည်)</label>
-          <Button className="col-span-2" disabled={busy}>သိမ်းမည်</Button>
+          <label className="col-span-1 flex items-center gap-2 text-sm sm:col-span-2"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /> ဖွင့်ထားသည် (ဝယ်သူများမြင်ရမည်)</label>
+          <Button className="col-span-1 sm:col-span-2" disabled={busy}>သိမ်းမည်</Button>
         </form>
       </DialogContent>
     </Dialog>
