@@ -10,6 +10,7 @@ import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
 import { customerPaymentChoices, getProductPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
+import { matchProductCode } from "@/lib/product-code-match";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -495,9 +496,25 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
 
   const req = parseProductRequest(msg);
   if (!req) return text(psid, "ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ - 111 2 သို့မဟုတ် 111=2");
-  const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
+  const { data: exactProduct } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
+  let p = exactProduct;
+  let correction: string | null = null;
+  if (!p) {
+    const { data: activeProducts, error: productsError } = await db.from("products").select("*").eq("owner_id", owner).eq("active", true);
+    if (productsError) return text(psid, "ပစ္စည်းရှာရာတွင် အမှားဖြစ်နေပါသည်။ ခဏနေပြီး ထပ်စမ်းပါရှင်။");
+    const match = matchProductCode(req.code, activeProducts ?? []);
+    if (match.kind === "ambiguous") {
+      const choices = match.candidates.slice(0, 5).map((candidate) => `• ${candidate.code} — ${candidate.name}`).join("\n");
+      return text(psid, `ပို့ထားသော Code “${req.code}” နှင့် နီးစပ်သည့် ပစ္စည်းများရှိနေပါသည်။ မှားယွင်းသောပစ္စည်း မရွေးမိစေရန် အလိုအလျောက် မရွေးထားပါ။ အောက်ပါ Code အပြည့်အစုံတစ်ခုနှင့် အရေအတွက်ကို ပြန်ပို့ပါရှင်။\n${choices}`);
+    }
+    if (match.kind === "matched") {
+      p = match.product;
+      if (match.distance > 0) correction = `ပို့ထားသော Code “${req.code}” သည် “${p.code}” နှင့် အနည်းငယ်ကွာနေသဖြင့် ဒီပစ္စည်းအဖြစ် ယူဆပြီး ဆက်လုပ်ပါမည်။\n`;
+    }
+  }
   if (!p) return text(psid, `Code ${req.code} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
   const { data: shop } = await db.from("shop_settings").select("shop_name").eq("owner_id", owner).maybeSingle();
+  if (correction) await text(psid, correction);
   await sendProductCard(psid, p, origin, fmt);
 
   if (req.qty === null) {
