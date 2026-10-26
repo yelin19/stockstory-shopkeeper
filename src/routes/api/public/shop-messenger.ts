@@ -592,8 +592,8 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
 
   const extracted = await extractCustomerDetailsFromImageUrl(imageUrl);
   if (!extracted.ok) {
-    if (extracted.reason === "missing_key") console.error("GEMINI_API_KEY is not configured for customer-details image extraction");
-    else if (extracted.reason === "provider_error") console.error("Gemini customer-details image extraction failed");
+    if (extracted.reason === "missing_key") console.error("LOVABLE_API_KEY is not configured for customer-details image extraction");
+    else if (extracted.reason === "provider_error") console.error("Lovable AI customer-details image extraction failed");
     const retryText = extracted.reason === "missing_key"
       ? "ပုံမှ အချက်အလက်ဖတ်ရှုမှုကို မဖွင့်ထားသေးပါ။ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။"
       : extracted.reason === "unreadable"
