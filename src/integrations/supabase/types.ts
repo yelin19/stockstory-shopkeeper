@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      low_stock_alert_pair_attempts: {
+        Row: {
+          attempts: number
+          blocked_until: string | null
+          owner_id: string
+          psid: string
+          window_started_at: string
+        }
+        Insert: {
+          attempts?: number
+          blocked_until?: string | null
+          owner_id: string
+          psid: string
+          window_started_at?: string
+        }
+        Update: {
+          attempts?: number
+          blocked_until?: string | null
+          owner_id?: string
+          psid?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
       messenger_sessions: {
         Row: {
           data: Json
@@ -45,21 +69,21 @@ export type Database = {
         Row: {
           address: string
           category: string
-          currency: string
           created_at: string
+          currency: string
           customer_name: string
           delivery_image_url: string | null
           delivery_notified_at: string | null
           delivery_status: string
           id: string
+          note: string | null
+          order_no: number
+          owner_id: string
           payment_approved_at: string | null
           payment_method: string
           payment_proof_url: string | null
           payment_status: string
           payment_submitted_at: string | null
-          note: string | null
-          order_no: number
-          owner_id: string
           phone: string
           product_code: string
           product_id: string | null
@@ -81,21 +105,21 @@ export type Database = {
         Insert: {
           address: string
           category: string
-          currency?: string
           created_at?: string
+          currency?: string
           customer_name: string
           delivery_image_url?: string | null
           delivery_notified_at?: string | null
           delivery_status?: string
           id?: string
+          note?: string | null
+          order_no?: number
+          owner_id: string
           payment_approved_at?: string | null
           payment_method?: string
           payment_proof_url?: string | null
           payment_status?: string
           payment_submitted_at?: string | null
-          note?: string | null
-          order_no?: number
-          owner_id: string
           phone: string
           product_code: string
           product_id?: string | null
@@ -117,21 +141,21 @@ export type Database = {
         Update: {
           address?: string
           category?: string
-          currency?: string
           created_at?: string
+          currency?: string
           customer_name?: string
           delivery_image_url?: string | null
           delivery_notified_at?: string | null
           delivery_status?: string
           id?: string
+          note?: string | null
+          order_no?: number
+          owner_id?: string
           payment_approved_at?: string | null
           payment_method?: string
           payment_proof_url?: string | null
           payment_status?: string
           payment_submitted_at?: string | null
-          note?: string | null
-          order_no?: number
-          owner_id?: string
           phone?: string
           product_code?: string
           product_id?: string | null
@@ -339,17 +363,50 @@ export type Database = {
     }
     Functions: {
       cancel_order: { Args: { _order_id: string }; Returns: undefined }
-      claim_low_stock_alerts: {
-        Args: { _owner: string; _product_id?: string | null }
+      cancel_order_by_customer: {
+        Args: { _owner: string; _psid: string; _public_order_id: string }
         Returns: {
+          address: string
+          category: string
+          created_at: string
+          currency: string
+          customer_name: string
+          delivery_image_url: string | null
+          delivery_notified_at: string | null
+          delivery_status: string
+          id: string
+          note: string | null
+          order_no: number
+          owner_id: string
+          payment_approved_at: string | null
+          payment_method: string
+          payment_proof_url: string | null
+          payment_status: string
+          payment_submitted_at: string | null
+          phone: string
           product_code: string
-          product_id: string
+          product_id: string | null
           product_name: string
-          recipient_psid: string
-          stock: number
-          threshold: number
-          unit: string
-        }[]
+          product_unit: string
+          psid: string | null
+          public_order_id: string
+          quantity: number
+          sent: boolean
+          sent_at: string | null
+          status: string
+          total: number
+          township: string
+          tracking_number: string | null
+          tracking_url: string | null
+          unit_price: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       change_stock: {
         Args: {
@@ -360,6 +417,76 @@ export type Database = {
           _request_id?: string
         }
         Returns: number
+      }
+      claim_low_stock_alerts: {
+        Args: { _owner: string; _product_id?: string }
+        Returns: {
+          product_code: string
+          product_id: string
+          product_name: string
+          recipient_psid: string
+          stock: number
+          threshold: number
+          unit: string
+        }[]
+      }
+      delete_order_history_range: {
+        Args: { _end_at: string; _expected_count: number; _start_at: string }
+        Returns: number
+      }
+      delete_stock_history_range: {
+        Args: { _end_at: string; _expected_count: number; _start_at: string }
+        Returns: number
+      }
+      edit_order_by_customer: {
+        Args: {
+          _owner: string
+          _psid: string
+          _public_order_id: string
+          _qty: number
+        }
+        Returns: {
+          address: string
+          category: string
+          created_at: string
+          currency: string
+          customer_name: string
+          delivery_image_url: string | null
+          delivery_notified_at: string | null
+          delivery_status: string
+          id: string
+          note: string | null
+          order_no: number
+          owner_id: string
+          payment_approved_at: string | null
+          payment_method: string
+          payment_proof_url: string | null
+          payment_status: string
+          payment_submitted_at: string | null
+          phone: string
+          product_code: string
+          product_id: string | null
+          product_name: string
+          product_unit: string
+          psid: string | null
+          public_order_id: string
+          quantity: number
+          sent: boolean
+          sent_at: string | null
+          status: string
+          total: number
+          township: string
+          tracking_number: string | null
+          tracking_url: string | null
+          unit_price: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_public_product: {
         Args: { _code: string }
@@ -407,6 +534,66 @@ export type Database = {
           note: string | null
           order_no: number
           owner_id: string
+          payment_approved_at: string | null
+          payment_method: string
+          payment_proof_url: string | null
+          payment_status: string
+          payment_submitted_at: string | null
+          phone: string
+          product_code: string
+          product_id: string | null
+          product_name: string
+          product_unit: string
+          psid: string | null
+          public_order_id: string
+          quantity: number
+          sent: boolean
+          sent_at: string | null
+          status: string
+          total: number
+          township: string
+          tracking_number: string | null
+          tracking_url: string | null
+          unit_price: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      place_order_from_messenger: {
+        Args: {
+          _address: string
+          _name: string
+          _note: string
+          _owner: string
+          _phone: string
+          _product_id: string
+          _psid: string
+          _qty: number
+          _township: string
+        }
+        Returns: {
+          address: string
+          category: string
+          created_at: string
+          currency: string
+          customer_name: string
+          delivery_image_url: string | null
+          delivery_notified_at: string | null
+          delivery_status: string
+          id: string
+          note: string | null
+          order_no: number
+          owner_id: string
+          payment_approved_at: string | null
+          payment_method: string
+          payment_proof_url: string | null
+          payment_status: string
+          payment_submitted_at: string | null
           phone: string
           product_code: string
           product_id: string | null
@@ -488,28 +675,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      release_low_stock_alert: { Args: { _product_id: string }; Returns: undefined }
+      preview_order_history_cleanup: {
+        Args: { _end_at: string; _start_at: string }
+        Returns: {
+          eligible_count: number
+          protected_count: number
+        }[]
+      }
+      preview_stock_history_cleanup: {
+        Args: { _end_at: string; _start_at: string }
+        Returns: {
+          record_count: number
+        }[]
+      }
+      release_low_stock_alert: {
+        Args: { _product_id: string }
+        Returns: undefined
+      }
       set_low_stock_alert_pin: { Args: { _pin: string }; Returns: undefined }
       set_shop_pin: { Args: { _pin: string }; Returns: undefined }
       verify_shop_pin: {
         Args: { _owner: string; _pin: string }
         Returns: boolean
-      }
-      preview_order_history_cleanup: {
-        Args: { _end_at: string; _start_at: string }
-        Returns: { eligible_count: number; protected_count: number }[]
-      }
-      delete_order_history_range: {
-        Args: { _end_at: string; _expected_count: number; _start_at: string }
-        Returns: number
-      }
-      preview_stock_history_cleanup: {
-        Args: { _end_at: string; _start_at: string }
-        Returns: { record_count: number }[]
-      }
-      delete_stock_history_range: {
-        Args: { _end_at: string; _expected_count: number; _start_at: string }
-        Returns: number
       }
     }
     Enums: {
