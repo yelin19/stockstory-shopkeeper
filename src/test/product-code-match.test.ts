@@ -31,6 +31,17 @@ describe("matchProductCode", () => {
     });
   });
 
+  it.each(["223", "2234", "22333"])(
+    "matches a 4-digit code typed with one digit missing, wrong or extra: %s",
+    (input) => {
+      expect(matchProductCode(input, [{ code: "2233" }])).toEqual({
+        kind: "matched",
+        product: { code: "2233" },
+        distance: 1,
+      });
+    },
+  );
+
   it("asks for clarification when multiple codes are equally close", () => {
     const result = matchProductCode("iPhone", [{ code: "iPhona" }, { code: "iPhonf" }]);
     expect(result).toEqual({
