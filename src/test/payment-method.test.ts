@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   customerPaymentChoices,
+  getProductPaymentChoices,
   parsePaymentChoice,
   paymentMethodInstruction,
   paymentMethodLabel,
@@ -26,6 +27,28 @@ describe("customer payment choices", () => {
       expect(parsePaymentChoice(choice.quickReplyTitle)).toBe(choice.method);
     }
     expect(parsePaymentChoice("NO_BUY")).toBeNull();
+  });
+
+  it("shows only payment methods enabled for the product", () => {
+    expect(
+      getProductPaymentChoices({ allow_prepaid: true, allow_seller_delivery_cash: true }).map(
+        (choice) => choice.method,
+      ),
+    ).toEqual(["prepaid", "seller_delivery_cash"]);
+    expect(
+      getProductPaymentChoices({ allow_prepaid: true, allow_seller_delivery_cash: false }).map(
+        (choice) => choice.method,
+      ),
+    ).toEqual(["prepaid"]);
+    expect(
+      getProductPaymentChoices({ allow_prepaid: false, allow_seller_delivery_cash: true }).map(
+        (choice) => choice.method,
+      ),
+    ).toEqual(["seller_delivery_cash"]);
+    expect(getProductPaymentChoices({}).map((choice) => choice.method)).toEqual([
+      "prepaid",
+      "seller_delivery_cash",
+    ]);
   });
 
   it("keeps Burmese payment labels and historical COD descriptions", () => {

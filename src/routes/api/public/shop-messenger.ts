@@ -8,7 +8,7 @@ import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
-import { customerPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
+import { customerPaymentChoices, getProductPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -87,10 +87,15 @@ const paymentChoices = (psid: string, t: string) => send(psid, {
     { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
   ],
 });
-const deliveryPaymentChoices = (psid: string, t: string) => send(psid, {
+const paymentChoiceInstructions = (choices: typeof customerPaymentChoices) => choices.map((choice) =>
+  choice.method === "prepaid"
+    ? "💳 ငွေကြိုလွှဲပါမည် — ဘဏ်အချက်အလက်အတိုင်း ငွေလွှဲပြီး ဖြတ်ပိုင်းပို့ပါ။ Admin စစ်ဆေးအတည်ပြုပါမည်။"
+    : "🏠 ဆိုင်မှအိမ်အရောက် — ဆိုင်ဘက်ပို့သူကို ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။",
+).join("\n");
+const deliveryPaymentChoices = (psid: string, t: string, choices = customerPaymentChoices) => send(psid, {
   text: t,
   quick_replies: [
-    ...customerPaymentChoices.map((choice) => ({
+    ...choices.map((choice) => ({
       content_type: "text",
       title: choice.quickReplyTitle,
       payload: choice.payload,
@@ -256,6 +261,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
         if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
         if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+        if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
         return startPrepaidPayment(p, pendingQty);
       }
       await save({ state: "idle", data: { prepay_allowed: true } });
@@ -323,24 +329,28 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
       }
       const paymentMethod = parsePaymentChoice(msg);
+      const { data: p } = await db.from("products")
+        .select("*")
+        .eq("owner_id", owner)
+        .eq("id", String(d.product_id))
+        .eq("active", true)
+        .maybeSingle();
+      if (!p) return text(psid, "ဒီပစ္စည်းကို ထပ်မှာယူ၍မရတော့ပါ။ ပစ္စည်း Code နဲ့ အရေအတွက်ကို ပြန်ပို့ပါရှင်။");
+      const quantity = Number(d.qty ?? 0);
+      if (p.stock < quantity) {
+        return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+      }
+      const allowedChoices = getProductPaymentChoices(p);
       if (!paymentMethod) {
-        return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို ရွေးချယ်ရန် အောက်ပါခလုတ်တစ်ခုကို နှိပ်ပါ။");
+        return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို ရွေးချယ်ရန် အောက်ပါခလုတ်တစ်ခုကို နှိပ်ပါ။", allowedChoices);
+      }
+      if (!allowedChoices.some((choice) => choice.method === paymentMethod)) {
+        return deliveryPaymentChoices(psid, "ဒီပစ္စည်းအတွက် အဲဒီငွေပေးချေနည်းလမ်းကို ဖွင့်မထားပါ။ ဖွင့်ထားသောနည်းလမ်းကို ရွေးပါရှင်။", allowedChoices);
       }
       if (paymentMethod === "prepaid") {
-        const { data: p } = await db.from("products")
-          .select("*")
-          .eq("owner_id", owner)
-          .eq("id", String(d.product_id))
-          .eq("active", true)
-          .maybeSingle();
-        if (!p) return text(psid, "ဒီပစ္စည်းကို ထပ်မှာယူ၍မရတော့ပါ။ ပစ္စည်း Code နဲ့ အရေအတွက်ကို ပြန်ပို့ပါရှင်။");
-        const quantity = Number(d.qty ?? 0);
-        if (p.stock < quantity) {
-          return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
-        }
         return startPrepaidPayment(p, quantity);
       }
-      const nd: Draft = { ...d, payment_method: paymentMethod, prepay_allowed: false };
+      const nd: Draft = { ...d, product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: quantity, payment_method: paymentMethod, prepay_allowed: false };
       if (nd.name && nd.phone && nd.address) {
         await save({ state: "confirm", data: nd });
         return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
@@ -441,8 +451,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
+    if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
     return startPrepaidPayment(p, req.qty);
   }
+  const allowedChoices = getProductPaymentChoices(p);
+  if (!allowedChoices.length) return text(psid, "ဒီပစ္စည်းအတွက် ငွေပေးချေနည်းလမ်း မသတ်မှတ်ရသေးပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
   const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
     .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const lastCustomer = (s.data as { last_customer?: { name?: string; phone?: string; address?: string } }).last_customer;
@@ -461,7 +474,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   await save({ state: "payment_method_choice", data: draft });
   return deliveryPaymentChoices(
     psid,
-    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nငွေပေးချေနည်းလမ်းကို ရွေးပါ။\n💳 ငွေကြိုလွှဲပါမည် — ဘဏ်အချက်အလက်အတိုင်း ငွေလွှဲပြီး ဖြတ်ပိုင်းပို့ပါ။ Admin စစ်ဆေးအတည်ပြုပါမည်။\n🏠 ဆိုင်မှအိမ်အရောက် — ဆိုင်ဘက်ပို့သူကို ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။`,
+    `🛒 ${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 မှာယူမည့်အရေအတွက်: ${formatQuantity(req.qty, p.unit)}\n💵 စုစုပေါင်း: ${fmt(Number(p.price) * req.qty)}\n\nငွေပေးချေနည်းလမ်းကို ရွေးပါ။\n${paymentChoiceInstructions(allowedChoices)}`,
+    allowedChoices,
   );
 }
 

@@ -71,6 +71,13 @@
       "when": 1792976018320,
       "tag": "0019_separate_cash_payment_methods",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792986408357,
+      "tag": "0020_product_payment_options",
+      "breakpoints": true
     }
   ]
 }

@@ -15,6 +15,19 @@ export const customerPaymentChoices: {
   },
 ];
 
+export type ProductPaymentOptions = {
+  allow_prepaid?: boolean | null;
+  allow_seller_delivery_cash?: boolean | null;
+};
+
+export function getProductPaymentChoices(product: ProductPaymentOptions) {
+  return customerPaymentChoices.filter((choice) =>
+    choice.method === "prepaid"
+      ? product.allow_prepaid !== false
+      : product.allow_seller_delivery_cash !== false,
+  );
+}
+
 const paymentLabels: Record<OrderPaymentMethod, string> = {
   cod: "အရင်အော်ဒါ (စနစ်ဟောင်း) — COD ကောက်ခံသူ မခွဲထားပါ",
   courier_cod: "အရင်အော်ဒါ — ပို့ဆောင်ရေးကုမ္ပဏီမှ ငွေကောက်ခံ (COD)",

@@ -163,6 +163,8 @@ export type Database = {
       products: {
         Row: {
           active: boolean
+          allow_prepaid: boolean
+          allow_seller_delivery_cash: boolean
           category: string
           code: string
           created_at: string
@@ -178,6 +180,8 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          allow_prepaid?: boolean
+          allow_seller_delivery_cash?: boolean
           category?: string
           code: string
           created_at?: string
@@ -193,6 +197,8 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          allow_prepaid?: boolean
+          allow_seller_delivery_cash?: boolean
           category?: string
           code?: string
           created_at?: string

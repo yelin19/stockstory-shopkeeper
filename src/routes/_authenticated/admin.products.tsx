@@ -110,6 +110,7 @@ function ProductsPage() {
                   <div className={`text-sm ${p.stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatQuantity(p.stock, p.unit)} လက်ကျန်</div>
                 </div>
               </div>
+              <div className="text-xs text-muted-foreground">ငွေပေးချေမှု: {[p.allow_prepaid ? "COD (ကြိုတင်ငွေလွှဲ)" : null, p.allow_seller_delivery_cash ? "ဆိုင်ပို့ အိမ်ရောက်ငွေချေ" : null].filter(Boolean).join(" · ") || "မသတ်မှတ်ရသေးပါ"}</div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => setStock({ p, mode: "increase" })}><PackagePlus /> လက်ကျန်ထပ်ဖြည့်မည်</Button>
                 <Button size="sm" variant="outline" onClick={() => setStock({ p, mode: "adjust" })}><SlidersHorizontal /> လက်ကျန်ပြင်မည်</Button>
@@ -140,10 +141,12 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
     stock: "0",
     description: product?.description ?? "",
     active: product?.active ?? true,
+    allow_prepaid: product?.allow_prepaid ?? true,
+    allow_seller_delivery_cash: product?.allow_seller_delivery_cash ?? true,
   });
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: "code" | "name" | "unit" | "category" | "price" | "description") => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((current) => ({ ...current, [k]: e.target.value }));
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -156,6 +159,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
     if (!isValidProductUnit(f.unit)) return void toast.error("အရေအတွက်ယူနစ်ကို အလွတ်မထားဘဲ ၃၂ လုံးအတွင်း ထည့်ပါ။");
     if (!f.name.trim() || !Number.isFinite(price) || !(price >= 0)) return void toast.error("အမည်နှင့် မှန်ကန်သောဈေးနှုန်း ထည့်ရန်လိုပါသည်");
     if (!product && !(stock >= 0)) return void toast.error("အရေအတွက်သည် အနုတ်မဖြစ်ရပါ");
+    if (!f.allow_prepaid && !f.allow_seller_delivery_cash) return void toast.error("ငွေပေးချေနည်းလမ်း အနည်းဆုံးတစ်ခု ဖွင့်ထားပါ။");
     setBusy(true);
     try {
       let image_url = product?.image_url ?? null;
@@ -166,7 +170,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
         if (error) throw error;
         image_url = path;
       }
-      const row = { code, name: f.name.trim(), unit, category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url };
+      const row = { code, name: f.name.trim(), unit, category: f.category.trim() || "General", price, description: f.description, active: f.active, image_url, allow_prepaid: f.allow_prepaid, allow_seller_delivery_cash: f.allow_seller_delivery_cash };
       const { error } = product
         ? await supabase.from("products").update(row).eq("id", product.id)
         : await supabase.from("products").insert({ ...row, stock });
@@ -176,7 +180,9 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
       onClose();
     } catch (err) {
       const error = err as Error & { code?: string };
-      if (["42703", "PGRST204"].includes(error.code ?? "")) toast.error("ပစ္စည်းယူနစ်သိမ်းရန် SQL migration 0017 ကို အရင် run လုပ်ပါ။");
+      if (error.code === "23514" && error.message.includes("products_at_least_one_payment_method_check")) toast.error("ငွေပေးချေနည်းလမ်း အနည်းဆုံးတစ်ခု ဖွင့်ထားပါ။");
+      else if (["42703", "PGRST204"].includes(error.code ?? "") && /allow_prepaid|allow_seller_delivery_cash/.test(error.message)) toast.error("ပစ္စည်းငွေပေးချေနည်းလမ်းပြင်ဆင်မှုအတွက် SQL migration 0020 ကို အရင် run လုပ်ပါ။");
+      else if (["42703", "PGRST204"].includes(error.code ?? "")) toast.error("ပစ္စည်းယူနစ်သိမ်းရန် SQL migration 0017 ကို အရင် run လုပ်ပါ။");
       else toast.error(error.message);
     } finally {
       setBusy(false);
@@ -195,6 +201,12 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
           {!product && <div className="space-y-1"><Label>အရေအတွက်</Label><Input type="number" min="0" value={f.stock} onChange={set("stock")} /></div>}
           <div className="col-span-2 space-y-1"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
           <div className="col-span-2 space-y-1"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={set("description")} /></div>
+          <div className="col-span-2 space-y-2 rounded-lg border p-3">
+            <div><Label>ဝယ်သူအတွက် ငွေပေးချေနည်းလမ်း</Label><p className="text-xs text-muted-foreground">အနည်းဆုံး ငွေပေးချေနည်းလမ်းတစ်ခုကို ရွေးပါ။ ဖွင့်ထားသောနည်းလမ်းများကိုသာ ဝယ်သူက Messenger တွင် မြင်ရပါမည်။</p></div>
+            <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_prepaid} onCheckedChange={(v) => setF((current) => ({ ...current, allow_prepaid: v }))} /> COD (ငွေကြိုလွှဲပြီး ဘောက်ချာပို့ကာ Admin အတည်ပြု)</label>
+            <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_seller_delivery_cash} onCheckedChange={(v) => setF((current) => ({ ...current, allow_seller_delivery_cash: v }))} /> ဆိုင်ပို့ အိမ်ရောက်ငွေချေ (ဆိုင်ဘက်ပို့သူထံ တိုက်ရိုက်ချေ)</label>
+            <p className="text-xs text-muted-foreground">အလယ်ခံငွေကောက်ခံသူမရှိသောကြောင့် COD ကို ကြိုတင်ငွေလွှဲပြီး Admin အတည်ပြုသည့်ပုံစံဖြင့် လုပ်ဆောင်ပါမည်။</p>
+          </div>
           <label className="col-span-2 flex items-center gap-2 text-sm"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /> ဖွင့်ထားသည် (ဝယ်သူများမြင်ရမည်)</label>
           <Button className="col-span-2" disabled={busy}>သိမ်းမည်</Button>
         </form>
