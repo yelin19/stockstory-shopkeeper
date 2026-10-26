@@ -370,7 +370,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       }
       const choice = parseCustomerDetailsChoice(msg);
       if (choice === "reuse") {
-        const nd: Draft = { ...d, ...previousCustomer, previous_customer: undefined };
+        const nd: Draft = { ...d, ...previousCustomer };
+        delete nd.previous_customer;
         await save({ state: "confirm", data: nd });
         const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
         return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
@@ -409,7 +410,9 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         return startPrepaidPayment(p, quantity, previousCustomerFromDraft(d));
       }
       const previousCustomer = previousCustomerFromDraft(d);
-      const nd: Draft = { ...d, product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: quantity, name: undefined, phone: undefined, address: undefined, previous_customer: previousCustomer ?? undefined, payment_method: paymentMethod, prepay_allowed: false };
+      const nd: Draft = { ...d, product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: quantity, ...(previousCustomer ? { previous_customer: previousCustomer } : {}), payment_method: paymentMethod, prepay_allowed: false };
+      delete nd.name; delete nd.phone; delete nd.address;
+      if (!previousCustomer) delete nd.previous_customer;
       if (previousCustomer) {
         await save({ state: "reuse_customer_details", data: nd });
         return reuseCustomerDetailsChoice(psid, previousCustomer);
@@ -559,7 +562,7 @@ async function handlePaymentProof(db: Admin, owner: string, psid: string, imageU
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s = existing as Session | null;
   if (!s || s.state !== "awaiting_payment_proof") return text(psid, "ငွေပေးချေရန်စောင့်နေသော အော်ဒါမရှိပါ။ အရင်ဆုံး ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါရှင်။");
-  const data = { ...s.data, payment_proof_url: imageUrl };
+  const data: Record<string, unknown> = { ...(s.data as Record<string, unknown>), payment_proof_url: imageUrl };
   const previousCustomer = readCustomerDetails(data["previous_customer"]);
   await db.from("messenger_sessions").upsert({ ...s, state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
   if (previousCustomer) return reuseCustomerDetailsChoice(psid, previousCustomer);
