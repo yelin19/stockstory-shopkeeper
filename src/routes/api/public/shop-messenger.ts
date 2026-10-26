@@ -9,6 +9,7 @@ import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
 import { customerPaymentChoices, getProductPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
+import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -17,6 +18,19 @@ const envFirst = (...names: string[]) => names.map((name) => process.env[name]).
 
 type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
+type CustomerDetails = { name: string; phone: string; address: string };
+function readCustomerDetails(value: unknown): CustomerDetails | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (typeof data["name"] !== "string" || typeof data["phone"] !== "string" || typeof data["address"] !== "string") return null;
+  const name = data["name"].trim();
+  const phone = data["phone"].trim();
+  const address = data["address"].trim();
+  return name && phone && address ? { name, phone, address } : null;
+}
+function previousCustomerFromDraft(draft: Record<string, unknown>): CustomerDetails | null {
+  return readCustomerDetails(draft["previous_customer"]) ?? readCustomerDetails(draft);
+}
 const callShopRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
   (db.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
 const retryLowStockAlerts = async (owner: string, productId: string | null = null) => {
@@ -103,6 +117,13 @@ const deliveryPaymentChoices = (psid: string, t: string, choices = customerPayme
     { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
   ],
 });
+const reuseCustomerDetailsChoice = (psid: string, customer: CustomerDetails) => send(psid, {
+  text: `အရင်အော်ဒါက အမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို ဒီအော်ဒါအတွက် ပြန်သုံးမလား။\nအမည်: ${customer.name}\nဖုန်း: ${customer.phone}\nလိပ်စာ: ${customer.address}`,
+  quick_replies: [
+    { content_type: "text", title: "အဟောင်းသုံးမည်", payload: "REUSE_CUSTOMER_DETAILS" },
+    { content_type: "text", title: "အသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
+  ],
+});
 const orderActions = (psid: string, t: string, orderId: string) => send(psid, {
   text: t,
   quick_replies: [
@@ -113,7 +134,7 @@ const orderActions = (psid: string, t: string, orderId: string) => send(psid, {
 const orderCommand = (msg: string, words: string[]) => msg.trim().match(new RegExp(`^(?:${words.join("|")})\\s+([0-9]{6})$`, "i"))?.[1];
 const orderIsLocked = (o: { sent?: boolean; delivery_status?: string }) => Boolean(o.sent || ["shipped", "in_transit", "delivered", "returned"].includes(o.delivery_status ?? ""));
 
-function parseCustomerDetails(msg: string) {
+function parseCustomerDetails(msg: string): CustomerDetails | null {
   const lines = msg.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
   const get = (re: RegExp) => msg.match(re)?.[1]?.trim();
   const name = get(/(?:အမည်|နာမည်)\s*[:：-]\s*(.+)/i) ?? lines[0];
@@ -220,6 +241,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const startPrepaidPayment = async (
     product: { id: string; code: string; name: string; price: number; unit: string },
     quantity: number,
+    previousCustomer?: CustomerDetails | null,
   ) => {
     const { data: bank } = await db.from("shop_settings")
       .select("bank_name, bank_account_name, bank_account_number")
@@ -236,11 +258,15 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         unit: product.unit,
         prepay_allowed: true,
         payment_method: "prepaid",
+        ...(previousCustomer ? { previous_customer: previousCustomer } : {}),
       },
     });
+    const followUp = previousCustomer
+      ? "ဖြတ်ပိုင်းရပြီးနောက် အရင်အော်ဒါက အချက်အလက်ကို ပြန်သုံးမလား မေးပါမယ်ရှင်။"
+      : "ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။";
     return text(
       psid,
-      `🛒 ပစ္စည်းအမည်: ${product.name}\n🔢 အရေအတွက်: ${formatQuantity(quantity, product.unit)}\n💰 တစ်${normalizeProductUnit(product.unit)}ဈေး: ${fmt(Number(product.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(product.price) * quantity)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${bank?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${bank?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${bank?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို ဆက်တောင်းပါမယ်ရှင်။`,
+      `🛒 ပစ္စည်းအမည်: ${product.name}\n🔢 အရေအတွက်: ${formatQuantity(quantity, product.unit)}\n💰 တစ်${normalizeProductUnit(product.unit)}ဈေး: ${fmt(Number(product.price))}\n💵 ပေးချေရန်ပမာဏ: ${fmt(Number(product.price) * quantity)}\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${bank?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${bank?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${bank?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။ ${followUp}`,
     );
   };
 
@@ -309,7 +335,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return deliveryPaymentChoices(psid, "ငွေပေးချေမှုနည်းလမ်းကို မရွေးရသေးပါ။ အောက်ပါနည်းလမ်းနှစ်မျိုးထဲမှ ရွေးပါ။");
     }
   }
-  if (isNo(msg) && s.state !== "idle") {
+  if (isNo(msg) && s.state !== "idle" && s.state !== "reuse_customer_details") {
     if (s.state === "cancel_order") {
       await save({ state: "idle", data: {} });
       return text(psid, "အော်ဒါဖျက်ခြင်းကို မလုပ်တော့ပါ။");
@@ -319,10 +345,37 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
 
-  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
+  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; previous_customer?: CustomerDetails; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
   const d = s.data as Draft;
+  const clearCustomerDetails = (draft: Draft): Draft => {
+    const cleared = { ...draft };
+    delete cleared.previous_customer;
+    delete cleared.name;
+    delete cleared.phone;
+    delete cleared.address;
+    return cleared;
+  };
 
   switch (s.state) {
+    case "reuse_customer_details": {
+      const previousCustomer = previousCustomerFromDraft(d);
+      if (!previousCustomer) {
+        await save({ state: "ask_customer_details", data: clearCustomerDetails(d) });
+        return text(psid, "ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+      }
+      const choice = parseCustomerDetailsChoice(msg);
+      if (choice === "reuse") {
+        const nd: Draft = { ...d, ...previousCustomer, previous_customer: undefined };
+        await save({ state: "confirm", data: nd });
+        const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
+        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
+      }
+      if (choice === "new") {
+        await save({ state: "ask_customer_details", data: clearCustomerDetails(d) });
+        return text(psid, "အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
+      }
+      return reuseCustomerDetailsChoice(psid, previousCustomer);
+    }
     case "payment_method_choice": {
       if (msg.trim() === "NO_BUY" || msg.trim() === "မဝယ်တော့ပါ") {
         await save({ state: "idle", data: {} });
@@ -348,12 +401,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         return deliveryPaymentChoices(psid, "ဒီပစ္စည်းအတွက် အဲဒီငွေပေးချေနည်းလမ်းကို ဖွင့်မထားပါ။ ဖွင့်ထားသောနည်းလမ်းကို ရွေးပါရှင်။", allowedChoices);
       }
       if (paymentMethod === "prepaid") {
-        return startPrepaidPayment(p, quantity);
+        return startPrepaidPayment(p, quantity, previousCustomerFromDraft(d));
       }
-      const nd: Draft = { ...d, product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: quantity, payment_method: paymentMethod, prepay_allowed: false };
-      if (nd.name && nd.phone && nd.address) {
-        await save({ state: "confirm", data: nd });
-        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
+      const previousCustomer = previousCustomerFromDraft(d);
+      const nd: Draft = { ...d, product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: quantity, name: undefined, phone: undefined, address: undefined, previous_customer: previousCustomer ?? undefined, payment_method: paymentMethod, prepay_allowed: false };
+      if (previousCustomer) {
+        await save({ state: "reuse_customer_details", data: nd });
+        return reuseCustomerDetailsChoice(psid, previousCustomer);
       }
       await save({ state: "ask_customer_details", data: nd });
       return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်`);
@@ -468,7 +522,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     price: Number(p.price),
     qty: req.qty,
     prepay_allowed: false,
-    ...(customer ?? {}),
+    ...(customer ? { previous_customer: customer } : {}),
     note: "",
   };
   await save({ state: "payment_method_choice", data: draft });
@@ -483,7 +537,10 @@ async function handlePaymentProof(db: Admin, owner: string, psid: string, imageU
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s = existing as Session | null;
   if (!s || s.state !== "awaiting_payment_proof") return text(psid, "ငွေပေးချေရန်စောင့်နေသော အော်ဒါမရှိပါ။ အရင်ဆုံး ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါရှင်။");
-  await db.from("messenger_sessions").upsert({ ...s, state: "ask_customer_details", data: { ...s.data, payment_proof_url: imageUrl }, updated_at: new Date().toISOString() });
+  const data = { ...s.data, payment_proof_url: imageUrl };
+  const previousCustomer = readCustomerDetails(data["previous_customer"]);
+  await db.from("messenger_sessions").upsert({ ...s, state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
+  if (previousCustomer) return reuseCustomerDetailsChoice(psid, previousCustomer);
   return text(psid, "ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။ အခု နာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါရှင်။\nအမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်");
 }
 
