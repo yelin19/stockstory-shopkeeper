@@ -35,10 +35,9 @@ export function matchProductCode<T extends { code: string }>(
     if (distance === 0) return [{ product, distance }];
     if (
       distance === 1 &&
-      Math.min(
-        Array.from(normalizedInput).length,
-        Array.from(product.code.normalize("NFC")).length,
-      ) >= 4
+      // The product's own code must be long enough for a one-character
+      // correction to be safe; the typed text may be one char short or long.
+      Array.from(product.code.normalize("NFC")).length >= 4
     ) {
       return [{ product, distance }];
     }
