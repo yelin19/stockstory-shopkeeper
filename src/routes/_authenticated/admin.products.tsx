@@ -110,7 +110,7 @@ function ProductsPage() {
                   <div className={`text-sm ${p.stock === 0 ? "text-destructive" : "text-muted-foreground"}`}>{formatQuantity(p.stock, p.unit)} လက်ကျန်</div>
                 </div>
               </div>
-              <div className="text-xs text-muted-foreground">ငွေပေးချေမှု: {[p.allow_prepaid ? "COD (ကြိုတင်ငွေလွှဲ)" : null, p.allow_seller_delivery_cash ? "ဆိုင်ပို့ အိမ်ရောက်ငွေချေ" : null].filter(Boolean).join(" · ") || "မသတ်မှတ်ရသေးပါ"}</div>
+              <div className="text-xs text-muted-foreground">ငွေပေးချေမှု: {[p.allow_prepaid ? "ငွေကြိုလွှဲမယ်" : null, p.allow_seller_delivery_cash ? "🏠 အိမ်ရောက်ငွေချေ" : null].filter(Boolean).join(" · ") || "မသတ်မှတ်ရသေးပါ"}</div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => setStock({ p, mode: "increase" })}><PackagePlus /> လက်ကျန်ထပ်ဖြည့်မည်</Button>
                 <Button size="sm" variant="outline" onClick={() => setStock({ p, mode: "adjust" })}><SlidersHorizontal /> လက်ကျန်ပြင်မည်</Button>
@@ -142,7 +142,7 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
     description: product?.description ?? "",
     active: product?.active ?? true,
     allow_prepaid: product?.allow_prepaid ?? true,
-    allow_seller_delivery_cash: product?.allow_seller_delivery_cash ?? true,
+    allow_seller_delivery_cash: product?.allow_seller_delivery_cash ?? false,
   });
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -202,10 +202,10 @@ function ProductDialog({ product, currency, onClose }: { product: Product | null
           <div className="col-span-1 space-y-1 sm:col-span-2"><Label>ပုံ</Label><Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
           <div className="col-span-1 space-y-1 sm:col-span-2"><Label>ဖော်ပြချက်</Label><Textarea value={f.description} onChange={(e) => setF((current) => ({ ...current, description: e.target.value }))} /></div>
           <div className="col-span-1 space-y-2 rounded-lg border p-3 sm:col-span-2">
-            <div><Label>ဝယ်သူအတွက် ငွေပေးချေနည်းလမ်း</Label><p className="text-xs text-muted-foreground">အနည်းဆုံး ငွေပေးချေနည်းလမ်းတစ်ခုကို ရွေးပါ။ ဖွင့်ထားသောနည်းလမ်းများကိုသာ ဝယ်သူက Messenger တွင် မြင်ရပါမည်။</p></div>
-            <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_prepaid} onCheckedChange={(v) => setF((current) => ({ ...current, allow_prepaid: v }))} /> COD (ငွေကြိုလွှဲပြီး ဘောက်ချာပို့ကာ Admin အတည်ပြု)</label>
-            <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_seller_delivery_cash} onCheckedChange={(v) => setF((current) => ({ ...current, allow_seller_delivery_cash: v }))} /> ဆိုင်ပို့ အိမ်ရောက်ငွေချေ (ဆိုင်ဘက်ပို့သူထံ တိုက်ရိုက်ချေ)</label>
-            <p className="text-xs text-muted-foreground">အလယ်ခံငွေကောက်ခံသူမရှိသောကြောင့် COD ကို ကြိုတင်ငွေလွှဲပြီး Admin အတည်ပြုသည့်ပုံစံဖြင့် လုပ်ဆောင်ပါမည်။</p>
+            <div><Label>ဝယ်သူအတွက် ငွေပေးချေနည်းလမ်း</Label><p className="text-xs text-muted-foreground">အနည်းဆုံးတစ်ခုကို ရွေးပါ။ ဒီပစ္စည်းအတွက် ဖွင့်ထားသောနည်းလမ်းများကိုသာ ဝယ်သူက Messenger တွင် မြင်ရပါမည်။ အိမ်ရောက်ငွေချေကို အသုံးပြုသည့်ပစ္စည်းများတွင်သာ ဖွင့်ပါ။</p></div>
+            <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_prepaid} onCheckedChange={(v) => setF((current) => ({ ...current, allow_prepaid: v }))} /> 💳 ငွေကြိုလွှဲမယ် (ဖြတ်ပိုင်းပို့ပြီး ဆိုင်ရှင်အတည်ပြု)</label>
+            <label className="flex items-center gap-2 text-sm"><Switch checked={f.allow_seller_delivery_cash} onCheckedChange={(v) => setF((current) => ({ ...current, allow_seller_delivery_cash: v }))} /> 🏠 အိမ်ရောက်ငွေချေ (ဆိုင်မှပို့ပြီး ပစ္စည်းရောက်ချိန်တွင် ငွေချေ)</label>
+            <p className="text-xs text-muted-foreground">ငွေကြိုလွှဲနည်းလမ်းရွေးပါက ဖြတ်ပိုင်းပို့ပြီး ဆိုင်ရှင်အတည်ပြုပြီးမှ အော်ဒါအတည်ပြုပါမည်။</p>
           </div>
           <label className="col-span-1 flex items-center gap-2 text-sm sm:col-span-2"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /> ဖွင့်ထားသည် (ဝယ်သူများမြင်ရမည်)</label>
           <Button className="col-span-1 sm:col-span-2" disabled={busy}>သိမ်းမည်</Button>

@@ -102,14 +102,14 @@ const confirmation = (psid: string, t: string) => send(psid, {
 const paymentChoices = (psid: string, t: string) => send(psid, {
   text: t,
   quick_replies: [
-    { content_type: "text", title: "ငွေကြိုလွှဲပါမည်", payload: "PREPAY" },
+    { content_type: "text", title: "ငွေကြိုလွှဲမယ်", payload: "PREPAY" },
     { content_type: "text", title: "မဝယ်တော့ပါ", payload: "NO_BUY" },
   ],
 });
 const paymentChoiceInstructions = (choices: typeof customerPaymentChoices) => choices.map((choice) =>
   choice.method === "prepaid"
-    ? "💳 ငွေကြိုလွှဲပါမည် — ဘဏ်အချက်အလက်အတိုင်း ငွေလွှဲပြီး ဖြတ်ပိုင်းပို့ပါ။ Admin စစ်ဆေးအတည်ပြုပါမည်။"
-    : "🏠 ဆိုင်မှအိမ်အရောက် — ဆိုင်ဘက်ပို့သူကို ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။",
+    ? "💳 ငွေကြိုလွှဲမယ် — ဘဏ်အချက်အလက်အတိုင်း ငွေလွှဲပြီး ဖြတ်ပိုင်းပို့ပါ။ Admin စစ်ဆေးအတည်ပြုပါမည်။"
+    : "🏠 အိမ်ရောက်ငွေချေ — ပစ္စည်းအိမ်ရောက်ချိန်တွင် ဆိုင်ဘက်ပို့သူထံ ငွေချေပါ။",
 ).join("\n");
 const deliveryPaymentChoices = (psid: string, t: string, choices = customerPaymentChoices) => send(psid, {
   text: t,
@@ -282,7 +282,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (returnedOrders?.length) {
     const history = returnedOrders.map(formatReturnedOrderHistory).join("\n\n");
     const data = s.data as Record<string, unknown>;
-    if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
+    if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲမယ်" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
       const pendingCode = typeof data["pending_code"] === "string" ? data["pending_code"] : "";
       const pendingQty = typeof data["pending_qty"] === "number" ? data["pending_qty"] : null;
       if (pendingCode && pendingQty) {

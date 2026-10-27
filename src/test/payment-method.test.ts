@@ -13,8 +13,16 @@ describe("customer payment choices", () => {
       "prepaid",
       "seller_delivery_cash",
     ]);
+    expect(customerPaymentChoices.map((choice) => choice.quickReplyTitle)).toEqual([
+      "ငွေကြိုလွှဲမယ်",
+      "🏠 အိမ်ရောက်ငွေချေ",
+    ]);
     expect(parsePaymentChoice("PREPAY")).toBe("prepaid");
     expect(parsePaymentChoice("PAY_SELLER_DELIVERY_CASH")).toBe("seller_delivery_cash");
+    expect(parsePaymentChoice("ငွေကြိုလွှဲမယ်")).toBe("prepaid");
+    expect(parsePaymentChoice("🏠 အိမ်ရောက်ငွေချေ")).toBe("seller_delivery_cash");
+    expect(parsePaymentChoice("ငွေကြိုလွှဲပါမည်")).toBe("prepaid");
+    expect(parsePaymentChoice("🏠 ဆိုင်ပို့ ငွေချေ")).toBe("seller_delivery_cash");
   });
 
   it("treats existing COD quick replies as advance payment for compatibility", () => {
@@ -45,18 +53,15 @@ describe("customer payment choices", () => {
         (choice) => choice.method,
       ),
     ).toEqual(["seller_delivery_cash"]);
-    expect(getProductPaymentChoices({}).map((choice) => choice.method)).toEqual([
-      "prepaid",
-      "seller_delivery_cash",
-    ]);
+    expect(getProductPaymentChoices({}).map((choice) => choice.method)).toEqual(["prepaid"]);
   });
 
   it("keeps Burmese payment labels and historical COD descriptions", () => {
     expect(paymentMethodLabel("prepaid")).toBe("ကြိုတင်ငွေလွှဲ");
-    expect(paymentMethodLabel("seller_delivery_cash")).toContain("ဆိုင်ဘက်မှ");
+    expect(paymentMethodLabel("seller_delivery_cash")).toBe("အိမ်ရောက်ငွေချေ (ဆိုင်မှပို့ဆောင်)");
     expect(paymentMethodLabel("cod")).toContain("စနစ်ဟောင်း");
     expect(paymentMethodInstruction("prepaid")).toContain("ဖြတ်ပိုင်း");
-    expect(paymentMethodInstruction("seller_delivery_cash")).toContain("တိုက်ရိုက်ငွေချေ");
+    expect(paymentMethodInstruction("seller_delivery_cash")).toContain("အိမ်ရောက်ချိန်တွင် ငွေချေ");
     expect(paymentMethodInstruction("courier_cod")).toContain("စနစ်ဟောင်း");
   });
 });

@@ -7,11 +7,11 @@ export const customerPaymentChoices: {
   payload: string;
   quickReplyTitle: string;
 }[] = [
-  { method: "prepaid", payload: "PREPAY", quickReplyTitle: "ငွေကြိုလွှဲပါမည်" },
+  { method: "prepaid", payload: "PREPAY", quickReplyTitle: "ငွေကြိုလွှဲမယ်" },
   {
     method: "seller_delivery_cash",
     payload: "PAY_SELLER_DELIVERY_CASH",
-    quickReplyTitle: "🏠 ဆိုင်ပို့ ငွေချေ",
+    quickReplyTitle: "🏠 အိမ်ရောက်ငွေချေ",
   },
 ];
 
@@ -24,14 +24,14 @@ export function getProductPaymentChoices(product: ProductPaymentOptions) {
   return customerPaymentChoices.filter((choice) =>
     choice.method === "prepaid"
       ? product.allow_prepaid !== false
-      : product.allow_seller_delivery_cash !== false,
+      : product.allow_seller_delivery_cash === true,
   );
 }
 
 const paymentLabels: Record<OrderPaymentMethod, string> = {
   cod: "အရင်အော်ဒါ (စနစ်ဟောင်း) — COD ကောက်ခံသူ မခွဲထားပါ",
   courier_cod: "အရင်အော်ဒါ — ပို့ဆောင်ရေးကုမ္ပဏီမှ ငွေကောက်ခံ (COD)",
-  seller_delivery_cash: "ဆိုင်ဘက်မှ အိမ်အရောက်ပို့ပြီး ငွေချေ",
+  seller_delivery_cash: "အိမ်ရောက်ငွေချေ (ဆိုင်မှပို့ဆောင်)",
   prepaid: "ကြိုတင်ငွေလွှဲ",
 };
 
@@ -54,7 +54,7 @@ export function paymentMethodInstruction(method: string | null | undefined): str
   if (method === "cod")
     return "ဤအော်ဒါသည် စနစ်ဟောင်းမှဖြစ်၍ ငွေကောက်ခံသူကို သီးခြားမှတ်တမ်းမတင်ထားပါ။";
   if (method === "seller_delivery_cash") {
-    return "ဆိုင်ဘက်မှ ပို့ဆောင်သူထံ ပစ္စည်းလက်ခံချိန် တိုက်ရိုက်ငွေချေပါ။";
+    return "ဆိုင်ဘက်မှ ပို့ဆောင်ပေးသည့် အော်ဒါဖြစ်ပါသည်။ ပစ္စည်းအိမ်ရောက်ချိန်တွင် ငွေချေပါ။";
   }
   if (method === "prepaid") {
     return "ငွေလွှဲဖြတ်ပိုင်းကို ပို့ပြီး ဆိုင်ရှင်အတည်ပြုချက်ကို စောင့်ပါ။";
@@ -66,6 +66,7 @@ export function parsePaymentChoice(value: string): CustomerPaymentChoice | null 
   const choice = value.trim().toLocaleLowerCase();
   if (
     choice === "prepay" ||
+    choice === "ငွေကြိုလွှဲမယ်" ||
     choice === "ငွေကြိုလွှဲပါမည်" ||
     choice === "pay_courier_cod" ||
     choice === "🚚 cod" ||
@@ -75,6 +76,8 @@ export function parsePaymentChoice(value: string): CustomerPaymentChoice | null 
   }
   if (
     choice === "pay_seller_delivery_cash" ||
+    choice === "🏠 အိမ်ရောက်ငွေချေ" ||
+    choice === "အိမ်ရောက်ငွေချေ" ||
     choice === "🏠 ဆိုင်ပို့ ငွေချေ" ||
     choice === "ဆိုင်ပို့ ငွေချေ"
   ) {

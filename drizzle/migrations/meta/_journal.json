@@ -78,6 +78,13 @@
       "when": 1792986408357,
       "tag": "0020_product_payment_options",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793073735895,
+      "tag": "0021_home_delivery_cash_opt_in",
+      "breakpoints": true
     }
   ]
 }
