@@ -313,8 +313,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
         if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
         if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
-        if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
-        return startPrepaidPayment(p, pendingQty);
+        // A returned delivery overrides per-product payment options: this customer must prepay.
+        if (getProductPaymentFlow(p, { forcePrepaid: true }) === "prepaid") {
+          return startPrepaidPayment(p, pendingQty);
+        }
+        return text(psid, "ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော အော်ဒါရှိပါက အော်ဒါအသစ်ကို ငွေကြိုလွှဲပြီးမှ လက်ခံပါမည်ရှင်။");
       }
       await save({ state: "idle", data: { prepay_allowed: true } });
       return text(psid, "ကြိုတင်ငွေလွှဲစနစ်ကို ရွေးချယ်ပြီးပါပြီ။ ဒီနေ့ အော်ဒါအသစ်အတွက် ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ 111=2");

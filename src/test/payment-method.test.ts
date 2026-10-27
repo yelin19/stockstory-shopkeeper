@@ -72,6 +72,15 @@ describe("customer payment choices", () => {
     );
   });
 
+  it("forces prepayment for customers with a returned delivery, regardless of product options", () => {
+    expect(
+      getProductPaymentFlow(
+        { allow_prepaid: false, allow_seller_delivery_cash: true },
+        { forcePrepaid: true },
+      ),
+    ).toBe("prepaid");
+  });
+
   it("keeps Burmese payment labels and historical COD descriptions", () => {
     expect(paymentMethodLabel("prepaid")).toBe("ကြိုတင်ငွေလွှဲ");
     expect(paymentMethodLabel("seller_delivery_cash")).toBe("အိမ်ရောက်ငွေချေ (ဆိုင်မှပို့ဆောင်)");

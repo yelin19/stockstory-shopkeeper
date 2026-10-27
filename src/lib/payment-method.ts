@@ -30,7 +30,11 @@ export function getProductPaymentChoices(product: ProductPaymentOptions) {
 
 export type ProductPaymentFlow = CustomerPaymentChoice | "choose" | "unavailable";
 
-export function getProductPaymentFlow(product: ProductPaymentOptions): ProductPaymentFlow {
+export function getProductPaymentFlow(
+  product: ProductPaymentOptions,
+  options: { forcePrepaid?: boolean } = {},
+): ProductPaymentFlow {
+  if (options.forcePrepaid) return "prepaid";
   const choices = getProductPaymentChoices(product);
   if (choices.length > 1) return "choose";
   return choices[0]?.method ?? "unavailable";
