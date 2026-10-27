@@ -28,6 +28,14 @@ export function getProductPaymentChoices(product: ProductPaymentOptions) {
   );
 }
 
+export type ProductPaymentFlow = CustomerPaymentChoice | "choose" | "unavailable";
+
+export function getProductPaymentFlow(product: ProductPaymentOptions): ProductPaymentFlow {
+  const choices = getProductPaymentChoices(product);
+  if (choices.length > 1) return "choose";
+  return choices[0]?.method ?? "unavailable";
+}
+
 const paymentLabels: Record<OrderPaymentMethod, string> = {
   cod: "အရင်အော်ဒါ (စနစ်ဟောင်း) — COD ကောက်ခံသူ မခွဲထားပါ",
   courier_cod: "အရင်အော်ဒါ — ပို့ဆောင်ရေးကုမ္ပဏီမှ ငွေကောက်ခံ (COD)",

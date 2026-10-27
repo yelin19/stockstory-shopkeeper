@@ -8,7 +8,7 @@ import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
-import { customerPaymentChoices, getProductPaymentChoices, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
+import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
@@ -272,6 +272,30 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     );
   };
 
+  const startSellerDeliveryCash = async (
+    product: { id: string; code: string; name: string; price: number; unit: string },
+    quantity: number,
+    previousCustomer?: CustomerDetails | null,
+  ) => {
+    const data: Record<string, unknown> = {
+      product_id: product.id,
+      code: product.code,
+      product: product.name,
+      price: Number(product.price),
+      qty: quantity,
+      unit: product.unit,
+      prepay_allowed: false,
+      payment_method: "seller_delivery_cash",
+      ...(previousCustomer ? { previous_customer: previousCustomer } : {}),
+    };
+    if (previousCustomer) {
+      await save({ state: "reuse_customer_details", data });
+      return reuseCustomerDetailsChoice(psid, previousCustomer);
+    }
+    await save({ state: "ask_customer_details", data });
+    return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel("seller_delivery_cash")}\n${paymentMethodInstruction("seller_delivery_cash")}\n\n${customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။")}`);
+  };
+
   const { data: returnedOrders } = await db.from("orders")
     .select("public_order_id, product_code, product_name, product_unit, unit_price, quantity, created_at")
     .eq("owner_id", owner)
@@ -406,16 +430,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (paymentMethod === "prepaid") {
         return startPrepaidPayment(p, quantity, previousCustomerFromDraft(d));
       }
-      const previousCustomer = previousCustomerFromDraft(d);
-      const nd: Draft = { ...d, product_id: p.id, code: p.code, product: p.name, unit: p.unit, price: Number(p.price), qty: quantity, ...(previousCustomer ? { previous_customer: previousCustomer } : {}), payment_method: paymentMethod, prepay_allowed: false };
-      delete nd.name; delete nd.phone; delete nd.address;
-      if (!previousCustomer) delete nd.previous_customer;
-      if (previousCustomer) {
-        await save({ state: "reuse_customer_details", data: nd });
-        return reuseCustomerDetailsChoice(psid, previousCustomer);
-      }
-      await save({ state: "ask_customer_details", data: nd });
-      return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\n${customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။")}`);
+      return startSellerDeliveryCash(p, quantity, previousCustomerFromDraft(d));
     }
     case "edit_order": {
       const quantity = Number(msg.trim());
@@ -530,12 +545,15 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
     return startPrepaidPayment(p, req.qty);
   }
+  const paymentFlow = getProductPaymentFlow(p);
   const allowedChoices = getProductPaymentChoices(p);
-  if (!allowedChoices.length) return text(psid, "ဒီပစ္စည်းအတွက် ငွေပေးချေနည်းလမ်း မသတ်မှတ်ရသေးပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
+  if (paymentFlow === "unavailable") return text(psid, "ဒီပစ္စည်းအတွက် ငွေပေးချေနည်းလမ်း မသတ်မှတ်ရသေးပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
   const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
     .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const lastCustomer = (s.data as { last_customer?: { name?: string; phone?: string; address?: string } }).last_customer;
   const customer = previous ? { name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address } : lastCustomer?.name && lastCustomer.phone && lastCustomer.address ? lastCustomer : null;
+  if (paymentFlow === "prepaid") return startPrepaidPayment(p, req.qty, customer);
+  if (paymentFlow === "seller_delivery_cash") return startSellerDeliveryCash(p, req.qty, customer);
   const draft = {
     product_id: p.id,
     code: p.code,
