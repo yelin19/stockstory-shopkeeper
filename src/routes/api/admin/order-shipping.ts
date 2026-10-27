@@ -4,6 +4,23 @@ import { formatCurrency } from "@/lib/currency";
 
 const envFirst = (...names: string[]) => names.map((name) => process.env[name]).find(Boolean);
 
+async function removeTemporaryDeliveryImage(ownerId: string, imagePath: string | null) {
+  if (!imagePath) return true;
+  if (!imagePath.startsWith(`${ownerId}/`) || imagePath.includes("..")) return false;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.storage.from("delivery-images").remove([imagePath]);
+    if (error) {
+      console.error("Temporary delivery image cleanup failed", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Temporary delivery image cleanup failed", error);
+    return false;
+  }
+}
+
 export const Route = createFileRoute("/api/admin/order-shipping")({
   server: {
     handlers: {
@@ -18,6 +35,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           tracking_number: z.string().trim().max(200).nullish(),
           tracking_url: z.string().trim().max(2000).nullish(),
           image_url: z.string().trim().url().max(2000).nullish(),
+          image_path: z.string().trim().max(500).nullish(),
         }).safeParse(await request.json().catch(() => null));
         if (!parsed.success) return Response.json({ error: "Invalid shipping information" }, { status: 400 });
         const body = parsed.data;
@@ -51,18 +69,36 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const trackingUrl = body.tracking_url?.trim() || null;
         const trackingNumber = body.tracking_number?.trim() || null;
         const imageUrl = body.image_url?.trim() || null;
+        const imagePath = body.image_path?.trim() || null;
+        if (imageUrl && (!imagePath || !imagePath.startsWith(`${userData.user.id}/`) || imagePath.includes(".."))) {
+          return Response.json({ error: "ဓာတ်ပုံကို ယာယီပို့ရန် မမှန်ကန်သောဖိုင်လမ်းကြောင်းဖြစ်ပါသည်" }, { status: 400 });
+        }
+        if (imagePath && !imageUrl) {
+          const imageRemoved = imagePath.startsWith(`${userData.user.id}/`) && !imagePath.includes("..")
+            ? await removeTemporaryDeliveryImage(userData.user.id, imagePath)
+            : false;
+          return Response.json({ error: "ဓာတ်ပုံလင့်ခ် မရှိပါ", image_cleanup_failed: !imageRemoved }, { status: 400 });
+        }
         if (body.delivery_status === "returned") {
+          if (imageUrl) {
+            const imageRemoved = await removeTemporaryDeliveryImage(userData.user.id, imagePath);
+            return Response.json({ error: "ပို့ဆောင်မှုမအောင်မြင်ပါ status တွင် ဓာတ်ပုံမပို့နိုင်ပါ", image_cleanup_failed: !imageRemoved }, { status: 400 });
+          }
           const { error: returnedError } = await authClient.from("orders").update({ delivery_status: "returned", updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (returnedError) return Response.json({ error: returnedError.message }, { status: 500 });
           return Response.json({ ok: true, returned: true, delivery_status: "returned", message: "ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ" });
         }
         const readyToShip = Boolean(trackingNumber && trackingUrl);
+        if (imageUrl && !readyToShip) {
+          const imageRemoved = await removeTemporaryDeliveryImage(userData.user.id, imagePath);
+          return Response.json({ error: "ဓာတ်ပုံကို Messenger သို့ပို့ရန် Tracking ID နှင့် Link နှစ်ခုလုံးဖြည့်ပါ", image_cleanup_failed: !imageRemoved }, { status: 400 });
+        }
         const deliveryStatus = readyToShip
           ? body.delivery_status === "delivered" ? "delivered" : "in_transit"
           : body.delivery_status ?? "confirmed";
         const now = new Date().toISOString();
         if (!readyToShip) {
-          const { error: acceptedError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          const { error: acceptedError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
           if (acceptedError) return Response.json({ error: acceptedError.message }, { status: 500 });
           return Response.json({ ok: true, accepted: true, delivery_status: deliveryStatus, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် အခြေအနေကိုသိမ်းပြီးပါပြီ" });
         }
@@ -83,17 +119,22 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const sendText = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: message } }),
         });
-        if (!sendText.ok) return Response.json({ error: "Messenger သို့ စာပို့မရပါ" }, { status: 502 });
+        if (!sendText.ok) {
+          const imageRemoved = await removeTemporaryDeliveryImage(userData.user.id, imagePath);
+          return Response.json({ error: "Messenger သို့ စာပို့မရပါ", image_cleanup_failed: !imageRemoved }, { status: 502 });
+        }
+        let imageCleanupFailed = false;
         if (imageUrl) {
           const sendImage = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
             method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } } }),
           });
-          if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ" }, { status: 502 });
+          imageCleanupFailed = !(await removeTemporaryDeliveryImage(userData.user.id, imagePath));
+          if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ", image_cleanup_failed: imageCleanupFailed }, { status: 502 });
         }
 
-        const { error: updateError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_image_url: imageUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+        const { error: updateError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
-        return Response.json({ ok: true, public_order_id: orderId, delivery_status: deliveryStatus, notified: true });
+        return Response.json({ ok: true, public_order_id: orderId, delivery_status: deliveryStatus, notified: true, image_cleanup_failed: imageCleanupFailed });
       },
     },
   },

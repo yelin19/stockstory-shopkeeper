@@ -274,13 +274,21 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
   async function save() {
     setBusy(true);
     try {
+      if (file && deliveryStatus === "returned") {
+        throw new Error("ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သတ်မှတ်ရာတွင် ဓာတ်ပုံကို Messenger သို့မပို့နိုင်ပါ။");
+      }
+      if (file && (!trackingNumber.trim() || !trackingUrl.trim())) {
+        throw new Error("ဓာတ်ပုံကို Messenger သို့ပို့ရန် Tracking ID နှင့် Tracking link နှစ်ခုလုံးဖြည့်ပါ။");
+      }
       let imageUrl: string | null = null;
+      let imagePath: string | null = null;
       if (file) {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
         const path = `${userData.user.id}/${order.id}-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9.]/g, "")}`;
         const { error: uploadError } = await supabase.storage.from("delivery-images").upload(path, file, { contentType: file.type, upsert: false });
         if (uploadError) throw uploadError;
+        imagePath = path;
         imageUrl = supabase.storage.from("delivery-images").getPublicUrl(path).data.publicUrl;
       }
       const { data: sessionData } = await supabase.auth.getSession();
@@ -289,12 +297,16 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       const response = await fetch("/api/admin/order-shipping", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl }),
+        body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl, image_path: imagePath }),
       });
-      const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean; notified?: boolean; delivery_status?: string };
+      const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean; notified?: boolean; delivery_status?: string; image_cleanup_failed?: boolean };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");
       const label = deliveryLabels[result.delivery_status ?? "confirmed"] ?? result.delivery_status ?? "confirmed";
-      toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ` : result.notified ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ${label} အဖြစ်သိမ်းပြီး Messenger ဆီ ပို့ပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို ${label} အဖြစ်သိမ်းပြီးပါပြီ`);
+      if (result.image_cleanup_failed) {
+        toast.warning(`ဝယ်ယူမှု ID ${order.public_order_id} ကို သိမ်းပြီး Messenger သို့ပို့ပါပြီ။ သို့သော် ဓာတ်ပုံဖိုင်ကို Storage မှ မဖယ်ရှားနိုင်ပါ။`);
+      } else {
+        toast.success(result.returned ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ` : result.notified ? `ဝယ်ယူမှု ID ${order.public_order_id} ကို ${label} အဖြစ်သိမ်းပြီး Messenger ဆီ ပို့ပြီးပါပြီ` : `ဝယ်ယူမှု ID ${order.public_order_id} ကို ${label} အဖြစ်သိမ်းပြီးပါပြီ`);
+      }
       onSaved();
     } catch (err) {
       toast.error((err as Error).message);
@@ -315,7 +327,7 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
         <span>ပို့ဆောင်မှုဓာတ်ပုံ</span>
         <input className="min-w-0 flex-1" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </label>
-      <p className="text-muted-foreground">သိမ်းမည်နှိပ်လျှင် Tracking ID၊ Link နှင့် ဓာတ်ပုံကို Customer Messenger ဆီ ပြန်ပို့ပါမည်။</p>
+      <p className="text-muted-foreground">ပုံကို Messenger သို့ပို့ရန် Tracking ID နှင့် Link နှစ်ခုလုံးဖြည့်ပါ။ ပုံကို Customer Messenger သို့ပို့ပြီးနောက် အော်ဒါစာရင်းထဲတွင် မသိမ်းဘဲ Storage မှ ဖယ်ရှားပါမည်။</p>
       <Button size="sm" className="w-full" disabled={busy} onClick={save}>{busy ? "Messenger သို့ ပို့နေသည်..." : "သိမ်းပြီး Customer ဆီ ပို့မည်"}</Button>
     </div>
   );
