@@ -253,6 +253,7 @@ export type Database = {
           pin_hash: string | null
           sender_address: string | null
           sender_name: string | null
+          sender_phone: string | null
           shop_name: string
           updated_at: string
         }
@@ -270,6 +271,7 @@ export type Database = {
           pin_hash?: string | null
           sender_address?: string | null
           sender_name?: string | null
+          sender_phone?: string | null
           shop_name?: string
           updated_at?: string
         }
@@ -287,6 +289,7 @@ export type Database = {
           pin_hash?: string | null
           sender_address?: string | null
           sender_name?: string | null
+          sender_phone?: string | null
           shop_name?: string
           updated_at?: string
         }

@@ -32,6 +32,7 @@ function SettingsPage() {
     shop_name: s?.shop_name ?? "My Shop",
     sender_name: s?.sender_name ?? "",
     sender_address: s?.sender_address ?? "",
+    sender_phone: s?.sender_phone ?? "",
     currency: s?.currency === "THB" ? "THB" : "MMK",
     fb_page_id: s?.fb_page_id ?? "",
     messenger_username: s?.messenger_username ?? "",
@@ -89,6 +90,7 @@ function SettingsPage() {
       shop_name: f.shop_name.trim() || "My Shop",
       sender_name: f.sender_name.trim() || null,
       sender_address: f.sender_address.trim() || null,
+      sender_phone: f.sender_phone.trim() || null,
       fb_page_id: f.fb_page_id.trim() || null,
       messenger_username: f.messenger_username.trim().replace(/^@/, "") || null,
       bank_name: f.bank_name.trim() || null,
@@ -99,10 +101,10 @@ function SettingsPage() {
     };
     const { error } = await supabase.from("shop_settings").upsert({ ...baseValues, currency: f.currency });
     if (error && ["42703", "PGRST204"].includes(error.code)) {
-      const { sender_name: _senderName, sender_address: _senderAddress, ...legacyValues } = baseValues;
+      const { sender_name: _senderName, sender_address: _senderAddress, sender_phone: _senderPhone, ...legacyValues } = baseValues;
       const { error: legacyError } = await supabase.from("shop_settings").upsert(legacyValues);
       if (legacyError) return void toast.error(legacyError.code === "23505" ? "ဤ Facebook Page ကို အခြားဈေးဆိုင်တွင် ချိတ်ထားပြီးပါပြီ" : legacyError.message);
-      toast.warning("အခြားဆက်တင်များ သိမ်းပြီးပါပြီ။ ပို့သူအမည်နှင့်လိပ်စာအတွက် database migration 0019 ကို အရင်အသုံးချပါ။");
+      toast.warning("အခြားဆက်တင်များ သိမ်းပြီးပါပြီ။ ပို့သူအချက်အလက်အတွက် database migration 0020 ကို အရင်အသုံးချပါ။");
       qc.invalidateQueries({ queryKey: ["settings"] });
       return;
     }
@@ -132,6 +134,7 @@ function SettingsPage() {
         <div className="space-y-1"><Label>ဈေးဆိုင်အမည်</Label><Input value={f.shop_name} onChange={set("shop_name")} /></div>
         <div className="space-y-1"><Label>ပို့သူအမည် (လူနာမည်)</Label><Input value={f.sender_name} onChange={set("sender_name")} placeholder="ဥပမာ ကိုအောင်အောင်" /><p className="text-xs text-muted-foreground">ဈေးဆိုင်အမည်နှင့် မရောဘဲ လိပ်စာဖြတ်ပိုင်း၏ ပို့သူအမည်အဖြစ် ပြပါမည်။</p></div>
         <div className="space-y-1"><Label>ပို့သူလိပ်စာ</Label><Input value={f.sender_address} onChange={set("sender_address")} placeholder="ဥပမာ အမှတ် ၁၂၃၊ လမ်း ၄၊ မြို့နယ်" /><p className="text-xs text-muted-foreground">လိပ်စာဖြတ်ပိုင်း၏ ပို့သူအမည်အောက်တွင် ပြပါမည်။</p></div>
+        <div className="space-y-1"><Label>ပို့သူဖုန်းနံပါတ်</Label><Input type="tel" inputMode="tel" value={f.sender_phone} onChange={set("sender_phone")} placeholder="ဥပမာ 09 123 456 789" /><p className="text-xs text-muted-foreground">လိပ်စာဖြတ်ပိုင်းတွင် ပို့သူလိပ်စာအောက်၌ ပြပါမည်။</p></div>
         <div className="space-y-1">
           <Label htmlFor="shop-currency">ဈေးနှုန်းသုံးငွေကြေး</Label>
           <select id="shop-currency" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value as ShopCurrency })}>
