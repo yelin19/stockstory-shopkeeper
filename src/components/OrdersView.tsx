@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileSpreadsheet, Copy, Truck, Undo2, Check } from "lucide-react";
+import { FileSpreadsheet, Copy, Truck, Undo2, Check, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isOrderShipped, ordersQuery, settingsQuery, type Order } from "@/lib/shop-data";
 import { exportXlsx, money, type Row } from "@/lib/export";
@@ -145,9 +145,44 @@ export function OrdersView({ mode }: { mode: Mode }) {
     }
     return m;
   }, [filtered]);
+  const selectedAddressOrders = orders.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled");
+
+  function printAddressLabels() {
+    if (!selectedAddressOrders.length) return void toast.info("လိပ်စာတံဆိပ် ပုံနှိပ်မည့် အော်ဒါကို အရင်ရွေးပါ");
+    const printStyle = document.createElement("style");
+    printStyle.textContent = "@page { size: 100mm 75mm; margin: 0; }";
+    document.head.appendChild(printStyle);
+    document.body.classList.add("thermal-label-print-mode");
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      document.body.classList.remove("thermal-label-print-mode");
+      printStyle.remove();
+      window.removeEventListener("afterprint", cleanup);
+      window.clearTimeout(fallbackTimer);
+    };
+    const fallbackTimer = window.setTimeout(cleanup, 60_000);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  }
 
   return (
     <div className="space-y-5">
+      <div className="thermal-label-print" aria-hidden="true">
+        {selectedAddressOrders.map((o) => (
+          <article className="thermal-label-page" key={o.id}>
+            <div className="thermal-label-heading"><span>ပို့ဆောင်ရန်</span><strong>#{o.public_order_id}</strong></div>
+            <div className="thermal-label-recipient">{o.customer_name}</div>
+            <div className="thermal-label-phone">ဖုန်း: {o.phone}</div>
+            <div className="thermal-label-address">
+              <strong>လိပ်စာ</strong>
+              <div>{o.township}၊ {o.address}</div>
+            </div>
+            <div className="thermal-label-product">{o.product_name} · {formatQuantity(o.quantity, o.product_unit)}</div>
+          </article>
+        ))}
+      </div>
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">{mode === "orders" ? "အော်ဒါများ" : "ပို့ပြီးသော Order များ"}</h1>
@@ -164,11 +199,13 @@ export function OrdersView({ mode }: { mode: Mode }) {
           {filtered.filter((o) => o.status !== "cancelled").every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အော်ဒါများရွေးမည်"}
         </Button>
         <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedOrderIds.length} ခု</span>
+        <Button size="sm" variant="outline" onClick={printAddressLabels} disabled={!selectedAddressOrders.length} title="ရွေးထားသောအော်ဒါတစ်ခုစီအတွက် 100×75 မီလီမီတာ လိပ်စာတံဆိပ် တစ်ခုစီထုတ်မည်"><Printer /> လိပ်စာတံဆိပ် ပုံနှိပ်မည် ({selectedAddressOrders.length})</Button>
         <Input className="min-w-[240px] flex-1" value={bulkTrackingUrl} onChange={(e) => setBulkTrackingUrl(e.target.value)} placeholder="တူညီသော Tracking link (https://...)" />
         <Button size="sm" onClick={applyBulkTrackingLink} disabled={!selectedOrderIds.length || bulkTrackingBusy}>
           {bulkTrackingBusy ? "သိမ်းနေသည်..." : "ရွေးထားသောအော်ဒါများသို့ Link ထည့်မည်"}
         </Button>
         <span className="basis-full text-xs text-muted-foreground">Tracking link တူသောအော်ဒါများကို ရွေးပြီး ထည့်ပါ။ Tracking ID ကို အော်ဒါတစ်ခုချင်းစီမှာ သီးသန့်ထည့်နိုင်ပါသည်။</span>
+        <span className="basis-full text-xs text-muted-foreground">လိပ်စာပုံနှိပ်ရာတွင် ရွေးထားသော အော်ဒါတစ်ခုစီကို 100×75 မီလီမီတာ စာရွက်တစ်ရွက်စီဖြင့် ထုတ်ပေးပါမည်။</span>
       </div>}
 
       <div className="no-print rounded-2xl border bg-card p-3">
