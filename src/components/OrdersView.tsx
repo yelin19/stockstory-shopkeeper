@@ -27,6 +27,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
+  const [senderAddress, setSenderAddress] = useState(settings?.sender_address ?? "");
+  const [savingSenderAddress, setSavingSenderAddress] = useState(false);
   const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
   const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
   const [approvingPaymentId, setApprovingPaymentId] = useState<string | null>(null);
@@ -149,6 +151,16 @@ export function OrdersView({ mode }: { mode: Mode }) {
   }, [filtered]);
   const selectedAddressOrders = orders.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled");
 
+  async function saveSenderAddress() {
+    if (!settings?.owner_id || savingSenderAddress) return;
+    setSavingSenderAddress(true);
+    const { error } = await supabase.from("shop_settings").update({ sender_address: senderAddress.trim() || null }).eq("owner_id", settings.owner_id);
+    setSavingSenderAddress(false);
+    if (error) return void toast.error(error.message);
+    await qc.invalidateQueries({ queryKey: ["settings"] });
+    toast.success("ပို့သူလိပ်စာ သိမ်းပြီးပါပြီ");
+  }
+
   async function printAddressLabels() {
     if (!selectedAddressOrders.length) return void toast.info("လိပ်စာတံဆိပ် ပုံနှိပ်မည့် အော်ဒါကို အရင်ရွေးပါ");
     const labelRoot = labelPrintRef.current;
@@ -188,7 +200,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
             <div className="thermal-label-sender">
               <div className="thermal-label-section-title">ပို့သူ</div>
               <strong>{settings?.shop_name || "ဆိုင်"}</strong>
-              <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
+              <div>{senderAddress || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
             </div>
             <div className="thermal-label-divider" />
             <div className="thermal-label-recipient-block">
@@ -220,6 +232,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
           {filtered.filter((o) => o.status !== "cancelled").every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အော်ဒါများရွေးမည်"}
         </Button>
         <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedOrderIds.length} ခု</span>
+        <Input className="min-w-[260px] flex-1" value={senderAddress} onChange={(e) => setSenderAddress(e.target.value)} placeholder="ပို့သူလိပ်စာ (printer label အပေါ်ပိုင်း)" aria-label="ပို့သူလိပ်စာ" />
+        <Button size="sm" variant="outline" onClick={saveSenderAddress} disabled={savingSenderAddress}>
+          {savingSenderAddress ? "သိမ်းနေသည်..." : "ပို့သူလိပ်စာ သိမ်းမည်"}
+        </Button>
         <Button size="sm" variant="outline" onClick={printAddressLabels} disabled={!selectedAddressOrders.length} title="ရွေးထားသောအော်ဒါတစ်ခုစီအတွက် 100×75 မီလီမီတာ လိပ်စာတံဆိပ် တစ်ခုစီထုတ်မည်"><Printer /> လိပ်စာတံဆိပ် ပုံနှိပ်မည် ({selectedAddressOrders.length})</Button>
         <Input className="min-w-[240px] flex-1" value={bulkTrackingUrl} onChange={(e) => setBulkTrackingUrl(e.target.value)} placeholder="တူညီသော Tracking link (https://...)" />
         <Button size="sm" onClick={applyBulkTrackingLink} disabled={!selectedOrderIds.length || bulkTrackingBusy}>
