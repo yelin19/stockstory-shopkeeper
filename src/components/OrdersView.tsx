@@ -187,7 +187,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
           <article className="thermal-label-page" key={o.id}>
             <div className="thermal-label-sender">
               <div className="thermal-label-section-title">ပို့သူ</div>
-              <strong>{settings?.shop_name || "ဆိုင်"}</strong>
+              <strong>{settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}</strong>
               <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
             </div>
             <div className="thermal-label-divider" />

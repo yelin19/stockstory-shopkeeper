@@ -252,6 +252,7 @@ export type Database = {
           owner_id: string
           pin_hash: string | null
           sender_address: string | null
+          sender_name: string | null
           shop_name: string
           updated_at: string
         }
@@ -268,6 +269,7 @@ export type Database = {
           owner_id: string
           pin_hash?: string | null
           sender_address?: string | null
+          sender_name?: string | null
           shop_name?: string
           updated_at?: string
         }
@@ -284,6 +286,7 @@ export type Database = {
           owner_id?: string
           pin_hash?: string | null
           sender_address?: string | null
+          sender_name?: string | null
           shop_name?: string
           updated_at?: string
         }
