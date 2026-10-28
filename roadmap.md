@@ -7,6 +7,6 @@
 - [ ] Verify a real Messenger order reads back in admin: blocked by missing SHOP_FB_APP_SECRET and SHOP_FB_PAGE_ACCESS_TOKEN, Facebook Page/PIN configuration, and publication of these changes.
 
 # Android thermal label printing
-- [ ] Research existing label layout and Android silent-print options.
+- [x] Research existing label layout and Android silent-print options: BLE/GATT can use Web Bluetooth after permission; Classic Bluetooth/USB requires a compatible Android bridge or vendor app. Existing HTML label requests 100×75 mm but can clip long content.
 - [ ] Implement exact 100×75 mm label fit and compatible direct-print transport: waiting for printer model and connection type.
 - [ ] Verify real one-click output without print dialog: requires the user's Android device and printer.
