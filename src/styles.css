@@ -169,6 +169,29 @@
   .thermal-label-heading strong {
     font-size: 16pt;
   }
+  .thermal-label-sender {
+    min-height: 15mm;
+    overflow-wrap: anywhere;
+    font-size: 9pt;
+    line-height: 1.15;
+  }
+  .thermal-label-sender strong {
+    display: block;
+    font-size: 11pt;
+  }
+  .thermal-label-section-title {
+    margin-bottom: 0.5mm;
+    font-size: 8pt;
+    font-weight: 700;
+  }
+  .thermal-label-divider {
+    flex: 0 0 0.35mm;
+    width: 100%;
+    background: #000;
+  }
+  .thermal-label-recipient-block {
+    min-height: 31mm;
+  }
   .thermal-label-recipient {
     font-size: 15pt;
     font-weight: 800;

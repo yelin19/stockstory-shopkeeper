@@ -251,6 +251,7 @@ export type Database = {
           messenger_username: string | null
           owner_id: string
           pin_hash: string | null
+          sender_address: string | null
           shop_name: string
           updated_at: string
         }
@@ -266,6 +267,7 @@ export type Database = {
           messenger_username?: string | null
           owner_id: string
           pin_hash?: string | null
+          sender_address?: string | null
           shop_name?: string
           updated_at?: string
         }
@@ -281,6 +283,7 @@ export type Database = {
           messenger_username?: string | null
           owner_id?: string
           pin_hash?: string | null
+          sender_address?: string | null
           shop_name?: string
           updated_at?: string
         }

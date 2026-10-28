@@ -1,6 +1,8 @@
 # 100×75 mm label printing
 
-The address-label button renders one label per 100 mm × 75 mm page. The app first tries a local silent-print agent and only falls back to the browser print dialog when no agent is available.
+The address-label button renders one label per 100 mm × 75 mm page. Each label shows the shop's sender name/address at the top, a divider line, and the customer's recipient name/address below it. The app first tries a local silent-print agent and only falls back to the browser print dialog when no agent is available.
+
+Set the sender address under **ဆက်တင်များ → ပို့သူလိပ်စာ**. Apply database migration `0018_sender_address.sql` before saving this new field.
 
 ## Silent printing on a desktop browser
 

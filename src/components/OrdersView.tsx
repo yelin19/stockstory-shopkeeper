@@ -185,12 +185,20 @@ export function OrdersView({ mode }: { mode: Mode }) {
       <div ref={labelPrintRef} className="thermal-label-print" aria-hidden="true">
         {selectedAddressOrders.map((o) => (
           <article className="thermal-label-page" key={o.id}>
-            <div className="thermal-label-heading"><span>ပို့ဆောင်ရန်</span><strong>#{o.public_order_id}</strong></div>
-            <div className="thermal-label-recipient">{o.customer_name}</div>
-            <div className="thermal-label-phone">ဖုန်း: {o.phone}</div>
-            <div className="thermal-label-address">
-              <strong>လိပ်စာ</strong>
-              <div>{o.township}၊ {o.address}</div>
+            <div className="thermal-label-sender">
+              <div className="thermal-label-section-title">ပို့သူ</div>
+              <strong>{settings?.shop_name || "ဆိုင်"}</strong>
+              <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
+            </div>
+            <div className="thermal-label-divider" />
+            <div className="thermal-label-recipient-block">
+              <div className="thermal-label-heading"><span>လက်ခံသူ</span><strong>#{o.public_order_id}</strong></div>
+              <div className="thermal-label-recipient">{o.customer_name}</div>
+              <div className="thermal-label-phone">ဖုန်း: {o.phone}</div>
+              <div className="thermal-label-address">
+                <strong>လိပ်စာ</strong>
+                <div>{o.township}၊ {o.address}</div>
+              </div>
             </div>
             <div className="thermal-label-product">{o.product_name} · {formatQuantity(o.quantity, o.product_unit)}</div>
           </article>
