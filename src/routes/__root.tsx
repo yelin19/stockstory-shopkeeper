@@ -108,6 +108,7 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js" />
         <Scripts />
       </body>
     </html>

@@ -1,5 +1,5 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { FileSpreadsheet, Copy, Truck, Undo2, Check, Printer } from "lucide-react";
@@ -9,6 +9,7 @@ import { exportXlsx, money, type Row } from "@/lib/export";
 import { sumByCurrency } from "@/lib/currency";
 import { formatQuantity } from "@/lib/product-unit";
 import { paymentMethodLabel } from "@/lib/payment-method";
+import { printLabelsSilently } from "@/lib/label-print";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -17,6 +18,7 @@ type Mode = "orders" | "addresses";
 const sel = "h-9 rounded-md border bg-card px-2 text-sm";
 
 export function OrdersView({ mode }: { mode: Mode }) {
+  const labelPrintRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const { data: orders } = useSuspenseQuery(ordersQuery);
   const { data: settings } = useSuspenseQuery(settingsQuery);
@@ -147,8 +149,19 @@ export function OrdersView({ mode }: { mode: Mode }) {
   }, [filtered]);
   const selectedAddressOrders = orders.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled");
 
-  function printAddressLabels() {
+  async function printAddressLabels() {
     if (!selectedAddressOrders.length) return void toast.info("လိပ်စာတံဆိပ် ပုံနှိပ်မည့် အော်ဒါကို အရင်ရွေးပါ");
+    const labelRoot = labelPrintRef.current;
+    if (!labelRoot) return void toast.error("လိပ်စာတံဆိပ် ပုံစံကို ပြင်ဆင်မရပါ");
+    try {
+      if (await printLabelsSilently(labelRoot)) {
+        toast.success(`${selectedAddressOrders.length} ခုကို Silent Print လွှတ်ပြီးပါပြီ`);
+        return;
+      }
+    } catch (error) {
+      console.warn("Silent print agent unavailable; opening browser print dialog", error);
+      toast.info("Silent Print agent မချိတ်ထားသေးပါ။ Browser Print ကို ဖွင့်ပါမည်");
+    }
     const printStyle = document.createElement("style");
     printStyle.textContent = "@page { size: 100mm 75mm; margin: 0; }";
     document.head.appendChild(printStyle);
@@ -169,7 +182,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   return (
     <div className="space-y-5">
-      <div className="thermal-label-print" aria-hidden="true">
+      <div ref={labelPrintRef} className="thermal-label-print" aria-hidden="true">
         {selectedAddressOrders.map((o) => (
           <article className="thermal-label-page" key={o.id}>
             <div className="thermal-label-heading"><span>ပို့ဆောင်ရန်</span><strong>#{o.public_order_id}</strong></div>

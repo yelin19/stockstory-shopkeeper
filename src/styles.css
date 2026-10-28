@@ -103,6 +103,7 @@
 }
 
 @media print {
+  @page { size: 100mm 75mm; margin: 0; }
   .no-print { display: none !important; }
   body { background: white; }
 }
@@ -127,6 +128,9 @@
     top: 0;
     left: 0;
     width: 100mm;
+    height: 75mm;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   .thermal-label-page {
     display: flex;
@@ -142,6 +146,7 @@
     color: #000;
     background: #fff;
     border: 0.25mm solid #333;
+    margin: 0 !important;
     font-family: var(--font-sans), "Noto Sans Myanmar", sans-serif;
     font-size: 11pt;
     line-height: 1.2;
