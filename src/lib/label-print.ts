@@ -105,7 +105,6 @@ function getLabelPages(root: HTMLElement) {
 export async function printLabelsSilently(root: HTMLElement): Promise<boolean> {
   const pages = getLabelPages(root);
   if (!pages.length) return false;
-  const pageHtml = pages.map((page) => wrapLabelHtml(page.outerHTML));
   const payload = {
     html: wrapLabelHtml(pages.map((page) => page.outerHTML).join("")),
     widthMm: LABEL_WIDTH_MM,
@@ -127,6 +126,9 @@ export async function printLabelsSilently(root: HTMLElement): Promise<boolean> {
     margins: 0,
     scaleContent: false,
   });
-  await qz.print(config, pageHtml.map((data) => ({ type: "pixel", format: "html", flavor: "plain", data })));
+  for (const page of pages) {
+    const data = wrapLabelHtml(page.outerHTML);
+    await qz.print(config, [{ type: "pixel", format: "html", flavor: "plain", data }]);
+  }
   return true;
 }
