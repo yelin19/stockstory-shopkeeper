@@ -647,6 +647,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
       GET: async ({ request }) => {
         const u = new URL(request.url);
         const expected = envFirst("SHOP_FB_VERIFY_TOKEN", "FB_VERIFY_TOKEN");
+        console.info("[shop-messenger] webhook verification request", { path: u.pathname, hasVerifyToken: Boolean(u.searchParams.get("hub.verify_token")) });
         const parsed = messengerVerificationSchema.safeParse({
           mode: u.searchParams.get("hub.mode"),
           token: u.searchParams.get("hub.verify_token"),
@@ -659,15 +660,24 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
       },
       POST: async ({ request }) => {
         const body = await request.text();
-        if (!(await verifyMessengerSignature(body, request.headers.get("x-hub-signature-256"), envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET")))) return new Response("Invalid signature", { status: 401 });
+        const signature = request.headers.get("x-hub-signature-256");
+        console.info("[shop-messenger] webhook POST received", { path: new URL(request.url).pathname, bodyBytes: body.length, hasSignature: Boolean(signature) });
+        if (!(await verifyMessengerSignature(body, signature, envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET")))) {
+          console.warn("[shop-messenger] webhook signature rejected", { hasSignature: Boolean(signature) });
+          return new Response("Invalid signature", { status: 401 });
+        }
         let json: unknown;
         try {
           json = JSON.parse(body);
         } catch {
+          console.warn("[shop-messenger] webhook JSON parse failed");
           return new Response("Invalid JSON", { status: 400 });
         }
         const parsed = messengerPayloadSchema.safeParse(json);
-        if (!parsed.success) return new Response("Invalid Messenger payload", { status: 400 });
+        if (!parsed.success) {
+          console.warn("[shop-messenger] webhook payload rejected", { issueCount: parsed.error.issues.length });
+          return new Response("Invalid Messenger payload", { status: 400 });
+        }
         const payload = parsed.data as unknown as {
           object: string;
           entry: {
@@ -680,14 +690,19 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
         for (const entry of payload.entry ?? []) {
+          console.info("[shop-messenger] page entry received", { hasMessaging: Boolean(entry.messaging?.length), changes: (entry.changes ?? []).map((change) => change.field ?? "unknown") });
           const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id, messenger_username").eq("fb_page_id", entry.id).maybeSingle();
-          if (!shop) continue;
+          if (!shop) {
+            console.warn("[shop-messenger] no shop configured for page entry");
+            continue;
+          }
           for (const change of entry.changes ?? []) {
             const value = change.value;
             const commentMessage = value?.message?.trim();
             const commenterId = value?.from?.id;
             if (change.field !== "feed" || value?.item !== "comment" || value.verb !== "add" || !value.comment_id || !commenterId || commenterId === entry.id || !commentMessage) continue;
             if (!parseProductRequest(commentMessage)) continue;
+            console.info("[shop-messenger] product-code comment accepted", { hasQuantity: Boolean(parseProductRequest(commentMessage)?.qty), hasPrivateReplyTarget: Boolean(value.comment_id) });
             try {
               await sendCommentPrivateReply(value.comment_id, "Product Code ကို Messenger မှာ ဆက်ပြီး အော်ဒါတင်နိုင်အောင် message ပို့ထားပါတယ်ရှင်။");
               await handleText(supabaseAdmin, shop.owner_id, commenterId, commentMessage.slice(0, 1000), origin, shop.messenger_username);
