@@ -116,10 +116,16 @@
     background: white !important;
   }
   body.thermal-label-print-mode * {
+    display: none !important;
     visibility: hidden !important;
+  }
+  body.thermal-label-print-mode .thermal-label-print-ancestor {
+    display: contents !important;
+    visibility: visible !important;
   }
   body.thermal-label-print-mode .thermal-label-print,
   body.thermal-label-print-mode .thermal-label-print * {
+    display: block !important;
     visibility: visible !important;
   }
   body.thermal-label-print-mode .thermal-label-print {
@@ -133,7 +139,7 @@
     padding: 0 !important;
   }
   .thermal-label-page {
-    display: flex;
+    display: flex !important;
     box-sizing: border-box;
     flex-direction: column;
     gap: 2mm;
@@ -158,7 +164,7 @@
     break-after: auto;
   }
   .thermal-label-heading {
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: space-between;
     border-bottom: 0.4mm solid #000;

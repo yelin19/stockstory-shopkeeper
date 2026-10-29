@@ -165,12 +165,20 @@ export function OrdersView({ mode }: { mode: Mode }) {
     const printStyle = document.createElement("style");
     printStyle.textContent = "@page { size: 100mm 75mm; margin: 0; }";
     document.head.appendChild(printStyle);
+    const printAncestors: HTMLElement[] = [];
+    let ancestor = labelRoot.parentElement;
+    while (ancestor && ancestor !== document.body) {
+      printAncestors.push(ancestor);
+      ancestor.classList.add("thermal-label-print-ancestor");
+      ancestor = ancestor.parentElement;
+    }
     document.body.classList.add("thermal-label-print-mode");
     let cleaned = false;
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
       document.body.classList.remove("thermal-label-print-mode");
+      printAncestors.forEach((element) => element.classList.remove("thermal-label-print-ancestor"));
       printStyle.remove();
       window.removeEventListener("afterprint", cleanup);
       window.clearTimeout(fallbackTimer);
