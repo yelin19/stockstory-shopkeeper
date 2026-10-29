@@ -123,6 +123,7 @@ export async function printLabelsSilently(root: HTMLElement): Promise<boolean> {
   const printer = await qz.printers.find();
   const config = qz.configs.create(printer, {
     size: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM, units: "mm" },
+    orientation: "portrait",
     margins: 0,
     scaleContent: false,
   });

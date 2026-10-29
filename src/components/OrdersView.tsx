@@ -160,7 +160,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
       }
     } catch (error) {
       console.warn("Silent print agent unavailable; opening browser print dialog", error);
-      toast.info("Silent Print agent မချိတ်ထားသေးပါ။ Browser Print ကို ဖွင့်ပါမည်");
+      toast.info("QZ Tray မချိတ်ထားသေးပါ။ 100×75 mm အရွယ်အစားကို အလိုအလျောက်ရွေးရန် QZ Tray လိုအပ်ပါသည်။ Browser Print ကို ဖွင့်ပါမည်");
     }
     const printStyle = document.createElement("style");
     printStyle.textContent = "@page { size: 100mm 75mm; margin: 0; }";
