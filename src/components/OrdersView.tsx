@@ -66,15 +66,15 @@ export function OrdersView({ mode }: { mode: Mode }) {
   async function copyAddress(o: Order) {
     const recipientAddress = `${o.township ? `${o.township}၊ ` : ""}${o.address}`;
     const text = [
-      "ပို့သူ",
+      "Sender",
       settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ",
-      `ဖုန်း: ${settings?.sender_phone || "ပို့သူဖုန်း မထည့်ရသေးပါ"}`,
-      `လိပ်စာ: ${settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}`,
+      `Phone: ${settings?.sender_phone || "ပို့သူဖုန်း မထည့်ရသေးပါ"}`,
+      `Address: ${settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}`,
       "────────────────────────",
-      `လက်ခံသူ                         Order #${o.public_order_id}`,
+      `Recipient                         Order #${o.public_order_id}`,
       o.customer_name,
-      `ဖုန်း: ${o.phone}`,
-      `လိပ်စာ: ${recipientAddress}`,
+      `Phone: ${o.phone}`,
+      `Address: ${recipientAddress}`,
       "────────────────────────",
       `ပစ္စည်း: ${o.product_name} · ${formatQuantity(o.quantity, o.product_unit)}`,
     ].join("\n");
@@ -207,21 +207,21 @@ export function OrdersView({ mode }: { mode: Mode }) {
         {selectedAddressOrders.map((o) => (
           <article className="thermal-label-page" key={o.id}>
             <div className="thermal-label-sender">
-              <div className="thermal-label-section-title">ပို့သူ</div>
+              <div className="thermal-label-section-title">Sender</div>
               <strong>{settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}</strong>
-              {settings?.sender_phone && <div className="thermal-label-phone">ဖုန်း: {settings.sender_phone}</div>}
+              {settings?.sender_phone && <div className="thermal-label-phone">Phone: {settings.sender_phone}</div>}
               <div className="thermal-label-address">
-                <strong>လိပ်စာ</strong>
+                <strong>Address</strong>
                 <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
               </div>
             </div>
             <div className="thermal-label-divider" />
             <div className="thermal-label-recipient-block">
-              <div className="thermal-label-heading"><span>လက်ခံသူ</span><strong>#{o.public_order_id}</strong></div>
+              <div className="thermal-label-heading"><span>Recipient</span><strong>#{o.public_order_id}</strong></div>
               <div className="thermal-label-recipient">{o.customer_name}</div>
-              <div className="thermal-label-phone">ဖုန်း: {o.phone}</div>
+              <div className="thermal-label-phone">Phone: {o.phone}</div>
               <div className="thermal-label-address">
-                <strong>လိပ်စာ</strong>
+                <strong>Address</strong>
                 <div>{o.township ? `${o.township}၊ ` : ""}{o.address}</div>
               </div>
             </div>
