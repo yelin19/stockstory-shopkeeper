@@ -693,6 +693,10 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
         const origin = new URL(request.url).origin;
         for (const entry of payload.entry ?? []) {
           console.info("[shop-messenger] page entry received", { hasMessaging: Boolean(entry.messaging?.length), changes: (entry.changes ?? []).map((change) => change.field ?? "unknown") });
+          if (entry.id === "0") {
+            console.info("[shop-messenger] feed test notification received");
+            continue;
+          }
           const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username");
           const shop = configuredShops?.find((candidate) => String(candidate.fb_page_id ?? "").trim() === String(entry.id).trim());
           if (!shop) {
