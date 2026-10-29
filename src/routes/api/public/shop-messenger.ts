@@ -55,6 +55,17 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+async function sendCommentPrivateReply(commentId: string, message: string) {
+  const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
+  if (!token) return false;
+  const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(commentId)}/private_replies?access_token=${encodeURIComponent(token)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) console.error("Facebook comment private reply failed", res.status);
+  return res.ok;
+}
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
 const customerDetailsRequest = (intro: string) => `${intro}\n${customerDetailsExample}\n\n${customerDetailsPhotoDisclosure}`;
@@ -657,13 +668,33 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
         }
         const parsed = messengerPayloadSchema.safeParse(json);
         if (!parsed.success) return new Response("Invalid Messenger payload", { status: 400 });
-        const payload = parsed.data as unknown as { object: string; entry: { id: string; messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[] }[] };
+        const payload = parsed.data as unknown as {
+          object: string;
+          entry: {
+            id: string;
+            changes?: Array<{ field?: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; from?: { id?: string } } }>;
+            messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[];
+          }[];
+        };
         if (payload.object !== "page") return new Response("ok");
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
         for (const entry of payload.entry ?? []) {
           const { data: shop } = await supabaseAdmin.from("shop_settings").select("owner_id, messenger_username").eq("fb_page_id", entry.id).maybeSingle();
           if (!shop) continue;
+          for (const change of entry.changes ?? []) {
+            const value = change.value;
+            const commentMessage = value?.message?.trim();
+            const commenterId = value?.from?.id;
+            if (change.field !== "feed" || value?.item !== "comment" || value.verb !== "add" || !value.comment_id || !commenterId || commenterId === entry.id || !commentMessage) continue;
+            if (!parseProductRequest(commentMessage)) continue;
+            try {
+              await sendCommentPrivateReply(value.comment_id, "Product Code ကို Messenger မှာ ဆက်ပြီး အော်ဒါတင်နိုင်အောင် message ပို့ထားပါတယ်ရှင်။");
+              await handleText(supabaseAdmin, shop.owner_id, commenterId, commentMessage.slice(0, 1000), origin, shop.messenger_username);
+            } catch (error) {
+              console.error("shop-messenger comment handler error", (error as Error).message);
+            }
+          }
           for (const ev of entry.messaging ?? []) {
             const message = ev.message as unknown as { is_echo?: boolean; text?: string; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> } | undefined;
             const t = message?.is_echo ? undefined : (message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
