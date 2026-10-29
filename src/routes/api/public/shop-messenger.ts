@@ -662,8 +662,10 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
         const body = await request.text();
         const signature = request.headers.get("x-hub-signature-256");
         console.info("[shop-messenger] webhook POST received", { path: new URL(request.url).pathname, bodyBytes: body.length, hasSignature: Boolean(signature) });
-        if (!(await verifyMessengerSignature(body, signature, envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET")))) {
-          console.warn("[shop-messenger] webhook signature rejected", { hasSignature: Boolean(signature) });
+        const appSecret = envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET", "FACEBOOK_APP_SECRET", "META_APP_SECRET");
+        const signatureFormatValid = Boolean(signature && /^sha256=[a-f0-9]{64}$/.test(signature));
+        if (!(await verifyMessengerSignature(body, signature, appSecret))) {
+          console.warn("[shop-messenger] webhook signature rejected", { hasSignature: Boolean(signature), signatureFormatValid, hasAppSecret: Boolean(appSecret) });
           return new Response("Invalid signature", { status: 401 });
         }
         let json: unknown;
