@@ -196,8 +196,11 @@ export function OrdersView({ mode }: { mode: Mode }) {
             <div className="thermal-label-sender">
               <div className="thermal-label-section-title">ပို့သူ</div>
               <strong>{settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}</strong>
-              <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
-              {settings?.sender_phone && <div>ဖုန်း: {settings.sender_phone}</div>}
+              {settings?.sender_phone && <div className="thermal-label-phone">ဖုန်း: {settings.sender_phone}</div>}
+              <div className="thermal-label-address">
+                <strong>လိပ်စာ</strong>
+                <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
+              </div>
             </div>
             <div className="thermal-label-divider" />
             <div className="thermal-label-recipient-block">
@@ -206,10 +209,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
               <div className="thermal-label-phone">ဖုန်း: {o.phone}</div>
               <div className="thermal-label-address">
                 <strong>လိပ်စာ</strong>
-                <div>{o.township}၊ {o.address}</div>
+                <div>{o.township ? `${o.township}၊ ` : ""}{o.address}</div>
               </div>
             </div>
-            <div className="thermal-label-product">{o.product_name} · {formatQuantity(o.quantity, o.product_unit)}</div>
+            <div className="thermal-label-product">ပစ္စည်း: {o.product_name} · {formatQuantity(o.quantity, o.product_unit)}</div>
           </article>
         ))}
       </div>
