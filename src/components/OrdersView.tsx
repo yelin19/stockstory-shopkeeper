@@ -64,7 +64,20 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
   async function copyAddress(o: Order) {
-    const text = `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${formatQuantity(o.quantity, o.product_unit)}\nအမည်: ${o.customer_name}\nဖုန်း: ${o.phone}\nလိပ်စာ: ${o.address}`;
+    const recipientAddress = `${o.township ? `${o.township}၊ ` : ""}${o.address}`;
+    const text = [
+      "ပို့သူ",
+      settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ",
+      `ဖုန်း: ${settings?.sender_phone || "ပို့သူဖုန်း မထည့်ရသေးပါ"}`,
+      `လိပ်စာ: ${settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}`,
+      "────────────────────────",
+      `လက်ခံသူ                         Order #${o.public_order_id}`,
+      o.customer_name,
+      `ဖုန်း: ${o.phone}`,
+      `လိပ်စာ: ${recipientAddress}`,
+      "────────────────────────",
+      `ပစ္စည်း: ${o.product_name} · ${formatQuantity(o.quantity, o.product_unit)}`,
+    ].join("\n");
     try {
       await navigator.clipboard.writeText(text);
       toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ၏ လိပ်စာကို Copy လုပ်ပြီးပါပြီ`);
