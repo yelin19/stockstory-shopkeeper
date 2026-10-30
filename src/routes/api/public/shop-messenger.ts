@@ -684,7 +684,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           object: string;
           entry: {
             id: string;
-            changes?: Array<{ field?: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; from?: { id?: string } } }>;
+            changes?: Array<{ field?: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; post_id?: string; parent_id?: string; from?: { id?: string } } }>;
             messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[];
           }[];
         };
@@ -711,8 +711,14 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
             const commentMessage = value?.message?.trim();
             const commenterId = value?.from?.id;
             if (change.field !== "feed" || value?.item !== "comment" || value.verb !== "add" || !value.comment_id || !commenterId || commenterId === entry.id || !commentMessage) continue;
-            if (!parseProductRequest(commentMessage)) continue;
-            console.info("[shop-messenger] product-code comment accepted", { hasQuantity: Boolean(parseProductRequest(commentMessage)?.qty), hasPrivateReplyTarget: Boolean(value.comment_id) });
+            const productRequest = parseProductRequest(commentMessage);
+            if (!productRequest) continue;
+            console.info("[shop-messenger] feed product-code comment accepted", {
+              postId: value.post_id ?? null,
+              parentComment: Boolean(value.parent_id),
+              hasQuantity: productRequest.qty !== null,
+              hasPrivateReplyTarget: Boolean(value.comment_id),
+            });
             try {
               await sendCommentPrivateReply(value.comment_id, "Product Code ကို Messenger မှာ ဆက်ပြီး အော်ဒါတင်နိုင်အောင် message ပို့ထားပါတယ်ရှင်။");
               await handleText(supabaseAdmin, shop.owner_id, commenterId, commentMessage.slice(0, 1000), origin, shop.messenger_username);
