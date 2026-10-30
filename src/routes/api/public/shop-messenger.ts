@@ -710,11 +710,12 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
             const value = change.value;
             const commentMessage = value?.message?.trim();
             const commenterId = value?.from?.id;
-            if (change.field !== "feed" || value?.item !== "comment" || value.verb !== "add" || !value.comment_id || !commenterId || commenterId === entry.id || !commentMessage) continue;
+            if ((change.field !== "feed" && change.field !== "live_comments") || value?.item !== "comment" || value.verb !== "add" || !value.comment_id || !commenterId || commenterId === entry.id || !commentMessage) continue;
             const productRequest = parseProductRequest(commentMessage);
             if (!productRequest) continue;
             console.info("[shop-messenger] feed product-code comment accepted", {
               postId: value.post_id ?? null,
+              source: change.field === "live_comments" ? "live_comments" : "feed",
               parentComment: Boolean(value.parent_id),
               hasQuantity: productRequest.qty !== null,
               hasPrivateReplyTarget: Boolean(value.comment_id),
