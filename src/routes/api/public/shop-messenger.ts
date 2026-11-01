@@ -11,6 +11,7 @@ import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
+import { handleProductComment, maskFacebookId, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
@@ -63,7 +64,7 @@ async function sendCommentPrivateReply(commentId: string, message: string) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ message }),
   });
-  if (!res.ok) console.error("Facebook comment private reply failed", res.status);
+  if (!res.ok) webhookLog("private reply HTTP failure", { status: res.status });
   return res.ok;
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
@@ -641,9 +642,7 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
   return true;
 }
 
-export const Route = createFileRoute("/api/public/shop-messenger")({
-  server: {
-    handlers: {
+export const messengerHandlers = {
       GET: async ({ request }) => {
         const u = new URL(request.url);
         const expected = envFirst("SHOP_FB_VERIFY_TOKEN", "FB_VERIFY_TOKEN");
@@ -668,6 +667,7 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           console.warn("[shop-messenger] webhook signature rejected", { hasSignature: Boolean(signature), signatureFormatValid, hasAppSecret: Boolean(appSecret) });
           return new Response("Invalid signature", { status: 401 });
         }
+        webhookLog("signature accepted");
         let json: unknown;
         try {
           json = JSON.parse(body);
@@ -684,15 +684,16 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           object: string;
           entry: {
             id: string;
-            changes?: Array<{ field?: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; post_id?: string; parent_id?: string; from?: { id?: string } } }>;
+            changes?: Array<{ field: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; post_id?: string; parent_id?: string; from?: { id?: string } } }>;
             messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[];
           }[];
         };
+        webhookLog("payload parsed", { entries: payload.entry.length });
         if (payload.object !== "page") return new Response("ok");
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
         for (const entry of payload.entry ?? []) {
-          console.info("[shop-messenger] page entry received", { hasMessaging: Boolean(entry.messaging?.length), changes: (entry.changes ?? []).map((change) => change.field ?? "unknown") });
+          webhookLog("entry received", { pageId: maskFacebookId(entry.id), hasMessaging: Boolean(entry.messaging?.length) });
           if (entry.id === "0") {
             console.info("[shop-messenger] feed test notification received");
             continue;
@@ -701,30 +702,35 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
           const shop = configuredShops?.find((candidate) => String(candidate.fb_page_id ?? "").trim() === String(entry.id).trim());
           if (!shop) {
             console.warn("[shop-messenger] no shop configured for page entry", {
-              receivedPageId: entry.id,
-              configuredPageIds: (configuredShops ?? []).map((candidate) => String(candidate.fb_page_id ?? "").trim()).filter(Boolean),
+              receivedPageId: maskFacebookId(entry.id),
+              configuredPageIds: (configuredShops ?? []).map((candidate) => maskFacebookId(String(candidate.fb_page_id ?? ""))).filter(Boolean),
             });
             continue;
           }
+          webhookLog("received Page ID matched", { pageId: maskFacebookId(entry.id) });
           for (const change of entry.changes ?? []) {
-            const value = change.value;
-            const commentMessage = value?.message?.trim();
-            const commenterId = value?.from?.id;
-            if ((change.field !== "feed" && change.field !== "live_comments") || value?.item !== "comment" || value.verb !== "add" || !value.comment_id || !commenterId || commenterId === entry.id || !commentMessage) continue;
-            const productRequest = parseProductRequest(commentMessage);
-            if (!productRequest) continue;
-            console.info("[shop-messenger] feed product-code comment accepted", {
-              postId: value.post_id ?? null,
-              source: change.field === "live_comments" ? "live_comments" : "feed",
-              parentComment: Boolean(value.parent_id),
-              hasQuantity: productRequest.qty !== null,
-              hasPrivateReplyTarget: Boolean(value.comment_id),
-            });
             try {
-              await sendCommentPrivateReply(value.comment_id, "Product Code ကို Messenger မှာ ဆက်ပြီး အော်ဒါတင်နိုင်အောင် message ပို့ထားပါတယ်ရှင်။");
-              await handleText(supabaseAdmin, shop.owner_id, commenterId, commentMessage.slice(0, 1000), origin, shop.messenger_username);
-            } catch (error) {
-              console.error("shop-messenger comment handler error", (error as Error).message);
+              await handleProductComment(change as Parameters<typeof handleProductComment>[0], entry.id, {
+                findActiveProduct: async (code) => {
+                  const { data, error } = await supabaseAdmin.from("products").select("id").eq("owner_id", shop.owner_id).eq("code", code).eq("active", true).maybeSingle();
+                  if (error) throw new Error("product_lookup_failed");
+                  return Boolean(data);
+                },
+                claim: async (commentId) => {
+                  const { error } = await supabaseAdmin.from("messenger_sessions").insert({ owner_id: shop.owner_id, psid: `comment:${commentId}`, state: "comment_claimed", data: {} });
+                  if (error?.code === "23505") return false;
+                  if (error) throw new Error("comment_claim_failed");
+                  return true;
+                },
+                privateReply: sendCommentPrivateReply,
+                complete: async (commentId, status) => {
+                  const { error } = await supabaseAdmin.from("messenger_sessions").update({ state: status, updated_at: new Date().toISOString() }).eq("owner_id", shop.owner_id).eq("psid", `comment:${commentId}`);
+                  if (error) throw new Error("comment_receipt_failed");
+                },
+              });
+            } catch {
+              webhookLog("comment processing failed");
+              return new Response("Temporary processing error", { status: 500 });
             }
           }
           for (const ev of entry.messaging ?? []) {
@@ -736,22 +742,24 @@ export const Route = createFileRoute("/api/public/shop-messenger")({
                 const customerDetailsImageHandled = await handleCustomerDetailsImage(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl, origin, shop.messenger_username);
                 if (!customerDetailsImageHandled) await handlePaymentProof(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl);
               } catch (error) {
-                console.error("shop-messenger image handler error", (error as Error).message);
+                webhookLog("image handler failed");
                 await text(ev.sender.id, "ပုံကို လုပ်ဆောင်မရပါ။ နာမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။");
               }
               continue;
             }
             if (!t) continue;
             try {
+              webhookLog("handleText started");
               await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
+              webhookLog("handleText completed");
             } catch (e) {
-              console.error("shop-messenger handler error", (e as Error).message);
+              webhookLog("handleText failed");
               return new Response("Temporary processing error", { status: 500 });
             }
           }
         }
         return new Response("ok");
       },
-    },
-  },
-});
+};
+
+export const Route = createFileRoute("/api/public/shop-messenger")({ server: { handlers: messengerHandlers } });

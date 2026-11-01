@@ -8,7 +8,6 @@ type Dependencies = {
   claim: (commentId: string) => Promise<boolean>;
   privateReply: (commentId: string, message: string) => Promise<boolean>;
   complete: (commentId: string, status: string) => Promise<void>;
-  handleText: (message: string) => Promise<void>;
 };
 
 // Only feed/item=comment is verified. No guessed Live-specific field.
