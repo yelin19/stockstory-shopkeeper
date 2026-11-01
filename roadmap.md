@@ -1,4 +1,6 @@
 # Messenger webhook
+- [ ] Harden and test real feed-comment processing, exact active-code gate, private-reply gate, persistent deduplication, and safe logs; publish and verify signed live endpoint.
+- [ ] Verify requested Page ID 1435456272977322, Meta configuration, and real Post/Live comment arrival; requires access to real Page comments/Meta settings when unavailable.
 - [x] Confirm synced commit 792ab7e, verify the owner's Facebook Page ID and shared app/webhook database, redeploy, and check the live endpoint: published bundle uses the configured backend; signed no-op POST returns 200; published webhook diagnostics read configuredPageIds [1435456271977322], matching the owner's database row; unsigned POST returns 401; all 78 tests pass.
 - [x] Sync commits d5966b8 (webhook diagnostics) and 813024c (Facebook comment product-code order flow), publish, and verify the live POST endpoint (unsigned/wrong-signature → 401; GET wrong token → 403).
 - [x] Confirm commit 8c80e20 is included, fix shipping release errors, and verify the four order actions and tracking gate (signed-in pending save/read-back plus 15 shipping/Messenger tests).
