@@ -643,7 +643,7 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
 }
 
 export const messengerHandlers = {
-      GET: async ({ request }) => {
+      GET: async ({ request }: { request: Request }) => {
         const u = new URL(request.url);
         const expected = envFirst("SHOP_FB_VERIFY_TOKEN", "FB_VERIFY_TOKEN");
         console.info("[shop-messenger] webhook verification request", { path: u.pathname, hasVerifyToken: Boolean(u.searchParams.get("hub.verify_token")) });
@@ -657,7 +657,7 @@ export const messengerHandlers = {
         }
         return new Response("Forbidden", { status: 403 });
       },
-      POST: async ({ request }) => {
+      POST: async ({ request }: { request: Request }) => {
         const body = await request.text();
         const signature = request.headers.get("x-hub-signature-256");
         console.info("[shop-messenger] webhook POST received", { path: new URL(request.url).pathname, bodyBytes: body.length, hasSignature: Boolean(signature) });
