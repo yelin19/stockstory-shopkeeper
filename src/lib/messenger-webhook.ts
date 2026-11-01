@@ -14,6 +14,15 @@ export const messengerPayloadSchema = z.object({
   object: z.literal("page"),
   entry: z.array(z.object({
     id: facebookId,
+    changes: z.array(z.object({
+      field: z.string().min(1).max(100),
+      value: z.object({
+        item: z.string().max(100).optional(), verb: z.string().max(100).optional(),
+        comment_id: z.string().max(100).optional(),
+        from: z.object({ id: z.string().max(100).optional() }).passthrough().optional(),
+        message: z.string().max(10000).optional(),
+      }).passthrough().optional(),
+    }).passthrough()).max(1000).optional(),
     messaging: z.array(eventSchema).max(1000).optional(),
   }).passthrough()).max(1000),
 }).passthrough();
