@@ -1,6 +1,6 @@
 # Messenger webhook
 - [x] Harden and test feed-comment processing, exact active-code gate, private-reply gate, persistent deduplication, and safe logs: 101 tests passed, compiler/build OK; publish requested. Ordinary Messenger resumes after the customer replies, not from an unverified feed sender ID.
-- [ ] Confirm published release and signed safe endpoint logs.
+- [x] Published code release 1b120f4 confirmed by production logs: signed synthetic feed/status/add POST → 200 with signature accepted, Page matched, and not_added_comment rejection; invalid signature → 401. Remote GitHub main includes changes (ffeda436 observed after documentation update).
 - [ ] Verify requested Page ID 1435456272977322, Meta configuration, and real Post/Live comment arrival; requires access to real Page comments/Meta settings when unavailable.
 - [x] Confirm synced commit 792ab7e, verify the owner's Facebook Page ID and shared app/webhook database, redeploy, and check the live endpoint: published bundle uses the configured backend; signed no-op POST returns 200; published webhook diagnostics read configuredPageIds [1435456271977322], matching the owner's database row; unsigned POST returns 401; all 78 tests pass.
 - [x] Sync commits d5966b8 (webhook diagnostics) and 813024c (Facebook comment product-code order flow), publish, and verify the live POST endpoint (unsigned/wrong-signature → 401; GET wrong token → 403).
@@ -9,7 +9,7 @@
 - [x] Harden signed Messenger requests and preserve database-backed order confirmation.
 - [x] Test verification and invalid requests live; test confirmed-order flow with a mocked database (12 tests passed).
 - [x] Check required Facebook configuration and report activation blockers.
-- [ ] Verify a real Messenger order reads back in admin: blocked by missing SHOP_FB_APP_SECRET and SHOP_FB_PAGE_ACCESS_TOKEN, Facebook Page/PIN configuration, and publication of these changes.
+- [ ] Verify a real Messenger order reads back in admin: requires a real customer Messenger interaction. Signing secret and Page token are now present; production signed safe request succeeds. No genuine customer order was created during this check.
 
 # Android thermal label printing
 - [x] Research existing label layout and Android silent-print options: BLE/GATT can use Web Bluetooth after permission; Classic Bluetooth/USB requires a compatible Android bridge or vendor app. Existing HTML label requests 100×75 mm but can clip long content.
