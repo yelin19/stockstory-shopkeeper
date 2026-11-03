@@ -11,7 +11,7 @@ import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
-import { handleProductComment, maskFacebookId, webhookLog } from "@/lib/messenger-comment.server";
+import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
@@ -56,16 +56,8 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
-async function sendCommentPrivateReply(commentId: string, message: string) {
-  const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
-  if (!token) return false;
-  const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(commentId)}/private_replies?access_token=${encodeURIComponent(token)}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ message }),
-  });
-  if (!res.ok) webhookLog("private reply HTTP failure", { status: res.status });
-  return res.ok;
+async function sendCommentPrivateReply(pageId: string, commentId: string, message: string) {
+  return sendPrivateReply(pageId, commentId, message, envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
@@ -722,7 +714,7 @@ export const messengerHandlers = {
                   if (error) throw new Error("comment_claim_failed");
                   return true;
                 },
-                privateReply: sendCommentPrivateReply,
+                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message),
                 complete: async (commentId, status) => {
                   const { error } = await supabaseAdmin.from("messenger_sessions").update({ state: status, updated_at: new Date().toISOString() }).eq("owner_id", shop.owner_id).eq("psid", `comment:${commentId}`);
                   if (error) throw new Error("comment_receipt_failed");
