@@ -7,7 +7,7 @@ type Dependencies = {
   findActiveProduct: (code: string) => Promise<boolean>;
   claim: (commentId: string) => Promise<boolean>;
   privateReply: (commentId: string, message: string) => Promise<boolean>;
-  complete: (commentId: string, status: string) => Promise<void>;
+  complete: (commentId: string, status: string, pending: { commenterId: string; code: string; qty: number | null }) => Promise<void>;
 };
 
 // Only feed/item=comment is verified. No guessed Live-specific field.
@@ -30,9 +30,13 @@ export async function handleProductComment(change: CommentChange, pageId: string
   if (!(await deps.claim(value.comment_id))) return reject("duplicate_comment");
   // A private reply does not open the ordinary Messenger response window.
   // Ask for a customer reply; never treat feed from.id as a Messenger PSID.
-  const success = await deps.privateReply(value.comment_id, `ဒီပစ္စည်းကို မှာယူရန် Messenger မှာ ${request.code}${request.qty === null ? "" : `=${request.qty}`} လို့ ပြန်ပို့ပေးပါရှင်။`);
+  const success = await deps.privateReply(value.comment_id, "အော်ဒါတင်ရန် Messenger မှာ စာတစ်ကြောင်း ပြန်ပို့ပေးပါရှင်။ Product Code နဲ့ အရေအတွက်ကို သိမ်းထားပြီးသားဖြစ်လို့ ထပ်ရေးရန် မလိုပါ။");
   webhookLog(success ? "private reply success" : "private reply failure", { commentId: maskFacebookId(value.comment_id) });
-  await deps.complete(value.comment_id, success ? "awaiting_messenger_reply" : "private_reply_failed");
+  await deps.complete(value.comment_id, success ? "awaiting_messenger_reply" : "private_reply_failed", {
+    commenterId: value.from.id,
+    code: request.code,
+    qty: request.qty,
+  });
   // handleText is resumed only by a genuine messaging event with a PSID.
   // Calling it here with from.id risks sending to the wrong ID and violates Meta's response window.
 }

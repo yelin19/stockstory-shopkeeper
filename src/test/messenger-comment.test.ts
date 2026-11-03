@@ -19,7 +19,7 @@ describe("production comment gates", () => {
     await handleProductComment(comment(message), page, deps);
     expect(deps.findActiveProduct).toHaveBeenCalledWith("ABC123");
     expect(deps.privateReply).toHaveBeenCalledOnce();
-    expect(deps.complete).toHaveBeenCalledWith("123_456", "awaiting_messenger_reply");
+    expect(deps.complete).toHaveBeenCalledWith("123_456", "awaiting_messenger_reply", { commenterId: "987654", code: "ABC123", qty: message === "ABC123" ? null : 2 });
   });
   it.each(["good", "nice", "ဘယ်လောက်လဲ", "ABC124", "abc123"])("does not reply to %s without an exact active code", async (message) => {
     await handleProductComment(comment(message), page, deps);
@@ -46,7 +46,7 @@ describe("production comment gates", () => {
   it("records failure and never opens a Messenger session after private reply failure", async () => {
     vi.mocked(deps.privateReply).mockResolvedValue(false);
     await handleProductComment(comment(), page, deps);
-    expect(deps.complete).toHaveBeenCalledWith("123_456", "private_reply_failed");
+    expect(deps.complete).toHaveBeenCalledWith("123_456", "private_reply_failed", { commenterId: "987654", code: "ABC123", qty: null });
   });
   it("does not assume a live_comments payload; verified Live feed comments use the same feed gate", async () => {
     await handleProductComment({ ...comment(), field: "live_comments" }, page, deps);

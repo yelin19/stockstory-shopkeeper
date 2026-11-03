@@ -634,6 +634,36 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
   return true;
 }
 
+async function resumePendingCommentOrder(db: Admin, owner: string, psid: string) {
+  const { data: sessions, error } = await db
+    .from("messenger_sessions")
+    .select("psid, data")
+    .eq("owner_id", owner)
+    .eq("state", "awaiting_messenger_reply")
+    .limit(50);
+  if (error) {
+    console.error("Could not look up pending Facebook comment order");
+    return null;
+  }
+
+  const pending = (sessions ?? []).find((row) => {
+    const data = row.data as Record<string, unknown> | null;
+    return data?.commenter_id === psid && typeof data.pending_code === "string" && typeof data.pending_qty === "number";
+  });
+  if (!pending) return null;
+
+  const data = pending.data as Record<string, unknown>;
+  const code = String(data.pending_code);
+  const quantity = Number(data.pending_qty);
+  await db
+    .from("messenger_sessions")
+    .update({ state: "messenger_linked", updated_at: new Date().toISOString() })
+    .eq("owner_id", owner)
+    .eq("psid", pending.psid);
+  webhookLog("comment order resumed in Messenger", { pendingCode: code, quantity });
+  return `${code}=${quantity}`;
+}
+
 export const messengerHandlers = {
       GET: async ({ request }: { request: Request }) => {
         const u = new URL(request.url);
@@ -715,8 +745,16 @@ export const messengerHandlers = {
                   return true;
                 },
                 privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message),
-                complete: async (commentId, status) => {
-                  const { error } = await supabaseAdmin.from("messenger_sessions").update({ state: status, updated_at: new Date().toISOString() }).eq("owner_id", shop.owner_id).eq("psid", `comment:${commentId}`);
+                complete: async (commentId, status, pending) => {
+                  const { error } = await supabaseAdmin.from("messenger_sessions").update({
+                    state: status,
+                    data: status === "awaiting_messenger_reply" ? {
+                      commenter_id: pending.commenterId,
+                      pending_code: pending.code,
+                      pending_qty: pending.qty,
+                    } : {},
+                    updated_at: new Date().toISOString(),
+                  }).eq("owner_id", shop.owner_id).eq("psid", `comment:${commentId}`);
                   if (error) throw new Error("comment_receipt_failed");
                 },
               });
@@ -742,7 +780,8 @@ export const messengerHandlers = {
             if (!t) continue;
             try {
               webhookLog("handleText started");
-              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
+              const resumedCode = await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
+              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, (resumedCode ?? t).slice(0, 1000), origin, shop.messenger_username);
               webhookLog("handleText completed");
             } catch (e) {
               webhookLog("handleText failed");
