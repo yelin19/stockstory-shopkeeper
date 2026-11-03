@@ -29,8 +29,12 @@ export async function handleProductComment(change: CommentChange, pageId: string
   webhookLog("product code accepted", { hasQuantity: request.qty !== null });
   if (!(await deps.claim(value.comment_id))) return reject("duplicate_comment");
   // A private reply does not open the ordinary Messenger response window.
-  // Ask for a customer reply; never treat feed from.id as a Messenger PSID.
-  const success = await deps.privateReply(value.comment_id, "အော်ဒါတင်ရန် Messenger မှာ စာတစ်ကြောင်း ပြန်ပို့ပေးပါရှင်။ Product Code နဲ့ အရေအတွက်ကို သိမ်းထားပြီးသားဖြစ်လို့ ထပ်ရေးရန် မလိုပါ။");
+  // Ask naturally for customer details; the product code and quantity are already saved.
+  const quantityText = request.qty === null ? "" : ` ${request.qty} ခု`;
+  const success = await deps.privateReply(
+    value.comment_id,
+    `ဟုတ်ကဲ့ရှင်။ ${request.code} ပစ္စည်း${quantityText} အော်ဒါတင်ပေးပါမယ်ရှင်။\n\nအမည်၊ ဖုန်းနံပါတ်နဲ့ ပို့ရမယ့်လိပ်စာကို Messenger မှာ ပို့ပေးပါရှင်။`,
+  );
   webhookLog(success ? "private reply success" : "private reply failure", { commentId: maskFacebookId(value.comment_id) });
   await deps.complete(value.comment_id, success ? "awaiting_messenger_reply" : "private_reply_failed", {
     commenterId: value.from.id,
