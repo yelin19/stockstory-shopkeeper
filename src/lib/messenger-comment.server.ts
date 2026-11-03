@@ -36,3 +36,52 @@ export async function handleProductComment(change: CommentChange, pageId: string
   // handleText is resumed only by a genuine messaging event with a PSID.
   // Calling it here with from.id risks sending to the wrong ID and violates Meta's response window.
 }
+// Masks long digit runs (Facebook IDs) and trims Meta error text so logs never carry full IDs.
+const safeMetaText = (value: unknown) =>
+  typeof value === "string" ? value.replace(/\d{5,}/g, (digits) => `***${digits.slice(-4)}`).slice(0, 300) : undefined;
+const safeMetaNumber = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
+
+// Meta official Private Replies format (Messenger Platform):
+// POST https://graph.facebook.com/{version}/{PAGE_ID}/messages
+// body: { recipient: { comment_id }, message: { text } } with a Page access token.
+// The legacy /{comment_id}/private_replies edge is deprecated and returns HTTP 400.
+export const GRAPH_API_VERSION = "v21.0";
+export async function sendPrivateReply(
+  pageId: string,
+  commentId: string,
+  messageText: string,
+  token: string | undefined,
+  fetcher: typeof fetch = fetch,
+) {
+  webhookLog("private reply token check", { tokenPresent: Boolean(token), tokenLength: token?.length ?? 0 });
+  if (!token) return false;
+  const endpoint = `https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(pageId.trim())}/messages`;
+  webhookLog("private reply request", { apiVersion: GRAPH_API_VERSION, endpoint: "/{page_id}/messages", pageId: maskFacebookId(pageId), commentId: maskFacebookId(commentId) });
+  let res: Response;
+  try {
+    res = await fetcher(`${endpoint}?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text: messageText } }),
+    });
+  } catch (error) {
+    webhookLog("private reply network failure", { error: safeMetaText((error as Error)?.message) });
+    return false;
+  }
+  if (res.ok) return true;
+  let metaError: Record<string, unknown> = {};
+  try {
+    const body = (await res.json()) as { error?: Record<string, unknown> };
+    if (body && typeof body.error === "object" && body.error) metaError = body.error;
+  } catch {
+    // Non-JSON body; status alone is logged.
+  }
+  webhookLog("private reply HTTP failure", {
+    status: res.status,
+    code: safeMetaNumber(metaError["code"]),
+    type: safeMetaText(metaError["type"]),
+    subcode: safeMetaNumber(metaError["error_subcode"]),
+    message: safeMetaText(metaError["message"]),
+  });
+  return false;
+}
