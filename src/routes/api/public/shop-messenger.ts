@@ -11,7 +11,7 @@ import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
-import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
+import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog, type QuickReply } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
@@ -56,8 +56,8 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
-async function sendCommentPrivateReply(pageId: string, commentId: string, message: string) {
-  return sendPrivateReply(pageId, commentId, message, envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
+async function sendCommentPrivateReply(pageId: string, commentId: string, message: string, quickReplies?: QuickReply[]) {
+  return sendPrivateReply(pageId, commentId, message, envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"), fetch, quickReplies);
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
@@ -247,8 +247,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
-  const orderConfirmation = (product: { name: string; price: number; unit: string }, quantity: number) =>
-    `မင်္ဂလာပါရှင်။\n\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${fmt(Number(product.price))}\nအရေအတွက်: ${formatQuantity(quantity, product.unit)}\nစုစုပေါင်း: ${fmt(Number(product.price) * quantity)}\n\nလူကြီးမင်း ဒီပစ္စည်းကို မှာယူမှာ သေချာပါသလား။\nမှာယူမယ်ဆို "ဟုတ်" လို့၊ မယူတော့ဘူးဆို "မယူဘူး" လို့ ပြန်ပို့ပေးပါရှင်။`;
+  const orderConfirmation = (psidForReply: string, product: { name: string; price: number; unit: string }, quantity: number) => send(psidForReply, {
+    text: `မင်္ဂလာပါရှင်။\n\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${fmt(Number(product.price))}\nအရေအတွက်: ${formatQuantity(quantity, product.unit)}\nစုစုပေါင်း: ${fmt(Number(product.price) * quantity)}\n\nလူကြီးမင်း ဒီပစ္စည်းကို မှာယူမှာ သေချာပါသလား။`,
+    quick_replies: [
+      { content_type: "text", title: "ဟုတ်", payload: "ဟုတ်" },
+      { content_type: "text", title: "မယူတော့ဘူး", payload: "မယူတော့ဘူး" },
+    ],
+  });
   if (s.state === "order_confirmation") {
     const pending = s.data as { pending_code?: string; pending_qty?: number };
     if (isYes(msg)) {
@@ -350,7 +355,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const { data: confirmationProduct } = await db.from("products").select("name, price, unit").eq("owner_id", owner).eq("code", incoming.code).eq("active", true).maybeSingle();
       if (!confirmationProduct) return text(psid, `Code ${incoming.code} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
       await save({ state: "order_confirmation", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
-      return text(psid, orderConfirmation({ name: String(confirmationProduct.name), price: Number(confirmationProduct.price), unit: String(confirmationProduct.unit ?? "ခု") }, incoming.qty));
+      return orderConfirmation(psid, { name: String(confirmationProduct.name), price: Number(confirmationProduct.price), unit: String(confirmationProduct.unit ?? "ခု") }, incoming.qty);
     }
     if (!data["prepay_allowed"]) {
       const nextData = incoming?.qty ? { pending_code: incoming.code, pending_qty: incoming.qty } : {};
@@ -567,7 +572,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
   if (!skipOrderConfirmation) {
     await save({ state: "order_confirmation", data: { pending_code: p.code, pending_qty: req.qty } });
-    return text(psid, orderConfirmation(p, req.qty));
+    return orderConfirmation(psid, p, req.qty);
   }
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
     if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
@@ -774,7 +779,7 @@ export const messengerHandlers = {
                   if (error) throw new Error("comment_claim_failed");
                   return true;
                 },
-                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message),
+                privateReply: (commentId, message, quickReplies) => sendCommentPrivateReply(entry.id, commentId, message, quickReplies),
                 complete: async (commentId, status, pending) => {
                   const { error } = await supabaseAdmin.from("messenger_sessions").update({
                     state: status,

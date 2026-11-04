@@ -3,10 +3,11 @@ import { parseProductRequest } from "@/lib/messenger-parse";
 export const maskFacebookId = (id: string) => `***${id.trim().slice(-4)}`;
 export const webhookLog = (event: string, details: Record<string, unknown> = {}) => console.info(`[shop-messenger] ${event}`, details);
 export type CommentChange = { field: string; value?: { item?: string; verb?: string; comment_id?: string; from?: { id?: string }; message?: string } };
+export type QuickReply = { content_type: "text"; title: string; payload: string };
 type Dependencies = {
   findActiveProduct: (code: string) => Promise<{ name: string; price: number; unit?: string; priceText?: string; totalText?: string } | null>;
   claim: (commentId: string) => Promise<boolean>;
-  privateReply: (commentId: string, message: string) => Promise<boolean>;
+  privateReply: (commentId: string, message: string, quickReplies?: QuickReply[]) => Promise<boolean>;
   complete: (commentId: string, status: string, pending: { commenterId: string; code: string; qty: number | null }) => Promise<void>;
 };
 
@@ -36,7 +37,11 @@ export async function handleProductComment(change: CommentChange, pageId: string
   const totalText = request.qty === null ? "" : `\n💵 စုစုပေါင်း: ${product.totalText ?? String(Number(product.price) * request.qty)}`;
   const success = await deps.privateReply(
     value.comment_id,
-    `ဟုတ်ကဲ့ရှင်။\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${priceText}\nအရေအတွက်: ${quantityText || "ကြည့်ရန်"}${totalText}\n\nအော်ဒါတင်ရန် အမည်၊ ဖုန်းနံပါတ်နဲ့ ပို့ရမယ့်လိပ်စာကို Messenger မှာ ပို့ပေးပါရှင်။`,
+    `မင်္ဂလာပါရှင်။\n\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${priceText}\nအရေအတွက်: ${quantityText || "ကြည့်ရန်"}${totalText}\n\nလူကြီးမင်း ဒီပစ္စည်းကို မှာယူမှာ သေချာပါသလား။`,
+    [
+      { content_type: "text", title: "ဟုတ်", payload: "ဟုတ်" },
+      { content_type: "text", title: "မယူတော့ဘူး", payload: "မယူတော့ဘူး" },
+    ],
   );
   webhookLog(success ? "private reply success" : "private reply failure", { commentId: maskFacebookId(value.comment_id) });
   await deps.complete(value.comment_id, success ? "awaiting_messenger_reply" : "private_reply_failed", {
@@ -63,6 +68,7 @@ export async function sendPrivateReply(
   messageText: string,
   token: string | undefined,
   fetcher: typeof fetch = fetch,
+  quickReplies?: QuickReply[],
 ) {
   webhookLog("private reply token check", { tokenPresent: Boolean(token), tokenLength: token?.length ?? 0 });
   if (!token) return false;
@@ -73,7 +79,7 @@ export async function sendPrivateReply(
     res = await fetcher(`${endpoint}?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text: messageText } }),
+      body: JSON.stringify({ recipient: { comment_id: commentId }, message: { text: messageText, ...(quickReplies?.length ? { quick_replies: quickReplies } : {}) } }),
     });
   } catch (error) {
     webhookLog("private reply network failure", { error: safeMetaText((error as Error)?.message) });

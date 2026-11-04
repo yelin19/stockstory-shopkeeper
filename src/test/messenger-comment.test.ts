@@ -19,8 +19,13 @@ describe("production comment gates", () => {
     await handleProductComment(comment(message), page, deps);
     expect(deps.findActiveProduct).toHaveBeenCalledWith("ABC123");
     expect(deps.privateReply).toHaveBeenCalledOnce();
-    if (message === "ABC123=2") expect(deps.privateReply).toHaveBeenCalledWith("123_456", expect.stringContaining("ပစ္စည်း: Test Product"));
-    if (message === "ABC123=2") expect(deps.privateReply).toHaveBeenCalledWith("123_456", expect.stringContaining("စုစုပေါင်း: 200 ကျပ်"));
+    if (message === "ABC123=2") {
+      const [commentId, reply, quickReplies] = vi.mocked(deps.privateReply).mock.calls[0]!;
+      expect(commentId).toBe("123_456");
+      expect(reply).toContain("ပစ္စည်း: Test Product");
+      expect(reply).toContain("စုစုပေါင်း: 200 ကျပ်");
+      expect(quickReplies?.map((quickReply) => quickReply.title)).toEqual(["ဟုတ်", "မယူတော့ဘူး"]);
+    }
     expect(deps.complete).toHaveBeenCalledWith("123_456", "awaiting_messenger_reply", { commenterId: "987654", code: "ABC123", qty: message === "ABC123" ? null : 2 });
   });
   it.each(["good", "nice", "ဘယ်လောက်လဲ", "ABC124", "abc123"])("does not reply to %s without an exact active code", async (message) => {
