@@ -258,7 +258,9 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     const pending = s.data as { pending_code?: string; pending_qty?: number };
     if (isYes(msg)) {
       if (!pending.pending_code || !pending.pending_qty) return text(psid, "မှာယူမည့် Product Code နှင့် အရေအတွက် မတွေ့ပါ။ ပြန်ပို့ပေးပါရှင်။");
-      await save({ state: "idle", data: {} });
+      // Keep the confirmed comment code and force prepaid for returned customers.
+      // Do not make the customer type the same Product Code again.
+      await save({ state: "idle", data: { prepay_allowed: true } });
       return handleText(db, owner, psid, `${pending.pending_code}=${pending.pending_qty}`, origin, pageUsername, detailsFromImage, true);
     }
     if (isNo(msg)) {
