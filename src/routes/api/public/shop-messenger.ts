@@ -648,7 +648,7 @@ async function resumePendingCommentOrder(db: Admin, owner: string, psid: string)
 
   const pending = (sessions ?? []).find((row) => {
     const data = row.data as Record<string, unknown> | null;
-    return data?.commenter_id === psid && typeof data["pending_code"] === "string" && typeof data["pending_qty"] === "number";
+    return data?.["commenter_id"] === psid && typeof data["pending_code"] === "string" && typeof data["pending_qty"] === "number";
   });
   if (!pending) return null;
 
