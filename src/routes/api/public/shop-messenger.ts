@@ -683,11 +683,11 @@ async function resumePendingCommentOrder(db: Admin, owner: string, psid: string)
   const quantity = Number(data["pending_qty"]);
   await db
     .from("messenger_sessions")
-    .update({ state: "messenger_linked", updated_at: new Date().toISOString() })
+    .update({ state: "order_confirmation", data: { pending_code: code, pending_qty: quantity }, updated_at: new Date().toISOString() })
     .eq("owner_id", owner)
     .eq("psid", pending.psid);
   webhookLog("comment order resumed in Messenger", { pendingCode: code, quantity });
-  return `${code}=${quantity}`;
+  return true;
 }
 
 export const messengerHandlers = {
@@ -815,8 +815,8 @@ export const messengerHandlers = {
             if (!t) continue;
             try {
               webhookLog("handleText started");
-              const resumedCode = await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
-              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, (resumedCode ?? t).slice(0, 1000), origin, shop.messenger_username);
+              await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
+              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
               webhookLog("handleText completed");
             } catch (e) {
               webhookLog("handleText failed");
