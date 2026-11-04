@@ -9,7 +9,7 @@ const comment = (message = "ABC123", patch = {}): CommentChange => ({ field: "fe
 beforeEach(() => {
   claimed = new Set();
   deps = {
-    findActiveProduct: vi.fn(async (code) => code === "ABC123"),
+    findActiveProduct: vi.fn(async (code) => code === "ABC123" ? { name: "Test Product", price: 100, unit: "ခု", priceText: "100 ကျပ်", totalText: "200 ကျပ်" } : null),
     claim: vi.fn(async (id) => { if (claimed.has(id)) return false; claimed.add(id); return true; }),
     privateReply: vi.fn(async () => true), complete: vi.fn(async () => {}),
   };
@@ -19,6 +19,8 @@ describe("production comment gates", () => {
     await handleProductComment(comment(message), page, deps);
     expect(deps.findActiveProduct).toHaveBeenCalledWith("ABC123");
     expect(deps.privateReply).toHaveBeenCalledOnce();
+    if (message === "ABC123=2") expect(deps.privateReply).toHaveBeenCalledWith("123_456", expect.stringContaining("ပစ္စည်း: Test Product"));
+    if (message === "ABC123=2") expect(deps.privateReply).toHaveBeenCalledWith("123_456", expect.stringContaining("စုစုပေါင်း: 200 ကျပ်"));
     expect(deps.complete).toHaveBeenCalledWith("123_456", "awaiting_messenger_reply", { commenterId: "987654", code: "ABC123", qty: message === "ABC123" ? null : 2 });
   });
   it.each(["good", "nice", "ဘယ်လောက်လဲ", "ABC124", "abc123"])("does not reply to %s without an exact active code", async (message) => {

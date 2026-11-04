@@ -4,7 +4,7 @@ export const maskFacebookId = (id: string) => `***${id.trim().slice(-4)}`;
 export const webhookLog = (event: string, details: Record<string, unknown> = {}) => console.info(`[shop-messenger] ${event}`, details);
 export type CommentChange = { field: string; value?: { item?: string; verb?: string; comment_id?: string; from?: { id?: string }; message?: string } };
 type Dependencies = {
-  findActiveProduct: (code: string) => Promise<boolean>;
+  findActiveProduct: (code: string) => Promise<{ name: string; price: number; unit?: string; priceText?: string; totalText?: string } | null>;
   claim: (commentId: string) => Promise<boolean>;
   privateReply: (commentId: string, message: string) => Promise<boolean>;
   complete: (commentId: string, status: string, pending: { commenterId: string; code: string; qty: number | null }) => Promise<void>;
@@ -25,15 +25,18 @@ export async function handleProductComment(change: CommentChange, pageId: string
   if (!message) return reject("missing_message");
   const request = parseProductRequest(message);
   if (!request) return reject("invalid_product_code");
-  if (!(await deps.findActiveProduct(request.code))) return reject("no_active_product");
+  const product = await deps.findActiveProduct(request.code);
+  if (!product) return reject("no_active_product");
   webhookLog("product code accepted", { hasQuantity: request.qty !== null });
   if (!(await deps.claim(value.comment_id))) return reject("duplicate_comment");
   // A private reply does not open the ordinary Messenger response window.
   // Ask naturally for customer details; the product code and quantity are already saved.
-  const quantityText = request.qty === null ? "" : ` ${request.qty} ခု`;
+  const quantityText = request.qty === null ? "" : ` ${request.qty}${product.unit ?? "ခု"}`;
+  const priceText = product.priceText ?? String(product.price);
+  const totalText = request.qty === null ? "" : `\n💵 စုစုပေါင်း: ${product.totalText ?? String(Number(product.price) * request.qty)}`;
   const success = await deps.privateReply(
     value.comment_id,
-    `ဟုတ်ကဲ့ရှင်။ ${request.code} ပစ္စည်း${quantityText} အော်ဒါတင်ပေးပါမယ်ရှင်။\n\nအမည်၊ ဖုန်းနံပါတ်နဲ့ ပို့ရမယ့်လိပ်စာကို Messenger မှာ ပို့ပေးပါရှင်။`,
+    `ဟုတ်ကဲ့ရှင်။\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${priceText}\nအရေအတွက်: ${quantityText || "ကြည့်ရန်"}${totalText}\n\nအော်ဒါတင်ရန် အမည်၊ ဖုန်းနံပါတ်နဲ့ ပို့ရမယ့်လိပ်စာကို Messenger မှာ ပို့ပေးပါရှင်။`,
   );
   webhookLog(success ? "private reply success" : "private reply failure", { commentId: maskFacebookId(value.comment_id) });
   await deps.complete(value.comment_id, success ? "awaiting_messenger_reply" : "private_reply_failed", {

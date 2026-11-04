@@ -720,7 +720,7 @@ export const messengerHandlers = {
             console.info("[shop-messenger] feed test notification received");
             continue;
           }
-          const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username");
+          const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username, currency");
           const shop = configuredShops?.find((candidate) => String(candidate.fb_page_id ?? "").trim() === String(entry.id).trim());
           if (!shop) {
             console.warn("[shop-messenger] no shop configured for page entry", {
@@ -734,9 +734,18 @@ export const messengerHandlers = {
             try {
               await handleProductComment(change as Parameters<typeof handleProductComment>[0], entry.id, {
                 findActiveProduct: async (code) => {
-                  const { data, error } = await supabaseAdmin.from("products").select("id").eq("owner_id", shop.owner_id).eq("code", code).eq("active", true).maybeSingle();
+                  const { data, error } = await supabaseAdmin.from("products").select("name, price, unit").eq("owner_id", shop.owner_id).eq("code", code).eq("active", true).maybeSingle();
                   if (error) throw new Error("product_lookup_failed");
-                  return Boolean(data);
+                  if (!data) return null;
+                  const request = parseProductRequest(change.value?.message ?? "");
+                  const quantity = request?.qty ?? 0;
+                  return {
+                    name: String(data.name),
+                    price: Number(data.price),
+                    unit: String(data.unit ?? "ခု"),
+                    priceText: formatCurrency(Number(data.price), shop.currency),
+                    totalText: formatCurrency(Number(data.price) * quantity, shop.currency),
+                  };
                 },
                 claim: async (commentId) => {
                   const { error } = await supabaseAdmin.from("messenger_sessions").insert({ owner_id: shop.owner_id, psid: `comment:${commentId}`, state: "comment_claimed", data: {} });
