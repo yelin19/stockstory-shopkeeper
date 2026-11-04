@@ -55,3 +55,22 @@ describe("production comment gates", () => {
     expect(deps.privateReply).toHaveBeenCalledOnce();
   });
 });
+import { sendPrivateReply } from "@/lib/messenger-comment.server";
+describe("sendPrivateReply", () => {
+  it("uses Meta Page messages endpoint with recipient.comment_id", async () => {
+    const f = vi.fn(async () => new Response("{}", { status: 200 }));
+    expect(await sendPrivateReply(page, "123_456", "hi", "tok", f as never)).toBe(true);
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url.startsWith(`https://graph.facebook.com/v21.0/${page}/messages?`)).toBe(true);
+    expect(JSON.parse(String(init.body))).toEqual({ recipient: { comment_id: "123_456" }, message: { text: "hi" } });
+  });
+  it("logs Meta error fields without token", async () => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => {});
+    const f = vi.fn(async () => new Response(JSON.stringify({ error: { message: "bad 1435456272977322", type: "OAuthException", code: 100, error_subcode: 33 } }), { status: 400 }));
+    expect(await sendPrivateReply(page, "123_456", "hi", "secret-token", f as never)).toBe(false);
+    const out = JSON.stringify(log.mock.calls);
+    expect(out).toContain('"code":100'); expect(out).toContain('"subcode":33'); expect(out).toContain('"status":400');
+    expect(out).not.toContain("secret-token"); expect(out).not.toContain("1435456272977322");
+    log.mockRestore();
+  });
+});
