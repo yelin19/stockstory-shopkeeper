@@ -11,7 +11,7 @@ import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
-import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog, type QuickReply } from "@/lib/messenger-comment.server";
+import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
@@ -56,8 +56,8 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
-async function sendCommentPrivateReply(pageId: string, commentId: string, message: string, quickReplies?: QuickReply[]) {
-  return sendPrivateReply(pageId, commentId, message, envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"), fetch, quickReplies);
+async function sendCommentPrivateReply(pageId: string, commentId: string, message: string) {
+  return sendPrivateReply(pageId, commentId, message, envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
@@ -217,7 +217,7 @@ async function handlePaymentReviewAction(
   await text(adminPsid, `❌ Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးပါပြီ။`);
 }
 
-async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null, detailsFromImage = false, skipOrderConfirmation = false) {
+async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null, detailsFromImage = false) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
   const { data: shopCurrency } = await db.from("shop_settings").select("currency,low_stock_alert_pin_hash,low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
@@ -247,26 +247,6 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
-  const orderConfirmation = (psidForReply: string, product: { name: string; price: number; unit: string }, quantity: number) => send(psidForReply, {
-    text: `မင်္ဂလာပါရှင်။\n\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${fmt(Number(product.price))}\nအရေအတွက်: ${formatQuantity(quantity, product.unit)}\nစုစုပေါင်း: ${fmt(Number(product.price) * quantity)}\n\nလူကြီးမင်း ဒီပစ္စည်းကို မှာယူမှာ သေချာပါသလား။`,
-    quick_replies: [
-      { content_type: "text", title: "ဟုတ်", payload: "ဟုတ်" },
-      { content_type: "text", title: "မယူတော့ဘူး", payload: "မယူတော့ဘူး" },
-    ],
-  });
-  if (s.state === "order_confirmation") {
-    const pending = s.data as { pending_code?: string; pending_qty?: number };
-    if (isYes(msg)) {
-      if (!pending.pending_code || !pending.pending_qty) return text(psid, "မှာယူမည့် Product Code နှင့် အရေအတွက် မတွေ့ပါ။ ပြန်ပို့ပေးပါရှင်။");
-      await save({ state: "idle", data: {} });
-      return handleText(db, owner, psid, `${pending.pending_code}=${pending.pending_qty}`, origin, pageUsername, detailsFromImage, true);
-    }
-    if (isNo(msg)) {
-      await save({ state: "idle", data: {} });
-      return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါမတင်တော့ပါ။");
-    }
-    return text(psid, "မှာယူမယ်ဆို \"ဟုတ်\" လို့၊ မယူတော့ဘူးဆို \"မယူဘူး\" လို့ ပြန်ပို့ပေးပါရှင်။");
-  }
   const startPrepaidPayment = async (
     product: { id: string; code: string; name: string; price: number; unit: string },
     quantity: number,
@@ -351,11 +331,9 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
     }
     const incoming = parseProductRequest(msg);
-    if (incoming?.qty && s.state !== "prepay_choice" && !skipOrderConfirmation) {
-      const { data: confirmationProduct } = await db.from("products").select("name, price, unit").eq("owner_id", owner).eq("code", incoming.code).eq("active", true).maybeSingle();
-      if (!confirmationProduct) return text(psid, `Code ${incoming.code} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
-      await save({ state: "order_confirmation", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
-      return orderConfirmation(psid, { name: String(confirmationProduct.name), price: Number(confirmationProduct.price), unit: String(confirmationProduct.unit ?? "ခု") }, incoming.qty);
+    if (incoming?.qty && s.state !== "prepay_choice") {
+      await save({ state: "prepay_choice", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
+      return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
     }
     if (!data["prepay_allowed"]) {
       const nextData = incoming?.qty ? { pending_code: incoming.code, pending_qty: incoming.qty } : {};
@@ -570,10 +548,6 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, `🏪 ${shop?.shop_name ?? "ဈေးဆိုင်"}\n\n${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `လက်ကျန် ${formatQuantity(p.stock, p.unit)}` : "လက်ကျန်ကုန်ပါပြီ"}${p.description ? `\n\n${p.description}` : ""}\n\nအော်ဒါတင်ရန် ${p.code} 1 သို့မဟုတ် ${p.code}=2 ပို့ပါ။`);
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
-  if (!skipOrderConfirmation) {
-    await save({ state: "order_confirmation", data: { pending_code: p.code, pending_qty: req.qty } });
-    return orderConfirmation(psid, p, req.qty);
-  }
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
     if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
     return startPrepaidPayment(p, req.qty);
@@ -683,11 +657,11 @@ async function resumePendingCommentOrder(db: Admin, owner: string, psid: string)
   const quantity = Number(data["pending_qty"]);
   await db
     .from("messenger_sessions")
-    .update({ state: "order_confirmation", data: { pending_code: code, pending_qty: quantity }, updated_at: new Date().toISOString() })
+    .update({ state: "messenger_linked", updated_at: new Date().toISOString() })
     .eq("owner_id", owner)
     .eq("psid", pending.psid);
   webhookLog("comment order resumed in Messenger", { pendingCode: code, quantity });
-  return true;
+  return `${code}=${quantity}`;
 }
 
 export const messengerHandlers = {
@@ -779,7 +753,7 @@ export const messengerHandlers = {
                   if (error) throw new Error("comment_claim_failed");
                   return true;
                 },
-                privateReply: (commentId, message, quickReplies) => sendCommentPrivateReply(entry.id, commentId, message, quickReplies),
+                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message),
                 complete: async (commentId, status, pending) => {
                   const { error } = await supabaseAdmin.from("messenger_sessions").update({
                     state: status,
@@ -815,8 +789,8 @@ export const messengerHandlers = {
             if (!t) continue;
             try {
               webhookLog("handleText started");
-              await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
-              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, t.slice(0, 1000), origin, shop.messenger_username);
+              const resumedCode = await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
+              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, (resumedCode ?? t).slice(0, 1000), origin, shop.messenger_username);
               webhookLog("handleText completed");
             } catch (e) {
               webhookLog("handleText failed");
