@@ -648,13 +648,13 @@ async function resumePendingCommentOrder(db: Admin, owner: string, psid: string)
 
   const pending = (sessions ?? []).find((row) => {
     const data = row.data as Record<string, unknown> | null;
-    return data?.commenter_id === psid && typeof data.pending_code === "string" && typeof data.pending_qty === "number";
+    return data?.commenter_id === psid && typeof data["pending_code"] === "string" && typeof data["pending_qty"] === "number";
   });
   if (!pending) return null;
 
   const data = pending.data as Record<string, unknown>;
-  const code = String(data.pending_code);
-  const quantity = Number(data.pending_qty);
+  const code = String(data["pending_code"]);
+  const quantity = Number(data["pending_qty"]);
   await db
     .from("messenger_sessions")
     .update({ state: "messenger_linked", updated_at: new Date().toISOString() })
