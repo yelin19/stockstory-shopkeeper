@@ -39,9 +39,9 @@ it("skips Page mismatches without private reply or session mutation", async () =
   await messengerHandlers.POST({ request: request({ id: "999", changes: [{ field: "feed", value: { item: "comment", verb: "add", comment_id: "123_456", from: { id: "987" }, message: "ABC123" } }] }) });
   expect(fetch).not.toHaveBeenCalled(); expect(saved).toBeNull();
 });
-it("production Messenger message still runs handleText and saves the quantity draft without inserting orders", async () => {
+it("production Messenger message asks for confirmation before saving an order draft", async () => {
   expect((await messengerHandlers.POST({ request: request({ id: page, messaging: [{ sender: { id: "987" }, message: { text: "ABC123=2" } }] }) })).status).toBe(200);
-  expect(saved).toMatchObject({ psid: "987", data: { code: "ABC123", qty: 2 } });
+  expect(saved).toMatchObject({ psid: "987", state: "order_confirmation", data: { pending_code: "ABC123", pending_qty: 2 } });
   expect(fetch).toHaveBeenCalled(); expect(db.rpc).not.toHaveBeenCalled();
 });
 it("production feed private reply does not misuse from.id as Messenger PSID", async () => {

@@ -217,7 +217,7 @@ async function handlePaymentReviewAction(
   await text(adminPsid, `❌ Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးပါပြီ။`);
 }
 
-async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null, detailsFromImage = false) {
+async function handleText(db: Admin, owner: string, psid: string, msg: string, origin: string, pageUsername?: string | null, detailsFromImage = false, skipOrderConfirmation = false) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s: Session = (existing as Session | null) ?? { owner_id: owner, psid, pin_verified: false, state: "idle", data: {} };
   const { data: shopCurrency } = await db.from("shop_settings").select("currency,low_stock_alert_pin_hash,low_stock_alert_psid").eq("owner_id", owner).maybeSingle();
@@ -247,6 +247,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
+  const orderConfirmation = (product: { name: string; price: number; unit: string }, quantity: number) =>
+    `မင်္ဂလာပါရှင်။\n\nပစ္စည်း: ${product.name}\nတစ်ခုဈေး: ${fmt(Number(product.price))}\nအရေအတွက်: ${formatQuantity(quantity, product.unit)}\nစုစုပေါင်း: ${fmt(Number(product.price) * quantity)}\n\nလူကြီးမင်း ဒီပစ္စည်းကို မှာယူမှာ သေချာပါသလား။\nမှာယူမယ်ဆို "ဟုတ်" လို့၊ မယူတော့ဘူးဆို "မယူဘူး" လို့ ပြန်ပို့ပေးပါရှင်။`;
+  if (s.state === "order_confirmation") {
+    const pending = s.data as { pending_code?: string; pending_qty?: number };
+    if (isYes(msg)) {
+      if (!pending.pending_code || !pending.pending_qty) return text(psid, "မှာယူမည့် Product Code နှင့် အရေအတွက် မတွေ့ပါ။ ပြန်ပို့ပေးပါရှင်။");
+      await save({ state: "idle", data: {} });
+      return handleText(db, owner, psid, `${pending.pending_code}=${pending.pending_qty}`, origin, pageUsername, detailsFromImage, true);
+    }
+    if (isNo(msg)) {
+      await save({ state: "idle", data: {} });
+      return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါမတင်တော့ပါ။");
+    }
+    return text(psid, "မှာယူမယ်ဆို \"ဟုတ်\" လို့၊ မယူတော့ဘူးဆို \"မယူဘူး\" လို့ ပြန်ပို့ပေးပါရှင်။");
+  }
   const startPrepaidPayment = async (
     product: { id: string; code: string; name: string; price: number; unit: string },
     quantity: number,
@@ -331,9 +346,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
     }
     const incoming = parseProductRequest(msg);
-    if (incoming?.qty && s.state !== "prepay_choice") {
-      await save({ state: "prepay_choice", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
-      return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
+    if (incoming?.qty && s.state !== "prepay_choice" && !skipOrderConfirmation) {
+      const { data: confirmationProduct } = await db.from("products").select("name, price, unit").eq("owner_id", owner).eq("code", incoming.code).eq("active", true).maybeSingle();
+      if (!confirmationProduct) return text(psid, `Code ${incoming.code} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
+      await save({ state: "order_confirmation", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
+      return text(psid, orderConfirmation({ name: String(confirmationProduct.name), price: Number(confirmationProduct.price), unit: String(confirmationProduct.unit ?? "ခု") }, incoming.qty));
     }
     if (!data["prepay_allowed"]) {
       const nextData = incoming?.qty ? { pending_code: incoming.code, pending_qty: incoming.qty } : {};
@@ -548,6 +565,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     return text(psid, `🏪 ${shop?.shop_name ?? "ဈေးဆိုင်"}\n\n${p.name}\n💰 တစ်${normalizeProductUnit(p.unit)}ဈေး: ${fmt(Number(p.price))}\n📦 ${p.stock > 0 ? `လက်ကျန် ${formatQuantity(p.stock, p.unit)}` : "လက်ကျန်ကုန်ပါပြီ"}${p.description ? `\n\n${p.description}` : ""}\n\nအော်ဒါတင်ရန် ${p.code} 1 သို့မဟုတ် ${p.code}=2 ပို့ပါ။`);
   }
   if (p.stock < req.qty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
+  if (!skipOrderConfirmation) {
+    await save({ state: "order_confirmation", data: { pending_code: p.code, pending_qty: req.qty } });
+    return text(psid, orderConfirmation(p, req.qty));
+  }
   if ((s.data as Record<string, unknown>)["prepay_allowed"]) {
     if (p.allow_prepaid === false) return text(psid, "ဒီပစ္စည်းအတွက် COD/ကြိုတင်ငွေလွှဲနည်းလမ်းကို ဆိုင်က ဖွင့်မထားပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
     return startPrepaidPayment(p, req.qty);

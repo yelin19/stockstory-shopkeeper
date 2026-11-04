@@ -26,5 +26,5 @@ export function isYes(t: string) {
   return /^(y|yes|ok|confirm|ဟုတ်|ဟုတ်ကဲ့)$/i.test(t.trim());
 }
 export function isNo(t: string) {
-  return /^(n|no|cancel|မလုပ်|မဟုတ်)$/i.test(t.trim());
+  return /^(n|no|cancel|မလုပ်|မဟုတ်|မယူဘူး|မယူတော့ဘူး)$/i.test(t.trim());
 }
