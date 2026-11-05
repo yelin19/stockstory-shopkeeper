@@ -36,6 +36,8 @@ function SettingsPage() {
     currency: s?.currency === "THB" ? "THB" : "MMK",
     fb_page_id: s?.fb_page_id ?? "",
     messenger_username: s?.messenger_username ?? "",
+    fb_page_access_token: "",
+    fb_app_secret: "",
     bank_name: s?.bank_name ?? "",
     bank_account_name: s?.bank_account_name ?? "",
     bank_account_number: s?.bank_account_number ?? "",
@@ -93,6 +95,8 @@ function SettingsPage() {
       sender_phone: f.sender_phone.trim() || null,
       fb_page_id: f.fb_page_id.trim() || null,
       messenger_username: f.messenger_username.trim().replace(/^@/, "") || null,
+      ...(f.fb_page_access_token.trim() ? { fb_page_access_token: f.fb_page_access_token.trim() } : {}),
+      ...(f.fb_app_secret.trim() ? { fb_app_secret: f.fb_app_secret.trim() } : {}),
       bank_name: f.bank_name.trim() || null,
       bank_account_name: f.bank_account_name.trim() || null,
       bank_account_number: f.bank_account_number.trim() || null,
@@ -145,6 +149,9 @@ function SettingsPage() {
         </div>
         <div className="space-y-1"><Label>Facebook Page ID</Label><Input value={f.fb_page_id} onChange={set("fb_page_id")} placeholder="e.g. 1029384756" /></div>
         <div className="space-y-1"><Label>Page username (m.me အော်ဒါခလုတ်အတွက်)</Label><Input value={f.messenger_username} onChange={set("messenger_username")} placeholder="yourshoppage" /></div>
+        <div className="border-t pt-4 text-sm font-semibold">Facebook ချိတ်ဆက်ရန် လျှို့ဝှက်အချက်အလက်</div>
+        <div className="space-y-1"><Label>Facebook Page Access Token</Label><Input type="password" autoComplete="new-password" value={f.fb_page_access_token} onChange={set("fb_page_access_token")} placeholder="အသစ်ထည့်ရန်သာ (မပြပါ)" /><p className="text-xs text-muted-foreground">အသစ်မပြောင်းလိုပါက အလွတ်ထားပါ။ သိမ်းပြီးနောက် Token အပြည့်အစုံကို ပြန်မပြပါ။</p></div>
+        <div className="space-y-1"><Label>Meta App Secret</Label><Input type="password" autoComplete="new-password" value={f.fb_app_secret} onChange={set("fb_app_secret")} placeholder="အသစ်ထည့်ရန်သာ (မပြပါ)" /><p className="text-xs text-muted-foreground">Testing အတွက်သာ အသုံးပြုပါ။ Save လုပ်ပြီးနောက် အပြည့်အစုံကို UI မှာ မပြပါ။</p></div>
         <div className="border-t pt-4 text-sm font-semibold">ကြိုတင်ငွေလွှဲရန် ဘဏ်အချက်အလက်</div>
         <div className="space-y-1"><Label>ဘဏ်အမည်</Label><Input value={f.bank_name} onChange={set("bank_name")} placeholder="ဥပမာ KBZ" /></div>
         <div className="space-y-1"><Label>အကောင့်အမည်</Label><Input value={f.bank_account_name} onChange={set("bank_account_name")} /></div>

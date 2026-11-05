@@ -56,8 +56,8 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
-async function sendCommentPrivateReply(pageId: string, commentId: string, message: string) {
-  return sendPrivateReply(pageId, commentId, message, envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
+async function sendCommentPrivateReply(pageId: string, commentId: string, message: string, pageToken?: string | null) {
+  return sendPrivateReply(pageId, commentId, message, pageToken || envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
@@ -685,7 +685,14 @@ export const messengerHandlers = {
         console.info("[shop-messenger] webhook POST received", { path: new URL(request.url).pathname, bodyBytes: body.length, hasSignature: Boolean(signature) });
         const appSecret = envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET", "FACEBOOK_APP_SECRET", "META_APP_SECRET");
         const signatureFormatValid = Boolean(signature && /^sha256=[a-f0-9]{64}$/.test(signature));
-        if (!(await verifyMessengerSignature(body, signature, appSecret))) {
+        let signatureAccepted = await verifyMessengerSignature(body, signature, appSecret);
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        if (!signatureAccepted && !appSecret) {
+          const { data: credentialRows } = await supabaseAdmin.from("shop_settings").select("fb_app_secret");
+          const configuredSecrets = (credentialRows ?? []).map((row) => row.fb_app_secret).filter((secret): secret is string => typeof secret === "string" && secret.length > 0);
+          signatureAccepted = (await Promise.all(configuredSecrets.map((secret) => verifyMessengerSignature(body, signature, secret)))).some(Boolean);
+        }
+        if (!signatureAccepted) {
           console.warn("[shop-messenger] webhook signature rejected", { hasSignature: Boolean(signature), signatureFormatValid, hasAppSecret: Boolean(appSecret) });
           return new Response("Invalid signature", { status: 401 });
         }
@@ -712,7 +719,6 @@ export const messengerHandlers = {
         };
         webhookLog("payload parsed", { entries: payload.entry.length });
         if (payload.object !== "page") return new Response("ok");
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const origin = new URL(request.url).origin;
         for (const entry of payload.entry ?? []) {
           webhookLog("entry received", { pageId: maskFacebookId(entry.id), hasMessaging: Boolean(entry.messaging?.length) });
@@ -720,7 +726,7 @@ export const messengerHandlers = {
             console.info("[shop-messenger] feed test notification received");
             continue;
           }
-          const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username, currency");
+          const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username, currency, fb_page_access_token, fb_app_secret");
           const shop = configuredShops?.find((candidate) => String(candidate.fb_page_id ?? "").trim() === String(entry.id).trim());
           if (!shop) {
             console.warn("[shop-messenger] no shop configured for page entry", {
@@ -753,7 +759,7 @@ export const messengerHandlers = {
                   if (error) throw new Error("comment_claim_failed");
                   return true;
                 },
-                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message),
+                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message, shop.fb_page_access_token),
                 complete: async (commentId, status, pending) => {
                   const { error } = await supabaseAdmin.from("messenger_sessions").update({
                     state: status,

@@ -92,7 +92,7 @@ export const settingsQuery = queryOptions({
   queryKey: ["settings"],
   queryFn: async () => {
     const { data: u } = await supabase.auth.getUser();
-    const { data, error } = await supabase.from("shop_settings").select("*").eq("owner_id", u.user!.id).maybeSingle();
+    const { data, error } = await supabase.from("shop_settings").select("owner_id,shop_name,pin_hash,fb_page_id,messenger_username,low_stock_threshold,updated_at,currency,sender_name,sender_address,sender_phone,bank_name,bank_account_name,bank_account_number,low_stock_alert_pin_hash,low_stock_alert_psid").eq("owner_id", u.user!.id).maybeSingle();
     if (error) throw error;
     return data;
   },
