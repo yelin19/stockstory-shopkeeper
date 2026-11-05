@@ -565,7 +565,12 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
   const req = parseProductRequest(msg);
-  if (!req) return text(psid, "ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ - 111 2 သို့မဟုတ် 111=2");
+  if (!req) {
+    const conversationalFallback = /စကားပြော|မေးချင်|ပြောလို့|ဟုတ်လား|ဘယ်လို|ဘယ်မှာ|ရှိလား|ရှိပါသလား/i.test(msg)
+      ? "ဟုတ်ကဲ့ရှင်၊ စကားပြောလို့ရပါတယ်။ ဘာပစ္စည်းလေး သိချင်တာလဲရှင်။ ပစ္စည်းအမည် ဒါမှမဟုတ် Code လေးပို့ပေးရင် ဈေးနှုန်းနဲ့ လက်ကျန်စစ်ပေးပါမယ်ရှင်။"
+      : "ဟုတ်ကဲ့ရှင်။ ပစ္စည်းအမည် ဒါမှမဟုတ် Product Code လေးပို့ပေးပါ။ ဈေးနှုန်း၊ လက်ကျန်နဲ့ မှာယူနည်း ပြောပြပေးပါမယ်ရှင်။";
+    return text(psid, conversationalFallback);
+  }
   const { data: exactProduct } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
   let p = exactProduct;
   let correction: string | null = null;
