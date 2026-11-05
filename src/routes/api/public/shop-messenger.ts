@@ -248,6 +248,17 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
   const save = (patch: Partial<Session>) =>
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
+  const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
+  if (isGreeting) {
+    const { data: greetingCatalog } = await db.from("products")
+      .select("code,name,category,unit,price,stock")
+      .eq("owner_id", owner)
+      .eq("active", true)
+      .limit(80);
+    await save({ state: "idle", data: {} });
+    const greetingReply = await generateNaturalShopReply(msg, (greetingCatalog ?? []) as Array<{ code: string; name: string; category?: string | null; unit?: string | null; price?: number | null; stock?: number | null }>);
+    return text(psid, greetingReply ?? "မင်္ဂလာပါရှင်။ ဘာပစ္စည်းလေး ကြည့်ချင်ပါသလဲရှင်။");
+  }
   // Gemini is an optional natural-language layer. Product codes and all existing
   // confirmation/payment/customer flows remain deterministic below.
   if (s.state === "idle" && !parseProductRequest(msg)) {
