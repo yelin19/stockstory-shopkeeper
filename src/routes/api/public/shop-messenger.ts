@@ -268,11 +268,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       .eq("active", true)
       .limit(150);
     const products = (catalog ?? []) as Array<{ code: string; name: string; category?: string | null; unit?: string | null; price?: number | null; stock?: number | null }>;
-    const intent = await understandOrderMessage(msg, products);
+    const normalizedMessage = msg.trim().toLocaleLowerCase();
+    const namedProduct = products
+      .filter((product) => product.name.trim().length >= 2 && normalizedMessage.includes(product.name.trim().toLocaleLowerCase()))
+      .sort((a, b) => b.name.trim().length - a.name.trim().length)[0];
+    const intent = namedProduct ? null : await understandOrderMessage(msg, products);
+    if (namedProduct) {
+      // A product-name question such as “ဖိနပ်ရှိလား” should be treated as a
+      // product lookup, not as an invalid product code.
+      msg = namedProduct.code;
+      webhookLog("Product name lookup accepted", { code: namedProduct.code });
+    }
     if (intent) {
       webhookLog("Gemini order intent accepted", { code: intent.code, quantity: intent.quantity });
       msg = `${intent.code}=${intent.quantity}`;
-    } else {
+    } else if (!namedProduct) {
       const naturalReply = await generateNaturalShopReply(msg, products);
       if (naturalReply) {
         webhookLog("Gemini natural reply sent", {});
