@@ -13,7 +13,7 @@ import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import { matchProductCode } from "@/lib/product-code-match";
 import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
-import { understandOrderMessage } from "@/lib/gemini-order.server";
+import { generateNaturalShopReply, understandOrderMessage } from "@/lib/gemini-order.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -252,14 +252,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   // confirmation/payment/customer flows remain deterministic below.
   if (s.state === "idle" && !parseProductRequest(msg)) {
     const { data: catalog } = await db.from("products")
-      .select("code,name,category,unit")
+      .select("code,name,category,unit,price,stock")
       .eq("owner_id", owner)
       .eq("active", true)
       .limit(150);
-    const intent = await understandOrderMessage(msg, (catalog ?? []) as Array<{ code: string; name: string; category?: string | null; unit?: string | null }>);
+    const products = (catalog ?? []) as Array<{ code: string; name: string; category?: string | null; unit?: string | null; price?: number | null; stock?: number | null }>;
+    const intent = await understandOrderMessage(msg, products);
     if (intent) {
       webhookLog("Gemini order intent accepted", { code: intent.code, quantity: intent.quantity });
       msg = `${intent.code}=${intent.quantity}`;
+    } else {
+      const naturalReply = await generateNaturalShopReply(msg, products);
+      if (naturalReply) {
+        webhookLog("Gemini natural reply sent", {});
+        return text(psid, naturalReply);
+      }
     }
   }
   const startPrepaidPayment = async (
