@@ -13,7 +13,7 @@ type GeminiOrderIntent = {
 };
 
 const apiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-const modelUrl = () => "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const modelUrl = () => "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 function parseJson(text: string): unknown {
   const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
@@ -42,7 +42,10 @@ async function generate(prompt: string): Promise<string | null> {
         generationConfig: { temperature: 0.65, maxOutputTokens: 180 },
       }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error("Gemini reply request failed", response.status);
+      return null;
+    }
     const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     return text || null;
@@ -102,6 +105,7 @@ export async function generateNaturalShopReply(
     "You are a warm Burmese shop assistant chatting naturally with a customer on Facebook Messenger.",
     "Reply in natural, polite Burmese like a real shop owner, not like a robot or a form.",
     "Be concise: 1 to 4 short lines. Use a friendly tone and natural particles such as ရှင် when appropriate.",
+    "Answer ordinary questions helpfully too, even when they are not about products. For unrelated topics, answer briefly and gently invite the customer to ask about the shop when appropriate.",
     "Do not claim an order is placed, do not invent products, prices, stock, delivery promises, or customer details.",
     "If the customer is greeting or asking generally, answer warmly and invite them to ask about a product.",
     "If they ask about a catalog product, use only the catalog facts below and invite them to order with its code.",
