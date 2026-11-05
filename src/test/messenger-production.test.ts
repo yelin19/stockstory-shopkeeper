@@ -35,6 +35,11 @@ it("rejects invalid signatures before database access", async () => {
   expect((await messengerHandlers.POST({ request: request({ id: page }, false) })).status).toBe(401);
   expect(db.from).not.toHaveBeenCalled();
 });
+it("rejects requests without a runtime signing secret before reading shop settings", async () => {
+  for (const name of ["SHOP_FB_APP_SECRET", "FB_APP_SECRET", "FACEBOOK_APP_SECRET", "META_APP_SECRET"]) vi.stubEnv(name, "");
+  expect((await messengerHandlers.POST({ request: request({ id: page }) })).status).toBe(401);
+  expect(db.from).not.toHaveBeenCalled();
+});
 it("skips Page mismatches without private reply or session mutation", async () => {
   await messengerHandlers.POST({ request: request({ id: "999", changes: [{ field: "feed", value: { item: "comment", verb: "add", comment_id: "123_456", from: { id: "987" }, message: "ABC123" } }] }) });
   expect(fetch).not.toHaveBeenCalled(); expect(saved).toBeNull();

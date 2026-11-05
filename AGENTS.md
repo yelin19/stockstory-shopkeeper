@@ -10,6 +10,7 @@
 <!-- LOVABLE:END -->
 
 ## Project rules
+- Facebook credentials use runtime secrets only, never shop_settings columns or admin form inputs; this keeps credentials outside ordinary owner-readable settings and matches the deployed schema.
 - Shipping saves use the authenticated caller's database client and owner scope; server-enforced tracking validation controls Messenger notification and shipping state.
 - Shop admin login uses username + password; usernames map to synthetic `<username>@shop-admin.local` emails (auto-confirm on) — no email is collected.
 - Every shop table is scoped by `owner_id = auth.uid()` RLS; stock changes only via DB functions (`change_stock`, `cancel_order`, `place_order`) so history is always written and stock can't go negative.

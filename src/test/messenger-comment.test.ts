@@ -33,7 +33,7 @@ describe("production comment gates", () => {
     expect(deps.findActiveProduct).not.toHaveBeenCalled();
   });
   it("rejects inactive products", async () => {
-    vi.mocked(deps.findActiveProduct).mockResolvedValue(false);
+    vi.mocked(deps.findActiveProduct).mockResolvedValue(null);
     await handleProductComment(comment(), page, deps);
     expect(deps.privateReply).not.toHaveBeenCalled();
   });

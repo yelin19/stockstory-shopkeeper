@@ -685,18 +685,13 @@ export const messengerHandlers = {
         console.info("[shop-messenger] webhook POST received", { path: new URL(request.url).pathname, bodyBytes: body.length, hasSignature: Boolean(signature) });
         const appSecret = envFirst("SHOP_FB_APP_SECRET", "FB_APP_SECRET", "FACEBOOK_APP_SECRET", "META_APP_SECRET");
         const signatureFormatValid = Boolean(signature && /^sha256=[a-f0-9]{64}$/.test(signature));
-        let signatureAccepted = await verifyMessengerSignature(body, signature, appSecret);
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        if (!signatureAccepted && !appSecret) {
-          const { data: credentialRows } = await supabaseAdmin.from("shop_settings").select("fb_app_secret");
-          const configuredSecrets = (credentialRows ?? []).map((row) => row.fb_app_secret).filter((secret): secret is string => typeof secret === "string" && secret.length > 0);
-          signatureAccepted = (await Promise.all(configuredSecrets.map((secret) => verifyMessengerSignature(body, signature, secret)))).some(Boolean);
-        }
+        const signatureAccepted = await verifyMessengerSignature(body, signature, appSecret);
         if (!signatureAccepted) {
           console.warn("[shop-messenger] webhook signature rejected", { hasSignature: Boolean(signature), signatureFormatValid, hasAppSecret: Boolean(appSecret) });
           return new Response("Invalid signature", { status: 401 });
         }
         webhookLog("signature accepted");
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         let json: unknown;
         try {
           json = JSON.parse(body);
@@ -726,7 +721,7 @@ export const messengerHandlers = {
             console.info("[shop-messenger] feed test notification received");
             continue;
           }
-          const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username, currency, fb_page_access_token, fb_app_secret");
+          const { data: configuredShops } = await supabaseAdmin.from("shop_settings").select("owner_id, fb_page_id, messenger_username, currency");
           const shop = configuredShops?.find((candidate) => String(candidate.fb_page_id ?? "").trim() === String(entry.id).trim());
           if (!shop) {
             console.warn("[shop-messenger] no shop configured for page entry", {
@@ -759,7 +754,7 @@ export const messengerHandlers = {
                   if (error) throw new Error("comment_claim_failed");
                   return true;
                 },
-                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message, shop.fb_page_access_token),
+                privateReply: (commentId, message) => sendCommentPrivateReply(entry.id, commentId, message),
                 complete: async (commentId, status, pending) => {
                   const { error } = await supabaseAdmin.from("messenger_sessions").update({
                     state: status,
