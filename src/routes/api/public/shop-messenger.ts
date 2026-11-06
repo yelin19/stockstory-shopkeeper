@@ -6,7 +6,6 @@ import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
 import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
 import { productPageUrl } from "@/lib/shop-data";
 import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
-import { formatReturnedOrderHistory } from "@/lib/messenger-order-history";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
@@ -355,49 +354,6 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     await save({ state: "ask_customer_details", data });
     return text(psid, `ငွေပေးချေမှု: ${paymentMethodLabel("seller_delivery_cash")}\n${paymentMethodInstruction("seller_delivery_cash")}\n\n${customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။")}`);
   };
-
-  const { data: returnedOrders } = await db.from("orders")
-    .select("public_order_id, product_code, product_name, product_unit, unit_price, quantity, created_at")
-    .eq("owner_id", owner)
-    .eq("psid", psid)
-    .eq("delivery_status", "returned")
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (returnedOrders?.length) {
-    const history = returnedOrders.map(formatReturnedOrderHistory).join("\n\n");
-    const data = s.data as Record<string, unknown>;
-    if (msg.trim() === "PREPAY" || msg.trim() === "ငွေကြိုလွှဲမယ်" || msg.trim() === "ငွေကြိုလွှဲပါမည်") {
-      const pendingCode = typeof data["pending_code"] === "string" ? data["pending_code"] : "";
-      const pendingQty = typeof data["pending_qty"] === "number" ? data["pending_qty"] : null;
-      if (pendingCode && pendingQty) {
-        const { data: p } = await db.from("products").select("*").eq("owner_id", owner).eq("code", pendingCode).eq("active", true).maybeSingle();
-        if (!p) return text(psid, `Code ${pendingCode} ဖြင့် ပစ္စည်းမတွေ့ပါ။`);
-        if (p.stock < pendingQty) return text(psid, p.stock ? `${p.name} အတွက် လက်ကျန် ${formatQuantity(p.stock, p.unit)} သာ ရှိပါသည်။` : `${p.name} လက်ကျန်ကုန်ပါပြီ။`);
-        // A returned delivery overrides per-product payment options: this customer must prepay.
-        if (getProductPaymentFlow(p, { forcePrepaid: true }) === "prepaid") {
-          return startPrepaidPayment(p, pendingQty);
-        }
-        return text(psid, "ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော အော်ဒါရှိပါက အော်ဒါအသစ်ကို ငွေကြိုလွှဲပြီးမှ လက်ခံပါမည်ရှင်။");
-      }
-      await save({ state: "idle", data: { prepay_allowed: true } });
-      return text(psid, "ကြိုတင်ငွေလွှဲစနစ်ကို ရွေးချယ်ပြီးပါပြီ။ ဒီနေ့ အော်ဒါအသစ်အတွက် ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါ။ ဥပမာ 111=2");
-    }
-    if (msg.trim() === "NO_BUY" || msg.trim() === "မဝယ်တော့ပါ") {
-      await save({ state: "idle", data: {} });
-      return text(psid, "ဟုတ်ကဲ့ပါရှင်။ အော်ဒါအသစ် မတင်တော့ပါ။");
-    }
-    const incoming = parseProductRequest(msg);
-    if (incoming?.qty && s.state !== "prepay_choice") {
-      await save({ state: "prepay_choice", data: { pending_code: incoming.code, pending_qty: incoming.qty } });
-      return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
-    }
-    // Only interrupt real order attempts; product questions still get normal answers.
-    if (!data["prepay_allowed"] && incoming?.qty) {
-      const nextData = { pending_code: incoming.code, pending_qty: incoming.qty };
-      await save({ state: "prepay_choice", data: nextData });
-      return paymentChoices(psid, `⚠️ ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Order ဖြစ်ပါသည်။\n\nအရင်ဝယ်ခဲ့ဖူးသောစာရင်း:\n${history}\n\nပို့ဆောင်မှုမအောင်မြင်ခဲ့သောကြောင့် ဤ Messenger အကောင့်ကို အိမ်ရောက်ငွေချေစနစ် မရတော့ပါရှင်။ ငွေကြိုလွှဲမှသာ ပစ္စည်းထပ်မှာယူနိုင်ပါမယ်ရှင်။`);
-    }
-  }
 
   const editOrderId = orderCommand(msg, ["ပြင်", "ပြင်ဆင်", "edit"]);
   const cancelOrderId = orderCommand(msg, ["ဖျက်", "ဖျက်မယ်", "cancel"]);
