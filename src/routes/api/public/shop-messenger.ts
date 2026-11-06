@@ -283,8 +283,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       webhookLog("Gemini order intent accepted", { code: intent.code, quantity: intent.quantity });
       msg = `${intent.code}=${intent.quantity}`;
     } else if (!namedProduct) {
-      const naturalReply = await generateNaturalShopReply(msg, products);
+      const { data: myOrders } = await db.from("orders")
+        .select("public_order_id,product_name,quantity,total,status,payment_status,delivery_status,tracking_number,tracking_url,created_at")
+        .eq("owner_id", owner).eq("psid", psid)
+        .order("created_at", { ascending: false }).limit(5);
+      const { data: described } = await db.from("products").select("code,description").eq("owner_id", owner).eq("active", true).limit(150);
+      const descMap = new Map((described ?? []).map((p) => [p.code, p.description]));
+      const history = Array.isArray((s.data as { chat?: unknown }).chat) ? ((s.data as { chat: Array<{ role: "customer" | "shop"; text: string }> }).chat) : [];
+      const naturalReply = await generateNaturalShopReply(
+        msg,
+        products.map((p) => ({ ...p, description: descMap.get(p.code) ?? null })),
+        (myOrders ?? []) as never,
+        history,
+      );
       if (naturalReply) {
+        await save({ data: { ...s.data, chat: [...history, { role: "customer", text: msg.slice(0, 300) }, { role: "shop", text: naturalReply.slice(0, 300) }].slice(-8) } });
         webhookLog("Gemini natural reply sent", {});
         return text(psid, naturalReply);
       }

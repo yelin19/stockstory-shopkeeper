@@ -5,6 +5,7 @@ type ProductCandidate = {
   unit?: string | null;
   price?: number | null;
   stock?: number | null;
+  description?: string | null;
 };
 
 type GeminiOrderIntent = {
@@ -39,11 +40,11 @@ async function generate(prompt: string): Promise<string | null> {
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.72, maxOutputTokens: 220 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 800, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     if (!response.ok) {
-      console.error("Gemini reply request failed", response.status);
+      console.error("Gemini reply request failed", response.status, (await response.text().catch(() => "")).slice(0, 200));
       return null;
     }
     const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
@@ -88,9 +89,24 @@ export async function understandOrderMessage(
   return { code: product.code, quantity: Number(parsed.quantity) };
 }
 
+export type CustomerOrderFact = {
+  public_order_id: string;
+  product_name: string;
+  quantity: number;
+  total: number;
+  status: string;
+  payment_status: string;
+  delivery_status: string;
+  tracking_number: string | null;
+  tracking_url: string | null;
+  created_at: string;
+};
+
 export async function generateNaturalShopReply(
   message: string,
   products: ProductCandidate[],
+  orders: CustomerOrderFact[] = [],
+  history: Array<{ role: "customer" | "shop"; text: string }> = [],
 ): Promise<string | null> {
   if (!apiKey() || !message.trim()) return null;
   const catalog = products.slice(0, 80).map((product) => ({
@@ -100,6 +116,7 @@ export async function generateNaturalShopReply(
     unit: product.unit ?? "",
     price: product.price ?? null,
     stock: product.stock ?? null,
+    description: product.description ? String(product.description).slice(0, 200) : "",
   }));
   const prompt = [
     "You are the friendly Burmese-speaking owner of a small Facebook shop, chatting with one customer in Messenger.",
@@ -115,8 +132,12 @@ export async function generateNaturalShopReply(
     "For general questions unrelated to products, answer helpfully and briefly. If the question is unclear, ask a natural clarification instead of replying with a product-code instruction.",
     "If the customer clearly wants to buy, do not claim that an order has been placed. Ask for the product code and quantity so the shop's order flow can continue.",
     "Never invent prices, stock, delivery dates, payment status, order status, customer details, or promises. Never say you checked something that is not present in the catalog facts.",
+    "If the customer asks about their order (status, payment, delivery, tracking), answer using ONLY the 'Customer's own orders' facts below: order ID, item, total, payment status, delivery status, and tracking number/link if present. If there are no orders listed, say you cannot find an order from this Messenger account and ask for the order ID.",
+    "Sell like a helpful human salesperson: recommend matching in-stock items, mention benefits from the product description, and gently invite the customer to order by sending the product code and quantity (for example: CODE 2). Never pressure.",
     "Do not repeat the same phrase mechanically. Do not begin every reply with 'ဟုတ်ကဲ့ရှင်'. Do not tell the customer to send a code unless the customer is actually asking to buy or the product code is needed to continue an order.",
     `Catalog facts: ${JSON.stringify(catalog)}`,
+    `Customer's own orders (newest first): ${JSON.stringify(orders.slice(0, 5))}`,
+    `Recent conversation: ${JSON.stringify(history.slice(-8))}`,
     `Customer message: ${JSON.stringify(message)}`,
   ].join("\n");
   return generate(prompt);
