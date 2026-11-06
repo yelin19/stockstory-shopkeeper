@@ -13,7 +13,7 @@ type GeminiOrderIntent = {
   quantity: number;
 };
 
-const apiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const apiKey = () => process.env["GEMINI_API_KEY"] || process.env["GOOGLE_API_KEY"];
 const modelUrl = () => "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 function parseJson(text: string): unknown {
