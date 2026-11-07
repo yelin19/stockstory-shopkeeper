@@ -66,6 +66,20 @@ const rememberChatMessage = async (db: Admin, owner: string, psid: string, role:
   });
   if (error) console.error("Could not save Messenger chat history", error.message);
 };
+const claimMessengerEvent = async (db: Admin, owner: string, eventId: string) => {
+  if (!eventId) return true;
+  const { error } = await db.from("messenger_event_receipts").insert({ owner_id: owner, event_id: eventId });
+  if (error?.code === "42P01" || error?.code === "PGRST205") {
+    console.error("Messenger event deduplication table is not migrated yet");
+    return true;
+  }
+  if (error?.code === "23505") {
+    webhookLog("duplicate Messenger event skipped", {});
+    return false;
+  }
+  if (error) throw new Error("messenger_event_claim_failed");
+  return true;
+};
 const isDeterministicProductRequest = (message: string) => {
   const parsed = parseProductRequest(message);
   if (!parsed) return false;
@@ -765,7 +779,7 @@ export const messengerHandlers = {
           entry: {
             id: string;
             changes?: Array<{ field: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; post_id?: string; parent_id?: string; from?: { id?: string } } }>;
-            messaging?: { sender: { id: string }; message?: { text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[];
+            messaging?: { sender: { id: string }; message?: { mid?: string; text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[];
           }[];
         };
         webhookLog("payload parsed", { entries: payload.entry.length });
@@ -830,7 +844,8 @@ export const messengerHandlers = {
             }
           }
           for (const ev of entry.messaging ?? []) {
-            const message = ev.message as unknown as { is_echo?: boolean; text?: string; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> } | undefined;
+            const message = ev.message as unknown as { mid?: string; is_echo?: boolean; text?: string; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> } | undefined;
+            if (message?.mid && !(await claimMessengerEvent(supabaseAdmin, shop.owner_id, message.mid))) continue;
             const t = message?.is_echo ? undefined : (message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
             const imageUrl = message?.attachments?.find((a) => a.type === "image")?.payload?.url;
             if (imageUrl) {
