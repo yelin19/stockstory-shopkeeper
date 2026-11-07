@@ -38,6 +38,54 @@ export type Database = {
         }
         Relationships: []
       }
+      messenger_chat_messages: {
+        Row: {
+          context: Json
+          created_at: string
+          id: number
+          message: string
+          owner_id: string
+          psid: string
+          role: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          id?: number
+          message: string
+          owner_id: string
+          psid: string
+          role: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          id?: number
+          message?: string
+          owner_id?: string
+          psid?: string
+          role?: string
+        }
+        Relationships: []
+      }
+      messenger_event_receipts: {
+        Row: {
+          created_at: string
+          event_id: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
       messenger_sessions: {
         Row: {
           data: Json
