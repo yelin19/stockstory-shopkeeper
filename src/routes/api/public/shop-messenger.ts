@@ -325,7 +325,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     const namedProduct = products
       .filter((product) => product.name.trim().length >= 2 && normalizedMessage.includes(product.name.trim().toLocaleLowerCase()))
       .sort((a, b) => b.name.trim().length - a.name.trim().length)[0];
-    const intent = namedProduct ? null : await understandOrderMessage(msg, products);
+    const likelyOrderIntent = /မှာ|ယူ|ဝယ်|အော်ဒါ|order|buy|လိုချင်/i.test(msg) || /[0-9၀-၉]/.test(msg);
+    // General questions should use one conversational request only. Calling
+    // the intent extractor first for every message consumes the free quota twice.
+    const intent = namedProduct || !likelyOrderIntent ? null : await understandOrderMessage(msg, products);
     if (namedProduct) {
       // A product-name question such as “ဖိနပ်ရှိလား” should be treated as a
       // product lookup, not as an invalid product code.
