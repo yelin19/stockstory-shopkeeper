@@ -596,9 +596,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   // fall through as a fake product code while the AI layer is unavailable.
   const req = isDeterministicProductRequest(msg) ? parseProductRequest(msg) : null;
   if (!req) {
+    const customerQuestion = msg.trim().replace(/\s+/g, " ").slice(0, 120);
     const conversationalFallback = /စကားပြော|မေးချင်|ပြောလို့|ဟုတ်လား|ဘယ်လို|ဘယ်မှာ|ရှိလား|ရှိပါသလား/i.test(msg)
-      ? "ဟုတ်ကဲ့ရှင်၊ စကားပြောလို့ရပါတယ်။ အခုခဏ စာပြန်စနစ် အလုပ်များနေလို့ မေးထားတာကို ပြန်စစ်ပြီး ဆက်ပြောပေးပါမယ်ရှင်။"
-      : "ဟုတ်ကဲ့ရှင်။ မေးထားတာကို နားလည်အောင် စစ်နေပါတယ်။ ခဏလေးနေရင် ထပ်ပို့ပေးပါရှင်။";
+      ? `ဟုတ်ကဲ့ရှင်။ “${customerQuestion}” လို့ မေးထားတာကို လက်ခံရရှိပါတယ်။ အခုခဏ စာပြန်စနစ် အလုပ်များနေလို့ ခဏနေရင် ထပ်မေးပေးပါရှင်။`
+      : `ဟုတ်ကဲ့ရှင်။ “${customerQuestion}” ဆိုတဲ့စာကို ရရှိပါတယ်။ အဖြေအပြည့်အစုံ ပြန်စစ်နေပါတယ်ရှင်။`;
     return text(psid, conversationalFallback);
   }
   const { data: exactProduct } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
