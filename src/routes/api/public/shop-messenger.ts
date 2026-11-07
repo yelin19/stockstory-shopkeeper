@@ -53,7 +53,10 @@ const loadChatHistory = async (db: Admin, owner: string, psid: string): Promise<
     .eq("psid", psid)
     .order("created_at", { ascending: false })
     .limit(20);
-  if (error) return [];
+  if (error) {
+    console.error("Could not load Messenger chat history", error.code, error.message);
+    return [];
+  }
   return (data ?? []).reverse().map((row) => ({
     role: row.role === "shop" ? "shop" : "customer",
     text: String(row.message ?? "").slice(0, 500),
@@ -293,6 +296,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
   await rememberChatMessage(db, owner, psid, "customer", msg);
   const persistentHistory = await loadChatHistory(db, owner, psid);
+  const sessionHistory = Array.isArray((s.data as { chat?: unknown }).chat)
+    ? ((s.data as { chat: ChatMessage[] }).chat).slice(-20)
+    : [];
+  const chatHistory = persistentHistory.length > 0 ? persistentHistory : sessionHistory;
   const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
   if (isGreeting) {
     const { data: greetingCatalog } = await db.from("products")
@@ -301,7 +308,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       .eq("active", true)
       .limit(80);
     await save({ state: "idle", data: {} });
-    const greetingReply = await generateNaturalShopReply(msg, (greetingCatalog ?? []) as Array<{ code: string; name: string; category?: string | null; unit?: string | null; price?: number | null; stock?: number | null }>, [], persistentHistory);
+    const greetingReply = await generateNaturalShopReply(msg, (greetingCatalog ?? []) as Array<{ code: string; name: string; category?: string | null; unit?: string | null; price?: number | null; stock?: number | null }>, [], chatHistory);
     if (greetingReply) await rememberChatMessage(db, owner, psid, "shop", greetingReply);
     return text(psid, greetingReply ?? "မင်္ဂလာပါရှင်။ ဘာပစ္စည်းလေး ကြည့်ချင်ပါသလဲရှင်။");
   }
@@ -335,9 +342,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         .order("created_at", { ascending: false }).limit(5);
       const { data: described } = await db.from("products").select("code,description").eq("owner_id", owner).eq("active", true).limit(150);
       const descMap = new Map((described ?? []).map((p) => [p.code, p.description]));
-      const history = persistentHistory.length > 0
-        ? persistentHistory
-        : (Array.isArray((s.data as { chat?: unknown }).chat) ? ((s.data as { chat: ChatMessage[] }).chat) : []);
+      const history = chatHistory;
       const naturalReply = await generateNaturalShopReply(
         msg,
         products.map((p) => ({ ...p, description: descMap.get(p.code) ?? null })),
