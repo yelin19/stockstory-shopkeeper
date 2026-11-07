@@ -14,7 +14,7 @@ type GeminiOrderIntent = {
 };
 
 const apiKey = () => process.env["GEMINI_API_KEY"] || process.env["GOOGLE_API_KEY"];
-const modelUrl = () => "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const modelUrl = () => "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 
 function parseJson(text: string): unknown {
   const cleaned = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
