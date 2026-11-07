@@ -66,6 +66,14 @@ const rememberChatMessage = async (db: Admin, owner: string, psid: string, role:
   });
   if (error) console.error("Could not save Messenger chat history", error.message);
 };
+const isDeterministicProductRequest = (message: string) => {
+  const parsed = parseProductRequest(message);
+  if (!parsed) return false;
+  // A quantity makes the customer’s intent explicit. Without a quantity,
+  // accept only code-shaped text; Burmese sentences such as “ဖုန်းရောင်းလား”
+  // must go through Gemini’s conversational/product-question layer.
+  return parsed.qty !== null || /^[A-Za-z0-9_-]{1,32}$/.test(parsed.code);
+};
 
 async function send(psid: string, message: Record<string, unknown>) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
@@ -285,7 +293,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
   // Gemini is an optional natural-language layer. Product codes and all existing
   // confirmation/payment/customer flows remain deterministic below.
-  if (s.state === "idle" && !parseProductRequest(msg)) {
+  if (s.state === "idle" && !isDeterministicProductRequest(msg)) {
     const { data: catalog } = await db.from("products")
       .select("code,name,category,unit,price,stock")
       .eq("owner_id", owner)
