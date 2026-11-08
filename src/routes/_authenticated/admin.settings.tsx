@@ -77,7 +77,7 @@ function SettingsPage() {
     const answer = botAnswer.trim();
     if (!question || !answer) return void toast.error("မေးခွန်းနဲ့ အဖြေ နှစ်ခုလုံး ဖြည့်ပါ");
     setSavingBotReply(true);
-    const quick_replies = botChoices.split(/[|\n]/).map((choice) => choice.trim()).filter(Boolean).slice(0, 3);
+    const quick_replies = botChoices.split(/[|၊။\n]/).map((choice) => choice.trim()).filter(Boolean).slice(0, 3);
     const { data, error } = await supabase.from("bot_replies").insert({ owner_id: user.id, question, answer, enabled: true, quick_replies }).select("id,question,answer,enabled,quick_replies").single();
     setSavingBotReply(false);
     if (error) return void toast.error(error.code === "PGRST205" ? "Database migration 0024 ကို အရင်အသုံးချပါ" : error.code === "PGRST204" ? "Quick Reply Button များအတွက် Database migration 0025 ကို အရင်အသုံးချပါ" : error.message);
@@ -219,7 +219,7 @@ function SettingsPage() {
         <div className="space-y-2 rounded-xl border p-4">
           <div className="space-y-1"><Label>မေးခွန်း</Label><Input value={botQuestion} onChange={(e) => setBotQuestion(e.target.value)} placeholder="ဥပမာ — နေကောင်းလား" /></div>
           <div className="space-y-1"><Label>အဖြေ</Label><Input value={botAnswer} onChange={(e) => setBotAnswer(e.target.value)} placeholder="ဥပမာ — ကောင်းပါတယ်ရှင်၊ လူကြီးမင်းကော နေကောင်းလား" /></div>
-          <div className="space-y-1"><Label>Customer နှိပ်ရွေးမည့်စာများ (အများဆုံး ၃ ခု)</Label><Input value={botChoices} onChange={(e) => setBotChoices(e.target.value)} placeholder="ငွေကြိုလွှဲမယ် | အိမ်ရောက်ငွေချေ | မဝယ်တော့ဘူး" /><p className="text-xs text-muted-foreground">ရွေးချယ်စရာတစ်ခုချင်းစီကို | သို့မဟုတ် စာကြောင်းအသစ်ဖြင့် ခွဲရေးပါ။ Messenger တွင် Button အဖြစ် ပေါ်ပါမည်။</p></div>
+          <div className="space-y-1"><Label>Customer နှိပ်ရွေးမည့်စာများ (အများဆုံး ၃ ခု)</Label><Input value={botChoices} onChange={(e) => setBotChoices(e.target.value)} placeholder="ငွေကြိုလွှဲမယ်၊ အိမ်ရောက်ငွေချေ၊ မဝယ်တော့ဘူး" /><p className="text-xs text-muted-foreground">ရွေးချယ်စရာတစ်ခုချင်းစီကို ၊ သို့မဟုတ် ။ သို့မဟုတ် စာကြောင်းအသစ်ဖြင့် ခွဲရေးပါ။ Messenger တွင် Button အဖြစ် ပေါ်ပါမည်။</p></div>
           <Button type="button" onClick={() => void saveBotReply()} disabled={savingBotReply}>{savingBotReply ? "သိမ်းနေသည်..." : "သိမ်းမည်"}</Button>
         </div>
         <div className="space-y-3">
@@ -227,7 +227,7 @@ function SettingsPage() {
             <div key={row.id} className="space-y-2 rounded-xl border p-4">
               <div className="space-y-1"><Label>မေး</Label><Input value={row.question} onChange={(e) => setBotReplies((rows) => rows.map((item) => item.id === row.id ? { ...item, question: e.target.value } : item))} /></div>
               <div className="space-y-1"><Label>အဖြေ</Label><Input value={row.answer} onChange={(e) => setBotReplies((rows) => rows.map((item) => item.id === row.id ? { ...item, answer: e.target.value } : item))} /></div>
-              <div className="space-y-1"><Label>ရွေးချယ်စရာများ (အများဆုံး ၃ ခု)</Label><Input value={row.quick_replies.join(" | ")} onChange={(e) => setBotReplies((rows) => rows.map((item) => item.id === row.id ? { ...item, quick_replies: e.target.value.split("|").map((choice) => choice.trim()).filter(Boolean).slice(0, 3) } : item))} placeholder="ငွေကြိုလွှဲမယ် | အိမ်ရောက်ငွေချေ | မဝယ်တော့ဘူး" /></div>
+              <div className="space-y-1"><Label>ရွေးချယ်စရာများ (အများဆုံး ၃ ခု)</Label><Input value={row.quick_replies.join("၊ ")} onChange={(e) => setBotReplies((rows) => rows.map((item) => item.id === row.id ? { ...item, quick_replies: e.target.value.split(/[|၊။\n]/).map((choice) => choice.trim()).filter(Boolean).slice(0, 3) } : item))} placeholder="ငွေကြိုလွှဲမယ်၊ အိမ်ရောက်ငွေချေ၊ မဝယ်တော့ဘူး" /></div>
               <div className="flex gap-2"><Button type="button" size="sm" onClick={() => void updateBotReply(row)}>ပြင်ပြီးသိမ်းမည်</Button><Button type="button" size="sm" variant="outline" onClick={() => void deleteBotReply(row.id)}>ဖျက်မည်</Button></div>
             </div>
           ))}
