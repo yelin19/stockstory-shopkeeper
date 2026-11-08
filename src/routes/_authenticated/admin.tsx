@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { BarChart3, Package, ShoppingBag, MapPin, History, Settings, LogOut } from "lucide-react";
+import { BarChart3, Package, ShoppingBag, MapPin, History, Settings, MessageCircle, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { settingsQuery } from "@/lib/shop-data";
@@ -25,6 +25,7 @@ const nav = [
   { to: "/admin/orders", label: "အော်ဒါများ", icon: ShoppingBag },
   { to: "/admin/addresses", label: "ပို့ပြီးသော Order များ", icon: MapPin },
   { to: "/admin/stock", label: "လက်ကျန်မှတ်တမ်း", icon: History },
+  { to: "/admin/bot", label: "Bot စကားပြော ထည့်သွင်းရန်", icon: MessageCircle },
   { to: "/admin/settings", label: "ဆက်တင်များနှင့် Messenger", icon: Settings },
 ] as const;
 

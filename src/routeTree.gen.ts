@@ -16,6 +16,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as ShopCodeRouteImport } from './routes/shop.$code'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAddressesRouteImport } from './routes/_authenticated/admin.addresses'
+import { Route as AuthenticatedAdminBotRouteImport } from './routes/_authenticated/admin.bot'
 import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenticated/admin.orders'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
@@ -61,6 +62,11 @@ const AuthenticatedAdminAddressesRoute =
     path: '/addresses',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminBotRoute = AuthenticatedAdminBotRouteImport.update({
+  id: '/bot',
+  path: '/bot',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const AuthenticatedAdminOrdersRoute =
   AuthenticatedAdminOrdersRouteImport.update({
     id: '/orders',
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/shop/$code': typeof ShopCodeRoute
   '/admin/addresses': typeof AuthenticatedAdminAddressesRoute
+  '/admin/bot': typeof AuthenticatedAdminBotRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/shop/$code': typeof ShopCodeRoute
   '/admin/addresses': typeof AuthenticatedAdminAddressesRoute
+  '/admin/bot': typeof AuthenticatedAdminBotRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/shop/$code': typeof ShopCodeRoute
   '/_authenticated/admin/addresses': typeof AuthenticatedAdminAddressesRoute
+  '/_authenticated/admin/bot': typeof AuthenticatedAdminBotRoute
   '/_authenticated/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/shop/$code'
     | '/admin/addresses'
+    | '/admin/bot'
     | '/admin/orders'
     | '/admin/products'
     | '/admin/settings'
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/shop/$code'
     | '/admin/addresses'
+    | '/admin/bot'
     | '/admin/orders'
     | '/admin/products'
     | '/admin/settings'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/shop/$code'
     | '/_authenticated/admin/addresses'
+    | '/_authenticated/admin/bot'
     | '/_authenticated/admin/orders'
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/settings'
@@ -280,6 +292,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAddressesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/bot': {
+      id: '/_authenticated/admin/bot'
+      path: '/bot'
+      fullPath: '/admin/bot'
+      preLoaderRoute: typeof AuthenticatedAdminBotRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/orders': {
       id: '/_authenticated/admin/orders'
       path: '/orders'
@@ -348,6 +367,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAddressesRoute: typeof AuthenticatedAdminAddressesRoute
+  AuthenticatedAdminBotRoute: typeof AuthenticatedAdminBotRoute
   AuthenticatedAdminOrdersRoute: typeof AuthenticatedAdminOrdersRoute
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
@@ -357,6 +377,7 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAddressesRoute: AuthenticatedAdminAddressesRoute,
+  AuthenticatedAdminBotRoute: AuthenticatedAdminBotRoute,
   AuthenticatedAdminOrdersRoute: AuthenticatedAdminOrdersRoute,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
