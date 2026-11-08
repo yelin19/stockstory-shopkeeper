@@ -88,7 +88,10 @@ const findSavedBotReply = async (db: Admin, owner: string, message: string) => {
   const normalized = normalizeBotText(message);
   const match = (data ?? []).find((row) => normalizeBotText(String(row.question ?? "")) === normalized);
   if (!match) return null;
-  const quickReplies = Array.isArray(match.quick_replies) ? match.quick_replies
+  const rawQuickReplies = typeof match.quick_replies === "string"
+    ? (() => { try { return JSON.parse(match.quick_replies); } catch { return []; } })()
+    : match.quick_replies;
+  const quickReplies = Array.isArray(rawQuickReplies) ? rawQuickReplies
     .filter((choice): choice is { title?: unknown; payload?: unknown } => Boolean(choice && typeof choice === "object"))
     .map((choice) => ({ title: String(choice.title ?? "").trim(), payload: String(choice.payload ?? choice.title ?? "").trim() }))
     .filter((choice) => choice.title && choice.payload).slice(0, 3) : [];
@@ -126,7 +129,7 @@ async function send(psid: string, message: Record<string, unknown>) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ recipient: { id: psid }, messaging_type: "RESPONSE", message }),
   });
-  if (!res.ok) console.error("Messenger send failed", res.status);
+  if (!res.ok) console.error("Messenger send failed", res.status, (await res.text().catch(() => "")).slice(0, 500));
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
 type SavedBotReply = { answer: string; quickReplies: Array<{ title: string; payload: string }> };
@@ -339,7 +342,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     const savedBotReply = await findSavedBotReply(db, owner, msg);
     if (savedBotReply) {
       await rememberChatMessage(db, owner, psid, "shop", savedBotReply.answer);
-      webhookLog("saved bot reply sent", {});
+      webhookLog("saved bot reply sent", { quickReplyCount: savedBotReply.quickReplies.length });
       return sendSavedBotReply(psid, savedBotReply);
     }
   }
