@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { settingsQuery } from "@/lib/shop-data";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataCleanupSection } from "@/components/DataCleanupSection";
+
+type BotReply = { id: string; question: string; answer: string; enabled: boolean };
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
   head: () => ({ meta: [
@@ -42,9 +44,55 @@ function SettingsPage() {
     low_stock_threshold: String(s?.low_stock_threshold ?? 5),
   });
   const [alertPin, setAlertPin] = useState("");
+  const [botReplies, setBotReplies] = useState<BotReply[]>([]);
+  const [botQuestion, setBotQuestion] = useState("");
+  const [botAnswer, setBotAnswer] = useState("");
+  const [loadingBotReplies, setLoadingBotReplies] = useState(true);
+  const [savingBotReply, setSavingBotReply] = useState(false);
   const [savingAlertPin, setSavingAlertPin] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
   const webhook = typeof window !== "undefined" ? `${window.location.origin}/api/public/shop-messenger` : "";
+
+  useEffect(() => {
+    let active = true;
+    void supabase.from("bot_replies").select("id,question,answer,enabled").order("created_at", { ascending: true }).then(({ data, error }) => {
+      if (!active) return;
+      if (error) toast.error("Bot စကားပြောစာရင်းကို ဖတ်မရပါ။ Migration 0024 ကို အရင်အသုံးချပါ။");
+      setBotReplies((data ?? []) as BotReply[]);
+      setLoadingBotReplies(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  async function saveBotReply() {
+    const question = botQuestion.trim();
+    const answer = botAnswer.trim();
+    if (!question || !answer) return void toast.error("မေးခွန်းနဲ့ အဖြေ နှစ်ခုလုံး ဖြည့်ပါ");
+    setSavingBotReply(true);
+    const { data, error } = await supabase.from("bot_replies").insert({ owner_id: user.id, question, answer, enabled: true }).select("id,question,answer,enabled").single();
+    setSavingBotReply(false);
+    if (error) return void toast.error(error.code === "PGRST205" ? "Database migration 0024 ကို အရင်အသုံးချပါ" : error.message);
+    setBotReplies((rows) => [...rows, data as BotReply]);
+    setBotQuestion("");
+    setBotAnswer("");
+    toast.success("Bot မေးခွန်း/အဖြေ သိမ်းပြီးပါပြီ");
+  }
+
+  async function updateBotReply(row: BotReply) {
+    const question = row.question.trim();
+    const answer = row.answer.trim();
+    if (!question || !answer) return void toast.error("မေးခွန်းနဲ့ အဖြေ အလွတ်မထားပါနဲ့");
+    const { error } = await supabase.from("bot_replies").update({ question, answer, updated_at: new Date().toISOString() }).eq("id", row.id);
+    if (error) return void toast.error(error.message);
+    toast.success("Bot အဖြေ ပြင်ပြီးပါပြီ");
+  }
+
+  async function deleteBotReply(id: string) {
+    const { error } = await supabase.from("bot_replies").delete().eq("id", id);
+    if (error) return void toast.error(error.message);
+    setBotReplies((rows) => rows.filter((row) => row.id !== id));
+    toast.success("Bot မေးခွန်း/အဖြေ ဖျက်ပြီးပါပြီ");
+  }
 
   async function refreshConnectionStatus() {
     setRefreshingStatus(true);
@@ -152,6 +200,26 @@ function SettingsPage() {
         <div className="space-y-1"><Label>လက်ကျန်နည်းကြောင်း သတိပေးမည့်အရေအတွက်</Label><Input type="number" min="0" value={f.low_stock_threshold} onChange={set("low_stock_threshold")} /><p className="text-xs text-muted-foreground">ပစ္စည်းတစ်ခုချင်းစီ၏ သတ်မှတ်ထားသော အရေအတွက်ယူနစ်အလိုက် တွက်ပါမည်။</p></div>
         <Button>ဆက်တင်များ သိမ်းမည်</Button>
       </form>
+      <section className="space-y-4 rounded-2xl border bg-card p-6">
+        <div>
+          <h2 className="text-lg font-bold">Bot စကားပြော ထည့်သွင်းရန်</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Customer က Messenger မှာ မေးခွန်းနှင့် တူသောစာပို့လာလျှင် အောက်မှာသိမ်းထားသော အဖြေကို Gemini မခေါ်ဘဲ တိုက်ရိုက်ပြန်ပေးပါမည်။</p>
+        </div>
+        <div className="space-y-2 rounded-xl border p-4">
+          <div className="space-y-1"><Label>မေးခွန်း</Label><Input value={botQuestion} onChange={(e) => setBotQuestion(e.target.value)} placeholder="ဥပမာ — နေကောင်းလား" /></div>
+          <div className="space-y-1"><Label>အဖြေ</Label><Input value={botAnswer} onChange={(e) => setBotAnswer(e.target.value)} placeholder="ဥပမာ — ကောင်းပါတယ်ရှင်၊ လူကြီးမင်းကော နေကောင်းလား" /></div>
+          <Button type="button" onClick={() => void saveBotReply()} disabled={savingBotReply}>{savingBotReply ? "သိမ်းနေသည်..." : "သိမ်းမည်"}</Button>
+        </div>
+        <div className="space-y-3">
+          {loadingBotReplies ? <p className="text-sm text-muted-foreground">Bot စကားပြောစာရင်း ဖတ်နေသည်...</p> : botReplies.length === 0 ? <p className="text-sm text-muted-foreground">သိမ်းထားသော မေးခွန်း/အဖြေ မရှိသေးပါ။</p> : botReplies.map((row) => (
+            <div key={row.id} className="space-y-2 rounded-xl border p-4">
+              <div className="space-y-1"><Label>မေး</Label><Input value={row.question} onChange={(e) => setBotReplies((rows) => rows.map((item) => item.id === row.id ? { ...item, question: e.target.value } : item))} /></div>
+              <div className="space-y-1"><Label>အဖြေ</Label><Input value={row.answer} onChange={(e) => setBotReplies((rows) => rows.map((item) => item.id === row.id ? { ...item, answer: e.target.value } : item))} /></div>
+              <div className="flex gap-2"><Button type="button" size="sm" onClick={() => void updateBotReply(row)}>ပြင်ပြီးသိမ်းမည်</Button><Button type="button" size="sm" variant="outline" onClick={() => void deleteBotReply(row.id)}>ဖျက်မည်</Button></div>
+            </div>
+          ))}
+        </div>
+      </section>
       <section className="space-y-3 rounded-2xl border bg-card p-6">
         <div>
           <h2 className="text-lg font-bold">လက်ကျန်နည်းသတိပေးစာ လက်ခံမည့် Messenger</h2>

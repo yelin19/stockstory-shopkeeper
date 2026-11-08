@@ -69,6 +69,26 @@ const rememberChatMessage = async (db: Admin, owner: string, psid: string, role:
   });
   if (error) console.error("Could not save Messenger chat history", error.message);
 };
+const normalizeBotText = (value: string) => value
+  .toLocaleLowerCase()
+  .replace(/[၊။!?၊,\.\-_/]+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+const findSavedBotReply = async (db: Admin, owner: string, message: string) => {
+  const { data, error } = await db.from("bot_replies")
+    .select("question,answer")
+    .eq("owner_id", owner)
+    .eq("enabled", true)
+    .order("created_at", { ascending: true })
+    .limit(500);
+  if (error) {
+    if (!["42P01", "PGRST205"].includes(error.code)) console.error("Could not load saved bot replies", error.code, error.message);
+    return null;
+  }
+  const normalized = normalizeBotText(message);
+  const match = (data ?? []).find((row) => normalizeBotText(String(row.question ?? "")) === normalized);
+  return match ? String(match.answer ?? "").trim() || null : null;
+};
 const claimMessengerEvent = async (db: Admin, owner: string, eventId: string) => {
   if (!eventId) return true;
   const { error } = await db.from("messenger_event_receipts").insert({ owner_id: owner, event_id: eventId });
@@ -300,6 +320,14 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     ? ((s.data as { chat: ChatMessage[] }).chat).slice(-20)
     : [];
   const chatHistory = persistentHistory.length > 0 ? persistentHistory : sessionHistory;
+  if (s.state === "idle") {
+    const savedBotReply = await findSavedBotReply(db, owner, msg);
+    if (savedBotReply) {
+      await rememberChatMessage(db, owner, psid, "shop", savedBotReply);
+      webhookLog("saved bot reply sent", {});
+      return text(psid, savedBotReply);
+    }
+  }
   const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
   if (isGreeting) {
     const { data: greetingCatalog } = await db.from("products")
