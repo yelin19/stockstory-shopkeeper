@@ -92,8 +92,14 @@ const findSavedBotReply = async (db: Admin, owner: string, message: string) => {
     ? (() => { try { return JSON.parse(match.quick_replies); } catch { return []; } })()
     : match.quick_replies;
   const quickReplies = Array.isArray(rawQuickReplies) ? rawQuickReplies
-    .filter((choice): choice is { title?: unknown; payload?: unknown } => Boolean(choice && typeof choice === "object"))
-    .map((choice) => ({ title: String(choice.title ?? "").trim(), payload: String(choice.payload ?? choice.title ?? "").trim() }))
+    .map((choice) => {
+      if (typeof choice === "string") return { title: choice.trim(), payload: choice.trim() };
+      if (choice && typeof choice === "object") {
+        const item = choice as { title?: unknown; payload?: unknown };
+        return { title: String(item.title ?? "").trim(), payload: String(item.payload ?? item.title ?? "").trim() };
+      }
+      return { title: "", payload: "" };
+    })
     .filter((choice) => choice.title && choice.payload).slice(0, 3) : [];
   const answer = String(match.answer ?? "").trim();
   return answer ? { answer, quickReplies } : null;
