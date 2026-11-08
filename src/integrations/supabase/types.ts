@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      bot_replies: {
+        Row: {
+          answer: string
+          created_at: string
+          enabled: boolean
+          id: string
+          owner_id: string
+          question: string
+          updated_at: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          owner_id: string
+          question: string
+          updated_at?: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          owner_id?: string
+          question?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       low_stock_alert_pair_attempts: {
         Row: {
           attempts: number
