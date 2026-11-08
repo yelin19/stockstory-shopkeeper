@@ -76,7 +76,7 @@ const normalizeBotText = (value: string) => value
   .trim();
 const findSavedBotReply = async (db: Admin, owner: string, message: string) => {
   const { data, error } = await db.from("bot_replies")
-    .select("question,answer")
+    .select("question,answer,quick_replies")
     .eq("owner_id", owner)
     .eq("enabled", true)
     .order("created_at", { ascending: true })
@@ -87,7 +87,13 @@ const findSavedBotReply = async (db: Admin, owner: string, message: string) => {
   }
   const normalized = normalizeBotText(message);
   const match = (data ?? []).find((row) => normalizeBotText(String(row.question ?? "")) === normalized);
-  return match ? String(match.answer ?? "").trim() || null : null;
+  if (!match) return null;
+  const quickReplies = Array.isArray(match.quick_replies) ? match.quick_replies
+    .filter((choice): choice is { title?: unknown; payload?: unknown } => Boolean(choice && typeof choice === "object"))
+    .map((choice) => ({ title: String(choice.title ?? "").trim(), payload: String(choice.payload ?? choice.title ?? "").trim() }))
+    .filter((choice) => choice.title && choice.payload).slice(0, 3) : [];
+  const answer = String(match.answer ?? "").trim();
+  return answer ? { answer, quickReplies } : null;
 };
 const claimMessengerEvent = async (db: Admin, owner: string, eventId: string) => {
   if (!eventId) return true;
@@ -123,6 +129,15 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status);
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+type SavedBotReply = { answer: string; quickReplies: Array<{ title: string; payload: string }> };
+const sendSavedBotReply = (psid: string, reply: SavedBotReply) => send(psid, {
+  text: reply.answer,
+  ...(reply.quickReplies.length > 0 ? { quick_replies: reply.quickReplies.map((choice) => ({
+    content_type: "text",
+    title: choice.title.slice(0, 20),
+    payload: choice.payload.slice(0, 1000),
+  })) } : {}),
+});
 async function sendCommentPrivateReply(pageId: string, commentId: string, message: string, pageToken?: string | null) {
   return sendPrivateReply(pageId, commentId, message, pageToken || envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
 }
@@ -323,9 +338,9 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (s.state === "idle") {
     const savedBotReply = await findSavedBotReply(db, owner, msg);
     if (savedBotReply) {
-      await rememberChatMessage(db, owner, psid, "shop", savedBotReply);
+      await rememberChatMessage(db, owner, psid, "shop", savedBotReply.answer);
       webhookLog("saved bot reply sent", {});
-      return text(psid, savedBotReply);
+      return sendSavedBotReply(psid, savedBotReply);
     }
   }
   const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
