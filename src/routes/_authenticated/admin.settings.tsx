@@ -56,10 +56,17 @@ function SettingsPage() {
 
   useEffect(() => {
     let active = true;
-    void supabase.from("bot_replies").select("id,question,answer,enabled,quick_replies").order("created_at", { ascending: true }).then(({ data, error }) => {
+    void supabase.from("bot_replies").select("id,question,answer,enabled,quick_replies").order("created_at", { ascending: true }).then(async ({ data, error }) => {
       if (!active) return;
-      if (error) toast.error("Bot စကားပြောစာရင်းကို ဖတ်မရပါ။ Migration 0024 ကို အရင်အသုံးချပါ။");
-      setBotReplies((data ?? []) as BotReply[]);
+      if (error?.code === "PGRST204") {
+        const legacy = await supabase.from("bot_replies").select("id,question,answer,enabled").order("created_at", { ascending: true });
+        if (legacy.error) toast.error("Bot စကားပြော table ကို ဖတ်မရပါ။ Migration 0024 ကို အသုံးချပါ။");
+        else toast.warning("မေးခွန်း/အဖြေကို ဖတ်နိုင်ပါပြီ။ Button များအတွက် Migration 0025 ကို အသုံးချပါ။");
+        setBotReplies(((legacy.data ?? []) as Array<Omit<BotReply, "quick_replies">>).map((row) => ({ ...row, quick_replies: [] })));
+      } else if (error) {
+        toast.error("Bot စကားပြော table ကို ဖတ်မရပါ။ Migration 0024 ကို အသုံးချပါ။");
+        setBotReplies([]);
+      } else setBotReplies((data ?? []) as BotReply[]);
       setLoadingBotReplies(false);
     });
     return () => { active = false; };
@@ -73,7 +80,7 @@ function SettingsPage() {
     const quick_replies = botChoices.split(/[|\n]/).map((choice) => choice.trim()).filter(Boolean).slice(0, 3);
     const { data, error } = await supabase.from("bot_replies").insert({ owner_id: user.id, question, answer, enabled: true, quick_replies }).select("id,question,answer,enabled,quick_replies").single();
     setSavingBotReply(false);
-    if (error) return void toast.error(error.code === "PGRST205" ? "Database migration 0024 ကို အရင်အသုံးချပါ" : error.message);
+    if (error) return void toast.error(error.code === "PGRST205" ? "Database migration 0024 ကို အရင်အသုံးချပါ" : error.code === "PGRST204" ? "Quick Reply Button များအတွက် Database migration 0025 ကို အရင်အသုံးချပါ" : error.message);
     setBotReplies((rows) => [...rows, data as BotReply]);
     setBotQuestion("");
     setBotAnswer("");
@@ -87,7 +94,7 @@ function SettingsPage() {
     if (!question || !answer) return void toast.error("မေးခွန်းနဲ့ အဖြေ အလွတ်မထားပါနဲ့");
     const quick_replies = row.quick_replies.map((choice) => choice.trim()).filter(Boolean).slice(0, 3);
     const { error } = await supabase.from("bot_replies").update({ question, answer, quick_replies, updated_at: new Date().toISOString() }).eq("id", row.id);
-    if (error) return void toast.error(error.message);
+    if (error) return void toast.error(error.code === "PGRST204" ? "Quick Reply Button များအတွက် Database migration 0025 ကို အရင်အသုံးချပါ" : error.message);
     toast.success("Bot အဖြေ ပြင်ပြီးပါပြီ");
   }
 
