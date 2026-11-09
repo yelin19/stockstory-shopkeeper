@@ -30,3 +30,25 @@ export const getPublicProduct = createServerFn({ method: "GET" })
     const origin = sandboxHost ? `https://${sandboxHost}` : url.origin;
     return { product: rows?.[0] ?? null, origin };
   });
+
+export const getPublicCatalog = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: settings, error: settingsError } = await supabaseAdmin
+      .from("shop_settings")
+      .select("owner_id,shop_name,messenger_username,currency")
+      .limit(1)
+      .maybeSingle();
+    if (settingsError || !settings) throw settingsError ?? new Error("Shop is not configured");
+    const { data: products, error } = await supabaseAdmin
+      .from("products")
+      .select("code,name,category,price,stock,unit,image_url,description,active")
+      .eq("owner_id", settings.owner_id)
+      .eq("active", true)
+      .order("code");
+    if (error) throw error;
+    const req = getRequest();
+    const url = new URL(req.url);
+    const sandboxHost = url.hostname === "localhost" ? req.headers.get("x-forwarded-host") : null;
+    return { shop: settings, products: products ?? [], origin: sandboxHost ? `https://${sandboxHost}` : url.origin };
+  });

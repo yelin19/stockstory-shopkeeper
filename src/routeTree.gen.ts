@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ShopRouteImport } from './routes/shop'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ShopCodeRouteImport } from './routes/shop.$code'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
@@ -41,15 +42,20 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShopRoute = ShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ShopCodeRoute = ShopCodeRouteImport.update({
-  id: '/shop/$code',
-  path: '/shop/$code',
-  getParentRoute: () => rootRouteImport,
+  id: '/$code',
+  path: '/$code',
+  getParentRoute: () => ShopRoute,
 } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
@@ -120,6 +126,7 @@ const ApiPublicProductImageCodeRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/shop': typeof ShopRouteWithChildren
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/shop/$code': typeof ShopCodeRoute
   '/admin/addresses': typeof AuthenticatedAdminAddressesRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/shop': typeof ShopRouteWithChildren
   '/shop/$code': typeof ShopCodeRoute
   '/admin/addresses': typeof AuthenticatedAdminAddressesRoute
   '/admin/bot': typeof AuthenticatedAdminBotRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/shop': typeof ShopRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/shop/$code': typeof ShopCodeRoute
   '/_authenticated/admin/addresses': typeof AuthenticatedAdminAddressesRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/shop'
     | '/admin'
     | '/shop/$code'
     | '/admin/addresses'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/shop'
     | '/shop/$code'
     | '/admin/addresses'
     | '/admin/bot'
@@ -213,6 +224,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/shop'
     | '/_authenticated/admin'
     | '/shop/$code'
     | '/_authenticated/admin/addresses'
@@ -233,7 +245,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ShopCodeRoute: typeof ShopCodeRoute
+  ShopRoute: typeof ShopRouteWithChildren
   ApiAdminDataCleanupRoute: typeof ApiAdminDataCleanupRoute
   ApiAdminLowStockAlertRoute: typeof ApiAdminLowStockAlertRoute
   ApiAdminOrderShippingRoute: typeof ApiAdminOrderShippingRoute
@@ -264,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shop': {
+      id: '/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -273,10 +292,10 @@ declare module '@tanstack/react-router' {
     }
     '/shop/$code': {
       id: '/shop/$code'
-      path: '/shop/$code'
+      path: '/$code'
       fullPath: '/shop/$code'
       preLoaderRoute: typeof ShopCodeRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof ShopRoute
     }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
@@ -399,11 +418,21 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ShopRouteChildren {
+  ShopCodeRoute: typeof ShopCodeRoute
+}
+
+const ShopRouteChildren: ShopRouteChildren = {
+  ShopCodeRoute: ShopCodeRoute,
+}
+
+const ShopRouteWithChildren = ShopRoute._addFileChildren(ShopRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ShopCodeRoute: ShopCodeRoute,
+  ShopRoute: ShopRouteWithChildren,
   ApiAdminDataCleanupRoute: ApiAdminDataCleanupRoute,
   ApiAdminLowStockAlertRoute: ApiAdminLowStockAlertRoute,
   ApiAdminOrderShippingRoute: ApiAdminOrderShippingRoute,

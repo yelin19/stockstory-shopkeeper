@@ -22,6 +22,8 @@ const envFirst = (...names: string[]) => names.map((name) => process.env[name]).
 type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
 type CustomerDetails = { name: string; phone: string; address: string };
+type CartItem = { product_id: string; code: string; product: string; unit: string; price: number; qty: number };
+type CartDraft = { cart?: CartItem[]; product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; previous_customer?: CustomerDetails; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
 function readCustomerDetails(value: unknown): CustomerDetails | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const data = value as Record<string, unknown>;
@@ -138,6 +140,21 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status, (await res.text().catch(() => "")).slice(0, 500));
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
+const decodeCartPayload = (message: string): Array<{ code: string; qty: number }> | null => {
+  if (!message.trim().startsWith("CART:")) return null;
+  try {
+    const value = JSON.parse(atob(message.trim().slice(5))) as unknown;
+    if (!Array.isArray(value) || value.length < 1 || value.length > 50) return null;
+    const items = value.map((item) => {
+      const row = item as { code?: unknown; qty?: unknown };
+      const code = String(row.code ?? "").trim();
+      const qty = Number(row.qty);
+      if (!code || !Number.isInteger(qty) || qty < 1 || qty > 9999) throw new Error("invalid_cart");
+      return { code, qty };
+    });
+    return items;
+  } catch { return null; }
+};
 type SavedBotReply = { answer: string; quickReplies: Array<{ title: string; payload: string }> };
 const sendSavedBotReply = (psid: string, reply: SavedBotReply) => send(psid, {
   text: reply.answer,
@@ -352,6 +369,31 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return sendSavedBotReply(psid, savedBotReply);
     }
   }
+  if (s.state === "idle") {
+    const cartRequest = decodeCartPayload(msg);
+    if (cartRequest) {
+      const { data: cartProducts } = await db.from("products")
+        .select("id,code,name,unit,price,stock,allow_prepaid,allow_seller_delivery_cash")
+        .eq("owner_id", owner).eq("active", true)
+        .in("code", cartRequest.map((item) => item.code));
+      const byCode = new Map((cartProducts ?? []).map((product) => [product.code.toLocaleLowerCase(), product]));
+      const cart: CartItem[] = [];
+      for (const item of cartRequest) {
+        const product = byCode.get(item.code.toLocaleLowerCase());
+        if (!product) return text(psid, `${item.code} ပစ္စည်းကို မတွေ့ပါရှင်။ Cart ကို ပြန်ဖွင့်ပြီး ထပ်စမ်းပါ။`);
+        if (Number(product.stock) < item.qty) return text(psid, `${product.name} အတွက် လက်ကျန် ${formatQuantity(Number(product.stock), product.unit)} သာရှိပါသည်။ Cart ထဲမှာ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါရှင်။`);
+        cart.push({ product_id: product.id, code: product.code, product: product.name, unit: product.unit, price: Number(product.price), qty: item.qty });
+      }
+      const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const allPrepaid = (cartProducts ?? []).every((product) => product.allow_prepaid);
+      const allSellerCash = (cartProducts ?? []).every((product) => product.allow_seller_delivery_cash);
+      if (!allPrepaid && !allSellerCash) return text(psid, "Cart ထဲက ပစ္စည်းများတွင် ငွေပေးချေနည်းလမ်း မတူညီသောကြောင့် တစ်မျိုးတည်းဖြင့် အော်ဒါတင်၍မရပါရှင်။ ပစ္စည်းတစ်မျိုးချင်းစီ အော်ဒါတင်ပေးပါ။");
+      const data: CartDraft = { cart, prepay_allowed: allPrepaid, payment_method: allPrepaid ? "prepaid" : "seller_delivery_cash" };
+      await save({ state: "cart_confirm", data });
+      const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${fmt(item.price * item.qty)}`).join("\n");
+      return confirmation(psid, `🛒 Cart အော်ဒါစာရင်း\n${lines}\n\nစုစုပေါင်း: ${fmt(total)}\nငွေပေးချေမှု: ${paymentMethodLabel(data.payment_method)}\n\nဒီပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES ကိုနှိပ်ပါ၊ မယူတော့ပါက NO ကိုနှိပ်ပါရှင်။`);
+    }
+  }
   const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
   if (isGreeting) {
     const { data: greetingCatalog } = await db.from("products")
@@ -501,7 +543,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
 
-  type Draft = { product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; previous_customer?: CustomerDetails; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
+  type Draft = CartDraft;
   const d = s.data as Draft;
   const clearCustomerDetails = (draft: Draft): Draft => {
     const cleared = { ...draft };
@@ -511,8 +553,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     delete cleared.address;
     return cleared;
   };
+  const draftItems = (draft: Draft) => draft.cart?.length
+    ? draft.cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${fmt(item.price * item.qty)}`).join("\n")
+    : `${draft.product}=${formatQuantity(draft.qty ?? 0, draft.unit)}`;
+  const draftTotal = (draft: Draft) => draft.cart?.length
+    ? draft.cart.reduce((sum, item) => sum + item.price * item.qty, 0)
+    : Number(draft.price ?? 0) * Number(draft.qty ?? 0);
 
   switch (s.state) {
+    case "cart_confirm": {
+      if (isNo(msg)) { await save({ state: "idle", data: {} }); return text(psid, "ဟုတ်ကဲ့ပါရှင်။ Cart အော်ဒါကို မတင်တော့ပါ။"); }
+      if (!isYes(msg)) return confirmation(psid, "Cart ထဲက ပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES သို့မဟုတ် NO ကိုနှိပ်ပါရှင်။");
+      const previousCustomer = previousCustomerFromDraft(d);
+      await save({ state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: d });
+      return previousCustomer ? reuseCustomerDetailsChoice(psid, previousCustomer) : text(psid, customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။"));
+    }
     case "reuse_customer_details": {
       const previousCustomer = previousCustomerFromDraft(d);
       if (!previousCustomer) {
@@ -525,7 +580,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         delete nd.previous_customer;
         await save({ state: "confirm", data: nd });
         const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
-        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
+        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
       }
       if (choice === "new") {
         await save({ state: "ask_customer_details", data: clearCustomerDetails(d) });
@@ -592,10 +647,35 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       await save({ state: "confirm", data: nd });
       const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
       const imageNotice = detailsFromImage ? "📷 ပုံမှ ဖတ်ထုတ်ထားသော အချက်အလက်ဖြစ်ပါသည်။ အောက်ပါအချက်အလက်များကို စစ်ဆေးပေးပါ။\n\n" : "";
-      return confirmation(psid, `${imageNotice}🧾 အော်ဒါစာရင်း\n${nd.product}=${formatQuantity(nd.qty ?? 0, nd.unit)}\nစုစုပေါင်း: ${fmt(Number(nd.price ?? 0) * Number(nd.qty ?? 0))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုနှိပ်ပါ။`);
+      return confirmation(psid, `${imageNotice}🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုပို့ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
+      if (d.cart?.length) {
+        const isPrepaidCart = d.payment_method === "prepaid";
+        const paymentMethod: CashPaymentMethod = "seller_delivery_cash";
+        const orderIds: string[] = [];
+        for (const item of d.cart) {
+          const itemData: Draft = { ...d, cart: undefined, product_id: item.product_id, code: item.code, product: item.product, unit: item.unit, price: item.price, qty: item.qty };
+          await save({ state: "confirm", data: itemData });
+          const baseArgs = { _owner: owner, _psid: psid, _product_id: item.product_id, _qty: item.qty, _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? "") };
+          const result = isPrepaidCart
+            ? await callShopRpc(db, "place_order_from_messenger", baseArgs)
+            : await callShopRpc(db, "place_order_from_messenger_with_payment_method", { ...baseArgs, _payment_method: paymentMethod });
+          if (result.error) {
+            await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
+            return text(psid, result.error.message.includes("OUT_OF_STOCK") ? `${item.product} အတွက် လက်ကျန်မလုံလောက်တော့ပါရှင်။` : "Cart အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါရှင်။");
+          }
+          const created = result.data as { public_order_id?: string; order_no?: number; product_id?: string | null };
+          const orderId = created.public_order_id ?? String(created.order_no ?? "").padStart(6, "0");
+          orderIds.push(orderId);
+          if (created.product_id) await retryLowStockAlerts(owner, created.product_id);
+        }
+        await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
+        const summary = `Order ID များ: ${orderIds.join(", ")}\n${draftItems(d)}\nစုစုပေါင်း: ${fmt(draftTotal(d))}\n\nCart ထဲက ပစ္စည်းများကို အော်ဒါတင်ပြီးပါပြီရှင်။`;
+        if (!isPrepaidCart && orderIds.length === 1) await orderActions(psid, `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`, orderIds[0]!);
+        return text(psid, isPrepaidCart ? `${summary}\nငွေကြိုလွှဲအော်ဒါများကို Admin စစ်ဆေးရန် ပို့ထားပါပြီရှင်။` : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`);
+      }
       const baseArgs = {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
         _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? ""),

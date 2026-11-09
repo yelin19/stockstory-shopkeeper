@@ -29,7 +29,7 @@ function Index() {
             ဝယ်သူက Code ပို့သည်။<br /><span className="text-sidebar-primary">သင်က အော်ဒါပို့ဆောင်ပါ။</span>
           </h1>
           <p className="text-lg opacity-80">ပစ္စည်း Code များ၊ PIN လုံခြုံထားသော Messenger အော်ဒါများ၊ လက်ကျန်နှင့် ပို့ဆောင်ရေးစာရင်းများကို တစ်နေရာတည်းတွင် စီမံပါ။</p>
-          <Button asChild size="lg" className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"><Link to="/admin">Dashboard ဖွင့်မည်</Link></Button>
+          <div className="flex flex-wrap gap-3"><Button asChild size="lg" className="bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90"><Link to="/shop">ပစ္စည်းများကြည့်မည်</Link></Button><Button asChild size="lg" variant="secondary"><Link to="/admin">Dashboard ဖွင့်မည်</Link></Button></div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {[
