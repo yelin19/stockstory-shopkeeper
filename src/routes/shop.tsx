@@ -31,8 +31,9 @@ function ShopCatalog() {
     return result;
   });
   const messengerUrl = () => {
-    const payload = btoa(JSON.stringify(selected.map((p) => ({ code: p.code, qty: cart[p.code] }))));
-    return `https://m.me/${String(shop.messenger_username ?? "").replace(/^@/, "")}?text=${encodeURIComponent(`CART:${payload}`)}`;
+    const lines = selected.map((p, index) => `${index + 1}. ${p.name} — ${cart[p.code]} ${p.unit} [${p.code}]`);
+    const payload = ["CART_ORDER", ...lines, "", "အော်ဒါတင်ရန် ပို့ပေးပါသည်။"].join("\n");
+    return `https://m.me/${String(shop.messenger_username ?? "").replace(/^@/, "")}?text=${encodeURIComponent(payload)}`;
   };
   return <div className="min-h-screen bg-background">
     <header className="sticky top-0 z-10 border-b bg-background/95 px-4 py-4 backdrop-blur"><div className="mx-auto flex max-w-6xl items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">{shop.shop_name}</h1><p className="text-sm text-muted-foreground">ပစ္စည်းရွေးပြီး Messenger မှာ အော်ဒါတင်ပါ</p></div><Button variant="outline" onClick={() => setOpenCart(true)}><ShoppingCart /> Cart ({selected.length})</Button></div></header>

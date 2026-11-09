@@ -141,9 +141,22 @@ async function send(psid: string, message: Record<string, unknown>) {
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
 const decodeCartPayload = (message: string): Array<{ code: string; qty: number }> | null => {
-  if (!message.trim().startsWith("CART:")) return null;
+  const trimmed = message.trim();
+  if (trimmed.startsWith("CART_ORDER")) {
+    const items: Array<{ code: string; qty: number }> = [];
+    for (const line of trimmed.split(/\r?\n/).slice(1)) {
+      const match = line.match(/^\s*\d+\.\s+.+?\s+[—-]\s+([0-9]+)\s+[^\[]*\[([^\]]+)\]\s*$/);
+      if (!match) continue;
+      const qty = Number(match[1]);
+      const code = match[2]!.trim();
+      if (!code || !Number.isInteger(qty) || qty < 1 || qty > 9999) return null;
+      items.push({ code, qty });
+    }
+    return items.length > 0 && items.length <= 50 ? items : null;
+  }
+  if (!trimmed.startsWith("CART:")) return null;
   try {
-    const value = JSON.parse(atob(message.trim().slice(5))) as unknown;
+    const value = JSON.parse(atob(trimmed.slice(5))) as unknown;
     if (!Array.isArray(value) || value.length < 1 || value.length > 50) return null;
     const items = value.map((item) => {
       const row = item as { code?: unknown; qty?: unknown };
