@@ -16,6 +16,28 @@ import { Input } from "@/components/ui/input";
 type Mode = "orders" | "addresses";
 
 const sel = "h-9 rounded-md border bg-card px-2 text-sm";
+type CartItemSummary = { product: string; qty: number; unit: string; price: number };
+
+function cartItemsFromNote(note: string | null | undefined): CartItemSummary[] {
+  const marker = "CART_ITEMS:";
+  if (!note?.startsWith(marker)) return [];
+  try {
+    const value = JSON.parse(note.slice(marker.length)) as unknown;
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is CartItemSummary => {
+      const row = item as Partial<CartItemSummary>;
+      return typeof row.product === "string" && typeof row.unit === "string" && Number.isFinite(Number(row.qty)) && Number.isFinite(Number(row.price));
+    });
+  } catch {
+    return [];
+  }
+}
+
+function orderProductsText(order: Order): string[] {
+  const items = cartItemsFromNote(order.note);
+  if (items.length > 0) return items.map((item) => `ပစ္စည်း: ${item.product} · ${formatQuantity(item.qty, item.unit)}`);
+  return [`ပစ္စည်း: ${order.product_name} · ${formatQuantity(order.quantity, order.product_unit)}`];
+}
 
 export function OrdersView({ mode }: { mode: Mode }) {
   const labelPrintRef = useRef<HTMLDivElement>(null);
@@ -76,7 +98,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
       `Phone: ${o.phone}`,
       `Address: ${recipientAddress}`,
       "────────────────────────",
-      `ပစ္စည်း: ${o.product_name} · ${formatQuantity(o.quantity, o.product_unit)}`,
+      ...orderProductsText(o),
     ].join("\n");
     try {
       await navigator.clipboard.writeText(text);
@@ -225,7 +247,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                 <div>{o.township ? `${o.township}၊ ` : ""}{o.address}</div>
               </div>
             </div>
-            <div className="thermal-label-product">ပစ္စည်း: {o.product_name} · {formatQuantity(o.quantity, o.product_unit)}</div>
+            <div className="thermal-label-product">{orderProductsText(o).map((line) => <div key={line}>{line}</div>)}</div>
           </article>
         ))}
       </div>
@@ -298,7 +320,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={o.status === "cancelled"} /></td>
                       <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
-                      <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && <div className="text-xs italic">“{o.note}”</div>}</td>
+                      <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && !o.note.startsWith("CART_ITEMS:") && <div className="text-xs italic">“{o.note}”</div>}{cartItemsFromNote(o.note).length > 0 && <div className="mt-1 text-xs text-muted-foreground">Cart: {cartItemsFromNote(o.note).map((item) => `${item.product} × ${formatQuantity(item.qty, item.unit)}`).join(", ")}</div>}</td>
                       <td className="py-2 text-right">{formatQuantity(o.quantity, o.product_unit)} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div><div className="mt-1 text-xs text-muted-foreground">{paymentMethodLabel(o.payment_method)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>

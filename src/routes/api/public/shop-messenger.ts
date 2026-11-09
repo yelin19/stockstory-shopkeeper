@@ -668,10 +668,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         const isPrepaidCart = d.payment_method === "prepaid";
         const paymentMethod: CashPaymentMethod = "seller_delivery_cash";
         const orderIds: string[] = [];
+        const cartItemsNote = `CART_ITEMS:${JSON.stringify(d.cart.map((item) => ({ product: item.product, qty: item.qty, unit: item.unit, price: item.price })))}`;
         for (const item of d.cart) {
           const itemData: Draft = { ...d, cart: undefined, product_id: item.product_id, code: item.code, product: item.product, unit: item.unit, price: item.price, qty: item.qty };
           await save({ state: "confirm", data: itemData });
-          const baseArgs = { _owner: owner, _psid: psid, _product_id: item.product_id, _qty: item.qty, _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: String(d.note ?? "") };
+          const baseArgs = { _owner: owner, _psid: psid, _product_id: item.product_id, _qty: item.qty, _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: cartItemsNote };
           const result = isPrepaidCart
             ? await callShopRpc(db, "place_order_from_messenger", baseArgs)
             : await callShopRpc(db, "place_order_from_messenger_with_payment_method", { ...baseArgs, _payment_method: paymentMethod });
