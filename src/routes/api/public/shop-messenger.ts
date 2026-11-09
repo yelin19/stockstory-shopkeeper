@@ -649,12 +649,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const req = isDeterministicProductRequest(msg) ? parseProductRequest(msg) : null;
   if (!req) {
     const conversationalFallback = /ရှိလား|ရှိပါသလား|ရမလား|ရနိုင်လား/i.test(msg)
-      ? "ဟုတ်ကဲ့ရှင်၊ ပစ္စည်းရှိမရှိနဲ့ ဈေးနှုန်းကို စစ်ပေးနေပါတယ်။ ခဏလေးနေရင် ထပ်ပို့ပေးပါရှင်။"
+      ? "ပစ္စည်းအမည် ဒါမှမဟုတ် Product Code ကို ပို့ပေးပါရှင်။ အဲဒီပစ္စည်းရဲ့ ဈေးနှုန်းနဲ့ လက်ကျန်ကို ဒီနေရာမှာ တစ်ခါတည်း ပြပေးပါမယ်။"
       : /ဈေး|ဘယ်လောက်|တန်လဲ/i.test(msg)
-        ? "ဈေးနှုန်းကို စစ်ပြီး ပြန်ပြောပေးပါမယ်ရှင်။ ခဏလေးစောင့်ပေးပါနော်။"
+        ? "ဘယ်ပစ္စည်းကို မေးတာလဲဆိုတာ Product Code ဒါမှမဟုတ် ပစ္စည်းအမည်နဲ့ ပို့ပေးပါရှင်။ ဈေးနှုန်းကို ဒီ Messenger မှာ တိုက်ရိုက်ပြပေးပါမယ်။"
         : /ပို့|အိမ်ရောက်|ပေးချေ|ငွေချေ/i.test(msg)
-          ? "ပို့ဆောင်မှုနဲ့ ငွေပေးချေမှုအကြောင်းကို စစ်ပြီး သေချာပြန်ပြောပေးပါမယ်ရှင်။"
-          : "ဟုတ်ကဲ့ရှင်၊ သိပါပြီ။ ခဏလေးနေရင် သေချာပြန်ပြောပေးပါမယ်ရှင်။";
+          ? "ပို့ဆောင်မှုနဲ့ ငွေပေးချေမှုကို ကူညီပေးနိုင်ပါတယ်ရှင်။ မှာယူလိုတဲ့ Product Code နဲ့ အရေအတွက်ကို ပို့ပေးပါ။ ဥပမာ ABC123=2"
+          : "မေးထားတာကို အခုချိန်မှာ အလိုအလျောက်နားလည်မရသေးပါရှင်။ Product Code၊ ပစ္စည်းအမည် ဒါမှမဟုတ် မေးချင်တာကို စာကြောင်းတိုတိုနဲ့ ပြန်ပို့ပေးပါ။";
+    webhookLog("Gemini fallback reply sent", {});
     return text(psid, conversationalFallback);
   }
   const { data: exactProduct } = await db.from("products").select("*").eq("owner_id", owner).eq("code", req.code).eq("active", true).maybeSingle();
