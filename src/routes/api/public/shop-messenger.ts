@@ -648,13 +648,14 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   // fall through as a fake product code while the AI layer is unavailable.
   const req = isDeterministicProductRequest(msg) ? parseProductRequest(msg) : null;
   if (!req) {
-    const conversationalFallback = /ရှိလား|ရှိပါသလား|ရမလား|ရနိုင်လား/i.test(msg)
+    const productContext = /(ပစ္စည်း|ဖိနပ်|ဖုန်း|အိတ်|အင်္ကျီ|နာရီ|iphone|product|code|လက်ကျန်|ဝယ်|မှာယူ|အော်ဒါ)/i.test(msg);
+    const conversationalFallback = productContext && /ရှိလား|ရှိပါသလား|ရမလား|ရနိုင်လား/i.test(msg)
       ? "ပစ္စည်းအမည် ဒါမှမဟုတ် Product Code ကို ပို့ပေးပါရှင်။ အဲဒီပစ္စည်းရဲ့ ဈေးနှုန်းနဲ့ လက်ကျန်ကို ဒီနေရာမှာ တစ်ခါတည်း ပြပေးပါမယ်။"
-      : /ဈေး|ဘယ်လောက်|တန်လဲ/i.test(msg)
+      : productContext && /ဈေး|ဘယ်လောက်|တန်လဲ/i.test(msg)
         ? "ဘယ်ပစ္စည်းကို မေးတာလဲဆိုတာ Product Code ဒါမှမဟုတ် ပစ္စည်းအမည်နဲ့ ပို့ပေးပါရှင်။ ဈေးနှုန်းကို ဒီ Messenger မှာ တိုက်ရိုက်ပြပေးပါမယ်။"
         : /ပို့|အိမ်ရောက်|ပေးချေ|ငွေချေ/i.test(msg)
           ? "ပို့ဆောင်မှုနဲ့ ငွေပေးချေမှုကို ကူညီပေးနိုင်ပါတယ်ရှင်။ မှာယူလိုတဲ့ Product Code နဲ့ အရေအတွက်ကို ပို့ပေးပါ။ ဥပမာ ABC123=2"
-          : "မေးထားတာကို အခုချိန်မှာ အလိုအလျောက်နားလည်မရသေးပါရှင်။ Product Code၊ ပစ္စည်းအမည် ဒါမှမဟုတ် မေးချင်တာကို စာကြောင်းတိုတိုနဲ့ ပြန်ပို့ပေးပါ။";
+          : "မေးထားတာကို အခုချိန်မှာ အလိုအလျောက်နားလည်မရသေးပါရှင်။ မေးချင်တဲ့အကြောင်းအရာကို တစ်ကြောင်းလောက် ပြန်ရေးပေးပါ။";
     webhookLog("Gemini fallback reply sent", {});
     return text(psid, conversationalFallback);
   }
