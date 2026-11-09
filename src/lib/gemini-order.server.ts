@@ -34,25 +34,37 @@ function parseJson(text: string): unknown {
 async function generate(prompt: string): Promise<string | null> {
   const key = apiKey();
   if (!key) return null;
-  try {
-    const response = await fetch(modelUrl(), {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 800, thinkingConfig: { thinkingBudget: 0 } },
-      }),
-    });
-    if (!response.ok) {
-      console.error("Gemini reply request failed", response.status, (await response.text().catch(() => "")).slice(0, 200));
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(modelUrl(), {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 800, thinkingConfig: { thinkingBudget: 0 } },
+        }),
+      });
+      if (!response.ok) {
+        const detail = (await response.text().catch(() => "")).slice(0, 200);
+        console.error("Gemini reply request failed", response.status, detail);
+        if (attempt === 0 && [429, 500, 502, 503, 524].includes(response.status)) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        return null;
+      }
+      const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      const text = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      return text || null;
+    } catch {
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
       return null;
     }
-    const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-    const text = body.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return text || null;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 export async function understandOrderMessage(
