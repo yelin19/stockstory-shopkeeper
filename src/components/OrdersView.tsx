@@ -67,7 +67,24 @@ export function OrdersView({ mode }: { mode: Mode }) {
       }),
     [scopedOrders, product, orderNo],
   );
-  const pendingPaymentOrders = useMemo(() => filtered.filter((o) => o.payment_status === "proof_submitted"), [filtered]);
+  const firstOrderRowIds = useMemo(() => {
+    const seen = new Set<string>();
+    const first = new Set<string>();
+    for (const order of filtered) {
+      if (seen.has(order.public_order_id)) continue;
+      seen.add(order.public_order_id);
+      first.add(order.id);
+    }
+    return first;
+  }, [filtered]);
+  const pendingPaymentOrders = useMemo(() => {
+    const seen = new Set<string>();
+    return filtered.filter((o) => {
+      if (o.payment_status !== "proof_submitted" || seen.has(o.public_order_id)) return false;
+      seen.add(o.public_order_id);
+      return true;
+    });
+  }, [filtered]);
 
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
@@ -287,7 +304,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
       </div>
 
       <div className="text-sm text-muted-foreground no-print">
-        {filtered.length} အော်ဒါ · {sumByCurrency(filtered.filter((o) => o.status !== "cancelled"), settings?.currency)}
+        {new Set(filtered.map((o) => o.public_order_id)).size} အော်ဒါ · {sumByCurrency(filtered.filter((o) => o.status !== "cancelled"), settings?.currency)}
       </div>
 
       {mode === "orders" && pendingPaymentOrders.length > 0 && <section className="no-print rounded-2xl border-2 border-primary/40 bg-primary/5 p-4">
@@ -318,7 +335,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                   {list.map((o) => (
                     <tr key={o.id} className="border-t align-top first:border-t-0">
                       <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={o.status === "cancelled"} /></td>
-                      <td className="px-4 py-2 font-mono text-xs"><span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span><div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
+                      <td className="px-4 py-2 font-mono text-xs">{firstOrderRowIds.has(o.id) && <span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span>}<div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && !o.note.startsWith("CART_ITEMS:") && <div className="text-xs italic">“{o.note}”</div>}{cartItemsFromNote(o.note).length > 0 && <div className="mt-1 text-xs text-muted-foreground">Cart: {cartItemsFromNote(o.note).map((item) => `${item.product} × ${formatQuantity(item.qty, item.unit)}`).join(", ")}</div>}</td>
                       <td className="py-2 text-right">{formatQuantity(o.quantity, o.product_unit)} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div><div className="mt-1 text-xs text-muted-foreground">{paymentMethodLabel(o.payment_method)}</div></td>
