@@ -431,7 +431,8 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       }
       onSaved();
     } catch (err) {
-      toast.error((err as Error).message);
+      const message = (err as Error).message;
+      toast.error(message === "Failed to fetch" ? "ပို့ဆောင်မှု server သို့ ချိတ်ဆက်မရပါ။ အင်တာနက်နှင့် Login session ကို စစ်ပြီး ခဏနေကာ ထပ်စမ်းပါ။" : message);
     } finally {
       setBusy(false);
     }

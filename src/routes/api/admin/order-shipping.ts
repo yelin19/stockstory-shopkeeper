@@ -3,6 +3,18 @@ import { z } from "zod";
 import { formatCurrency } from "@/lib/currency";
 
 const envFirst = (...names: string[]) => names.map((name) => process.env[name]).find(Boolean);
+const sendMessengerMessage = async (token: string, recipientId: string, message: Record<string, unknown>) => {
+  try {
+    return await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ recipient: { id: recipientId }, messaging_type: "UPDATE", message }),
+    });
+  } catch (error) {
+    console.error("Messenger delivery request failed", error);
+    return null;
+  }
+};
 
 async function removeTemporaryDeliveryImage(ownerId: string, imagePath: string | null) {
   if (!imagePath) return true;
@@ -116,20 +128,16 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           delivered: "ပစ္စည်းရောက်ရှိပြီးပါပြီ",
         };
         const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ${statusMessage[deliveryStatus] ?? statusMessage["shipped"]}\nပစ္စည်းအမည်: ${order.product_name}\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
-        const sendText = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: message } }),
-        });
-        if (!sendText.ok) {
+        const sendText = await sendMessengerMessage(tokenValue, order.psid, { text: message });
+        if (!sendText?.ok) {
           const imageRemoved = await removeTemporaryDeliveryImage(userData.user.id, imagePath);
-          return Response.json({ error: "Messenger သို့ စာပို့မရပါ", image_cleanup_failed: !imageRemoved }, { status: 502 });
+          return Response.json({ error: sendText ? "Messenger သို့ စာပို့မရပါ။ Facebook Page Access Token သို့မဟုတ် Messenger customer ID ကို စစ်ပါ။" : "Messenger server သို့ ချိတ်ဆက်မရပါ။ ခဏနေပြီး ထပ်စမ်းပါ။", image_cleanup_failed: !imageRemoved }, { status: 502 });
         }
         let imageCleanupFailed = false;
         if (imageUrl) {
-          const sendImage = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, {
-            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } } }),
-          });
+          const sendImage = await sendMessengerMessage(tokenValue, order.psid, { attachment: { type: "image", payload: { url: imageUrl, is_reusable: true } } });
           imageCleanupFailed = !(await removeTemporaryDeliveryImage(userData.user.id, imagePath));
-          if (!sendImage.ok) return Response.json({ error: "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ", image_cleanup_failed: imageCleanupFailed }, { status: 502 });
+          if (!sendImage?.ok) return Response.json({ error: sendImage ? "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ။ ဓာတ်ပုံလင့်ခ်ကို Facebook မဖတ်နိုင်ပါ။" : "Messenger server သို့ ချိတ်ဆက်မရပါ။ ဓာတ်ပုံမပို့နိုင်ပါ။", image_cleanup_failed: imageCleanupFailed }, { status: 502 });
         }
 
         const { error: updateError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
