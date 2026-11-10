@@ -254,10 +254,10 @@ const reuseCustomerDetailsChoice = (psid: string, customer: CustomerDetails) => 
     { content_type: "text", title: "လိပ်စာအသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
   ],
 });
-const orderActions = (psid: string, t: string, orderId: string) => send(psid, {
+const orderActions = (psid: string, t: string, orderId: string, includeEdit = true) => send(psid, {
   text: t,
   quick_replies: [
-    { content_type: "text", title: "ပြင်မည်", payload: `ပြင် ${orderId}` },
+    ...(includeEdit ? [{ content_type: "text", title: "ပြင်မည်", payload: `ပြင် ${orderId}` }] : []),
     { content_type: "text", title: "မယူတော့ဘူး", payload: `မယူတော့ဘူး ${orderId}` },
   ],
 });
@@ -409,7 +409,19 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const allPrepaid = (cartProducts ?? []).every((product) => product.allow_prepaid);
       const allSellerCash = (cartProducts ?? []).every((product) => product.allow_seller_delivery_cash);
       if (!allPrepaid && !allSellerCash) return text(psid, "Cart ထဲက ပစ္စည်းများတွင် ငွေပေးချေနည်းလမ်း မတူညီသောကြောင့် တစ်မျိုးတည်းဖြင့် အော်ဒါတင်၍မရပါရှင်။ ပစ္စည်းတစ်မျိုးချင်းစီ အော်ဒါတင်ပေးပါ။");
-      const data: CartDraft = { cart, prepay_allowed: allPrepaid, payment_method: allPrepaid ? "prepaid" : "seller_delivery_cash" };
+      const { data: previousOrder } = await db.from("orders")
+        .select("customer_name,phone,address")
+        .eq("owner_id", owner).eq("psid", psid)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const previousCustomer = previousOrder
+        ? readCustomerDetails({ name: previousOrder.customer_name, phone: previousOrder.phone, address: previousOrder.address })
+        : null;
+      const data: CartDraft = {
+        cart,
+        prepay_allowed: allPrepaid,
+        payment_method: allPrepaid ? "prepaid" : "seller_delivery_cash",
+        ...(previousCustomer ? { previous_customer: previousCustomer } : {}),
+      };
       await save({ state: "cart_confirm", data });
       const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${fmt(item.price * item.qty)}`).join("\n");
       return confirmation(psid, `🛒 Cart အော်ဒါစာရင်း\n${lines}\n\nစုစုပေါင်း: ${fmt(total)}\nငွေပေးချေမှု: ${paymentMethodLabel(data.payment_method)}\n\nဒီပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES ကိုနှိပ်ပါ၊ မယူတော့ပါက NO ကိုနှိပ်ပါရှင်။`);
@@ -729,8 +741,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
             if (!delivery.textSent || !delivery.receiptSent) console.error("Could not deliver prepaid cart review to the configured Messenger recipient", delivery.reason);
           }
         }
-        if (!isPrepaidCart) await send(psid, { text: `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}` });
-        return text(psid, isPrepaidCart ? `${summary}\nငွေကြိုလွှဲအော်ဒါများကို Admin စစ်ဆေးရန် ပို့ထားပါပြီရှင်။` : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`);
+        const orderMessage = isPrepaidCart
+          ? `${summary}\nငွေကြိုလွှဲအော်ဒါများကို Admin စစ်ဆေးရန် ပို့ထားပါပြီရှင်။\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
+          : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`;
+        return orderActions(psid, orderMessage, orderId, false);
       }
       const baseArgs = {
         _owner: owner, _psid: psid, _product_id: String(d.product_id), _qty: Number(d.qty),
