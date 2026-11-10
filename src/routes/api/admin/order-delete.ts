@@ -29,7 +29,7 @@ export const Route = createFileRoute("/api/admin/order-delete")({
 
         const { data: rows, error: queryError } = await authClient
           .from("orders")
-          .select("id,public_order_id,status,sent,delivery_status")
+          .select("id,public_order_id,status,sent,delivery_status,psid,customer_name,phone,address")
           .eq("owner_id", userData.user.id)
           .in("public_order_id", orderIds);
         if (queryError) return Response.json({ error: queryError.message }, { status: 500 });
@@ -46,6 +46,37 @@ export const Route = createFileRoute("/api/admin/order-delete")({
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const customers = new Map<string, { name: string; phone: string; address: string }>();
+        for (const row of eligible) {
+          if (!row.psid || customers.has(row.psid)) continue;
+          customers.set(row.psid, {
+            name: String(row.customer_name ?? ""),
+            phone: String(row.phone ?? ""),
+            address: String(row.address ?? ""),
+          });
+        }
+        for (const [psid, customer] of customers) {
+          const { data: session } = await supabaseAdmin
+            .from("messenger_sessions")
+            .select("pin_verified,state,data")
+            .eq("owner_id", userData.user.id)
+            .eq("psid", psid)
+            .maybeSingle();
+          const existingData = session?.data && typeof session.data === "object" && !Array.isArray(session.data)
+            ? session.data as Record<string, unknown>
+            : {};
+          const { error: addressError } = await supabaseAdmin
+            .from("messenger_sessions")
+            .upsert({
+              owner_id: userData.user.id,
+              psid,
+              pin_verified: Boolean(session?.pin_verified),
+              state: "idle",
+              data: { ...existingData, last_customer: customer },
+              updated_at: new Date().toISOString(),
+            });
+          if (addressError) return Response.json({ error: addressError.message }, { status: 500 });
+        }
         const { error: deleteError } = await supabaseAdmin
           .from("orders")
           .delete()
