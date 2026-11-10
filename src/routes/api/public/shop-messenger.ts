@@ -258,7 +258,7 @@ const orderActions = (psid: string, t: string, orderId: string) => send(psid, {
   text: t,
   quick_replies: [
     { content_type: "text", title: "ပြင်မည်", payload: `ပြင် ${orderId}` },
-    { content_type: "text", title: "ဖျက်မည်", payload: `ဖျက် ${orderId}` },
+    { content_type: "text", title: "မယူတော့ဘူး", payload: `မယူတော့ဘူး ${orderId}` },
   ],
 });
 const orderCommand = (msg: string, words: string[]) => msg.trim().match(new RegExp(`^(?:${words.join("|")})\\s+([0-9]{6})$`, "i"))?.[1];
@@ -521,7 +521,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   };
 
   const editOrderId = orderCommand(msg, ["ပြင်", "ပြင်ဆင်", "edit"]);
-  const cancelOrderId = orderCommand(msg, ["ဖျက်", "ဖျက်မယ်", "cancel"]);
+  const cancelOrderId = orderCommand(msg, ["ဖျက်", "ဖျက်မယ်", "မယူတော့ဘူး", "မယူတော့ပါ", "cancel"]);
   if (editOrderId || cancelOrderId) {
     const publicOrderId = editOrderId ?? cancelOrderId!;
     const { data: order } = await db.from("orders").select("*").eq("owner_id", owner).eq("psid", psid).eq("public_order_id", publicOrderId).maybeSingle();
@@ -529,7 +529,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
       await save({ state: "cancel_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
-      return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nဒီအော်ဒါကို ဖျက်မည်မှာ သေချာပါသလား။`);
+      return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nဒီအော်ဒါကို မယူတော့ဘဲ ပယ်ဖျက်မှာ သေချာပါသလား။`);
     }
     await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
     return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
@@ -643,7 +643,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       return text(psid, `Order ID: ${o.public_order_id}\nပစ္စည်းအမည်: ${o.product_name}\nအရေအတွက်: ${formatQuantity(o.quantity, d.unit)}\n\nအော်ဒါအရေအတွက်ကို ပြင်ဆင်ပြီးပါပြီ။`);
     }
     case "cancel_order": {
-      if (!isYes(msg)) return text(psid, "အော်ဒါဖျက်ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
+      if (!isYes(msg)) return text(psid, "အော်ဒါမယူတော့ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
       const { data: cancelled, error } = await callShopRpc(db, "cancel_order_by_customer", {
         _owner: owner, _psid: psid, _public_order_id: String((d as { public_order_id?: string }).public_order_id),
       });
