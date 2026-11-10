@@ -668,7 +668,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         const isPrepaidCart = d.payment_method === "prepaid";
         const paymentMethod: CashPaymentMethod = "seller_delivery_cash";
         const cartItemsNote = `CART_ITEMS:${JSON.stringify(d.cart.map((item) => ({ product: item.product, qty: item.qty, unit: item.unit, price: item.price })))}`;
-        const result = await callShopRpc(db, "place_cart_orders_from_messenger", {
+        const cartArgs = {
           _owner: owner,
           _psid: psid,
           _items: d.cart.map((item) => ({ product_id: item.product_id, qty: item.qty })),
@@ -678,7 +678,40 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           _address: String(d.address),
           _note: cartItemsNote,
           _payment_method: isPrepaidCart ? "prepaid" : paymentMethod,
-        });
+        };
+        let result = await callShopRpc(db, "place_cart_orders_from_messenger", cartArgs);
+        // Older deployments may not have migration 0026 yet. Fall back to the
+        // original service-role order function so checkout remains usable while
+        // the migration is being applied. The first created ID is shown to the
+        // customer as the cart's reference ID.
+        if (result.error && /function .*place_cart_orders_from_messenger|does not exist|public_order_id/i.test(result.error.message)) {
+          const fallbackRows: unknown[] = [];
+          let fallbackError: { message: string } | null = null;
+          for (const item of d.cart) {
+            const created = await callShopRpc(db, "place_order", {
+              _owner: owner,
+              _psid: psid,
+              _product_id: item.product_id,
+              _qty: item.qty,
+              _name: String(d.name),
+              _phone: String(d.phone),
+              _township: "",
+              _address: String(d.address),
+              _note: cartItemsNote,
+            });
+            if (created.error) {
+              fallbackError = created.error;
+              break;
+            }
+            const row = created.data as { id?: string; product_id?: string | null };
+            fallbackRows.push(row);
+            if (row.id) {
+              const { error: paymentError } = await db.from("orders").update({ payment_method: cartArgs._payment_method }).eq("id", row.id).eq("owner_id", owner);
+              if (paymentError) console.error("Could not save fallback cart payment method", paymentError.message);
+            }
+          }
+          result = fallbackError ? { data: null, error: fallbackError } : { data: fallbackRows, error: null };
+        }
         if (result.error) {
           console.error("Cart checkout RPC failed", { owner, psid: psid.slice(-6), message: result.error.message });
           await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
