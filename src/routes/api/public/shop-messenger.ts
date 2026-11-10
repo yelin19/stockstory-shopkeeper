@@ -781,7 +781,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           }
         }
         const orderMessage = isPrepaidCart
-          ? `${summary}\nငွေကြိုလွှဲအော်ဒါများကို Admin စစ်ဆေးရန် ပို့ထားပါပြီရှင်။\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
+          ? `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။\n\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
           : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`;
         return orderActions(psid, orderMessage, orderId, false);
       }
@@ -911,11 +911,7 @@ async function handlePaymentProof(db: Admin, owner: string, psid: string, imageU
   const data: Record<string, unknown> = { ...(s.data as Record<string, unknown>), payment_proof_url: imageUrl };
   if (Array.isArray(data["cart"]) && data["name"] && data["phone"] && data["address"]) {
     await db.from("messenger_sessions").upsert({ ...s, state: "confirm", data: data as never, updated_at: new Date().toISOString() });
-    const cart = data["cart"] as Array<{ product: string; qty: number; unit: string; price: number }>;
-    const { data: shop } = await db.from("shop_settings").select("currency").eq("owner_id", owner).maybeSingle();
-    const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${formatCurrency(item.price * item.qty, shop?.currency)}`).join("\n");
-    const total = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
-    return confirmation(psid, `ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။\n\n🧾 အော်ဒါစာရင်း\n${lines}\nစုစုပေါင်း: ${formatCurrency(total, shop?.currency)}\nငွေပေးချေမှု: ${paymentMethodLabel("prepaid")}\nငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အော်ဒါအတည်ပြုရန် YES ကိုနှိပ်ပါ။\n\nအမည်: ${data["name"]}\nဖုန်း: ${data["phone"]}\nလိပ်စာ: ${data["address"]}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုပို့ပါရှင်။`);
+    return handleText(db, owner, psid, "YES", "");
   }
   const previousCustomer = readCustomerDetails(data["previous_customer"]);
   await db.from("messenger_sessions").upsert({ ...s, state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
