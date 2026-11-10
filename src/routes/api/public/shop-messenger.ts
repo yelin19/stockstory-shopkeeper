@@ -188,14 +188,23 @@ async function sendCommentPrivateReply(pageId: string, commentId: string, messag
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
 const customerDetailsRequest = (intro: string) => `${intro}\n${customerDetailsExample}\n\n${customerDetailsPhotoDisclosure}`;
-async function sendUpdate(psid: string, messageText: string) {
+async function sendUpdate(psid: string, messageText: string, cancellableOrderId?: string) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
   if (!token) return false;
   try {
     const response = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ recipient: { id: psid }, messaging_type: "UPDATE", message: { text: messageText } }),
+      body: JSON.stringify({
+        recipient: { id: psid },
+        messaging_type: "UPDATE",
+        message: {
+          text: messageText,
+          ...(cancellableOrderId ? {
+            quick_replies: [{ content_type: "text", title: "မယူတော့ဘူး", payload: `မယူတော့ဘူး ${cancellableOrderId}` }],
+          } : {}),
+        },
+      }),
     });
     if (!response.ok) console.error("Messenger order review update failed", response.status);
     return response.ok;
@@ -331,7 +340,7 @@ async function handlePaymentReviewAction(
     if (approvalError) return text(adminPsid, "ငွေပေးချေမှုကို အတည်ပြုမရပါ။ အက်ပ်ထဲတွင် ထပ်စစ်ပါ။");
     if (!approved?.length) return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
     const buyerMessage = `✅ Order ID: ${orderId} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းများ: ${groupProducts}\nပေးချေပြီးငွေ: ${formatCurrency(groupTotal, currency ?? order.currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။`;
-    if (order.psid && !(await sendUpdate(order.psid, buyerMessage))) console.error("Could not notify customer that prepaid order was approved");
+    if (order.psid && !(await sendUpdate(order.psid, buyerMessage, orderId))) console.error("Could not notify customer that prepaid order was approved");
     await text(adminPsid, `✅ Order ID: ${orderId} ကို အတည်ပြုပြီး ဝယ်သူထံ အကြောင်းကြားပါပြီ။`);
     return;
   }
