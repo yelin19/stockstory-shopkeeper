@@ -42,13 +42,25 @@ export const getPublicCatalog = createServerFn({ method: "GET" })
     if (settingsError || !settings) throw settingsError ?? new Error("Shop is not configured");
     const { data: products, error } = await supabaseAdmin
       .from("products")
-      .select("code,name,category,price,stock,unit,image_url,description,active")
+      .select("id,code,name,category,price,stock,unit,image_url,description,active")
       .eq("owner_id", settings.owner_id)
       .eq("active", true)
       .order("code");
     if (error) throw error;
+    const { data: orders, error: ordersError } = await supabaseAdmin
+      .from("orders")
+      .select("product_id,quantity,status,delivery_status")
+      .eq("owner_id", settings.owner_id)
+      .neq("status", "cancelled")
+      .neq("delivery_status", "returned");
+    if (ordersError) throw ordersError;
+    const soldByProduct = new Map<string, number>();
+    for (const order of orders ?? []) {
+      if (order.product_id) soldByProduct.set(order.product_id, (soldByProduct.get(order.product_id) ?? 0) + Number(order.quantity ?? 0));
+    }
+    const catalog = (products ?? []).map((product) => ({ ...product, sold_count: soldByProduct.get(product.id) ?? 0 }));
     const req = getRequest();
     const url = new URL(req.url);
     const sandboxHost = url.hostname === "localhost" ? req.headers.get("x-forwarded-host") : null;
-    return { shop: settings, products: products ?? [], origin: sandboxHost ? `https://${sandboxHost}` : url.origin };
+    return { shop: settings, products: catalog, origin: sandboxHost ? `https://${sandboxHost}` : url.origin };
   });

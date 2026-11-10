@@ -52,6 +52,7 @@ function ProductPage() {
           <div className="text-sm font-semibold uppercase tracking-widest text-primary">{p.shop_name ?? "ဈေးဆိုင်"} · {p.category}</div>
           <h1 className="text-4xl font-extrabold md:text-5xl">{p.name}</h1>
           <div className="font-display text-3xl font-bold">ဈေးနှုန်း: {money(p.price, p.currency)}</div>
+          <div className="flex gap-3 text-sm"><span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">ရောင်းပြီး: {p.sold_count ?? 0} {p.unit}</span><span className="rounded-full bg-secondary px-3 py-1">လက်ကျန်: {p.stock} {p.unit}</span></div>
           {p.stock <= 0 && <div className="text-destructive">လက်ကျန်ကုန်ပြီ</div>}
           {p.description && <p className="whitespace-pre-line text-muted-foreground">{p.description}</p>}
           {p.stock > 0 && <div className="rounded-xl bg-secondary p-4 text-sm">ပစ္စည်း Code <b className="font-mono text-lg">{p.code}</b> — Messenger တွင် <b>{p.code} 1</b> ပို့ပြီး အော်ဒါတင်ပါ။</div>}
