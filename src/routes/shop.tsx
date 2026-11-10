@@ -51,7 +51,7 @@ function ShopCatalog() {
       {products.map((p) => { const quantity = cart[p.code] ?? 0; return <article key={p.code} className={`overflow-hidden rounded-2xl border bg-card shadow-sm transition-all ${quantity > 0 ? "border-blue-400 ring-2 ring-blue-100" : ""}`}>
         <Link to="/shop/$code" params={{ code: p.code }} className="block" aria-label={`${p.name} ဖော်ပြချက်ကြည့်ရန်`}>
           <div className="aspect-[4/3] bg-muted">{p.image_url ? <img src={productImageUrl(p.code, p.image_url)} alt={p.name} className="size-full object-cover" /> : null}</div>
-          <div className="px-4 pt-4"><div className="flex justify-between gap-3"><div><h2 className="font-bold">{p.name}</h2><p className="text-xs text-muted-foreground">#{p.code} · {p.category}</p></div><b>{money(p.price, currency)}</b></div>
+          <div className="px-4 pt-4"><div className="flex justify-between gap-3"><div><h2 className="font-bold">{p.name}</h2><p className="text-xs text-muted-foreground">#{p.code}{p.category && p.category !== "General" ? ` · ${p.category}` : ""}</p></div><b>{money(p.price, currency)}</b></div>
             {p.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{p.description}</p>}
             <p className="mt-2 text-xs font-medium text-primary"><ExternalLink className="mr-1 inline size-3" />အသေးစိတ်ဖော်ပြချက်ကြည့်ရန်</p>
           </div>
