@@ -87,6 +87,14 @@ export function OrdersView({ mode }: { mode: Mode }) {
       return true;
     });
   }, [filtered]);
+  const visibleOrders = useMemo(() => {
+    const groups = new Map<string, Order[]>();
+    for (const order of filtered) groups.set(order.public_order_id, [...(groups.get(order.public_order_id) ?? []), order]);
+    return [...groups.values()].map((group) => {
+      const first = group[0]!;
+      return group.length === 1 ? first : { ...first, total: group.reduce((sum, order) => sum + Number(order.total), 0) };
+    });
+  }, [filtered]);
 
   const rows: Row[] = filtered.map((o) =>
     mode === "orders"
@@ -243,15 +251,15 @@ export function OrdersView({ mode }: { mode: Mode }) {
   // group by category → product for print
   const grouped = useMemo(() => {
     const m = new Map<string, Map<string, Order[]>>();
-    for (const o of filtered) {
+    for (const o of visibleOrders) {
       if (!m.has(o.category)) m.set(o.category, new Map());
       const pm = m.get(o.category)!;
       const k = `${o.product_code} · ${o.product_name}`;
       pm.set(k, [...(pm.get(k) ?? []), o]);
     }
     return m;
-  }, [filtered]);
-  const selectedAddressOrders = orders.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled");
+  }, [visibleOrders]);
+  const selectedAddressOrders = visibleOrders.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled");
 
   async function printAddressLabels() {
     if (!selectedAddressOrders.length) return void toast.info("လိပ်စာတံဆိပ် ပုံနှိပ်မည့် အော်ဒါကို အရင်ရွေးပါ");
