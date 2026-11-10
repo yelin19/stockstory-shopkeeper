@@ -35,10 +35,11 @@ export const Route = createFileRoute("/api/admin/order-delete")({
         if (queryError) return Response.json({ error: queryError.message }, { status: 500 });
 
         const eligible = (rows ?? []).filter((row) => mode === "pending"
-          ? row.status !== "cancelled" && !row.sent && row.delivery_status !== "returned"
+          ? !row.sent && row.delivery_status !== "returned"
           : row.sent || row.delivery_status === "returned");
         if (mode === "pending") {
           for (const row of eligible) {
+            if (row.status === "cancelled") continue;
             const { error } = await authClient.rpc("cancel_order", { _order_id: row.id });
             if (error) return Response.json({ error: error.message }, { status: 500 });
           }

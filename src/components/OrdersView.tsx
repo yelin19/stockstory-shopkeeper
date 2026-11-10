@@ -132,12 +132,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
   }
 
   function toggleAllFiltered() {
-    const ids = filtered.filter((o) => o.status !== "cancelled" && (mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o))).map((o) => o.id);
+    const ids = filtered.filter((o) => mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)).map((o) => o.id);
     setSelectedOrderIds((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]);
   }
 
   async function deleteSelectedOrders() {
-    const selected = filtered.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled" && (mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o)));
+    const selected = filtered.filter((o) => selectedOrderIds.includes(o.id) && (mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)));
     if (!selected.length) return void toast.info("ဖျက်မည့်အော်ဒါကို အရင်ရွေးပါ");
     const orderIds = [...new Set(selected.map((o) => o.public_order_id))];
     const message = mode === "orders"
@@ -222,15 +222,16 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   async function deleteOrder(o: Order) {
     if (deletingOrderId) return;
-    const related = orders.filter((item) => item.public_order_id === o.public_order_id && item.status !== "cancelled" && !isOrderShipped(item));
     if (!window.confirm(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ဖျက်မည်လား။ Stock ကို ပြန်ထည့်ပါမည်။`)) return;
     setDeletingOrderId(o.id);
     try {
-      for (const item of related) {
-        const { error } = await supabase.rpc("cancel_order", { _order_id: item.id });
-        if (error) throw error;
-      }
-      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ဖျက်ပြီး Stock ပြန်ထည့်ပြီးပါပြီ`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+      const response = await fetch("/api/admin/order-delete", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ public_order_ids: [o.public_order_id], mode: "pending" }) });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error || "အော်ဒါဖျက်မရပါ");
+      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ဖျက်ပြီးပါပြီ`);
       qc.invalidateQueries();
     } catch (err) {
       toast.error(`အော်ဒါဖျက်မရပါ: ${(err as Error).message}`);
@@ -332,7 +333,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
       <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
         <div className="basis-full text-sm font-semibold">{mode === "orders" ? "အော်ဒါများကို ရွေးချယ်စီမံရန်" : "ပို့ပြီးသော Order များကို ရွေးချယ်စီမံရန်"}</div>
         <Button size="sm" variant="outline" onClick={toggleAllFiltered} disabled={!filtered.length}>
-          {filtered.filter((o) => o.status !== "cancelled" && (mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o))).every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အားလုံးရွေးမည်"}
+          {filtered.filter((o) => mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)).every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အားလုံးရွေးမည်"}
         </Button>
         <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedOrderIds.length} ခု</span>
         <Button size="sm" variant="destructive" onClick={deleteSelectedOrders} disabled={!selectedOrderIds.length || bulkDeleteBusy}>
@@ -391,7 +392,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                 <tbody>
                   {list.map((o) => (
                     <tr key={o.id} className="border-t align-top first:border-t-0">
-                      <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={o.status === "cancelled"} /></td>
+                      <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={mode === "addresses" && o.status === "cancelled"} /></td>
                       <td className="px-4 py-2 font-mono text-xs">{firstOrderRowIds.has(o.id) && <span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span>}<div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && !o.note.startsWith("CART_ITEMS:") && <div className="text-xs italic">“{o.note}”</div>}{cartItemsFromNote(o.note).length > 0 && <div className="mt-1 text-xs text-muted-foreground">Cart: {cartItemsFromNote(o.note).map((item) => `${item.product} × ${formatQuantity(item.qty, item.unit)}`).join(", ")}</div>}</td>
@@ -402,10 +403,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
                         </span>
                         {o.payment_status === "proof_submitted" && o.payment_proof_url && <a className="mt-1 block text-xs font-semibold text-primary underline" href={o.payment_proof_url} target="_blank" rel="noreferrer">ငွေလွှဲဖြတ်ပိုင်း ကြည့်မည်</a>}
                         {o.tracking_url && <a className="mt-1 block text-xs text-primary underline" href={o.tracking_url} target="_blank" rel="noreferrer">Tracking link</a>}
-                        {mode === "orders" && o.status !== "cancelled" && (
+                        {mode === "orders" && (
                           <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
-                            {o.payment_status === "proof_submitted" && <Button size="sm" variant="default" className="h-8 px-2 text-xs" title="ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အတည်ပြုမည်" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "ငွေပေးချေမှု အတည်ပြုမည်"}</Button>}
-                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
+                            {o.status !== "cancelled" && o.payment_status === "proof_submitted" && <Button size="sm" variant="default" className="h-8 px-2 text-xs" title="ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အတည်ပြုမည်" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "ငွေပေးချေမှု အတည်ပြုမည်"}</Button>}
+                            {o.status !== "cancelled" && <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>}
                             <Button size="sm" variant="destructive" className="h-8 px-2 text-xs" title="အော်ဒါဖျက်ပြီး Stock ပြန်ထည့်မည်" onClick={() => deleteOrder(o)} disabled={deletingOrderId === o.id}><Trash2 /> {deletingOrderId === o.id ? "ဖျက်နေသည်..." : "ဖျက်မည်"}</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ဝယ်ယူသူ၏ ပို့ဆောင်မည့်လိပ်စာကို Copy လုပ်မည်" onClick={() => copyAddress(o)}><Copy /> လိပ်စာ Copy</Button>
                           </div>
