@@ -915,7 +915,7 @@ async function handlePaymentProof(db: Admin, owner: string, psid: string, imageU
     const { data: shop } = await db.from("shop_settings").select("currency").eq("owner_id", owner).maybeSingle();
     const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${formatCurrency(item.price * item.qty, shop?.currency)}`).join("\n");
     const total = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
-    return text(psid, `ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။\n\n🧾 အော်ဒါစာရင်း\n${lines}\nစုစုပေါင်း: ${formatCurrency(total, shop?.currency)}\nငွေပေးချေမှု: ${paymentMethodLabel("prepaid")}\nငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အော်ဒါအတည်ပြုရန် YES ကိုနှိပ်ပါ။\n\nအမည်: ${data["name"]}\nဖုန်း: ${data["phone"]}\nလိပ်စာ: ${data["address"]}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုပို့ပါရှင်။`);
+    return confirmation(psid, `ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။\n\n🧾 အော်ဒါစာရင်း\n${lines}\nစုစုပေါင်း: ${formatCurrency(total, shop?.currency)}\nငွေပေးချေမှု: ${paymentMethodLabel("prepaid")}\nငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အော်ဒါအတည်ပြုရန် YES ကိုနှိပ်ပါ။\n\nအမည်: ${data["name"]}\nဖုန်း: ${data["phone"]}\nလိပ်စာ: ${data["address"]}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုပို့ပါရှင်။`);
   }
   const previousCustomer = readCustomerDetails(data["previous_customer"]);
   await db.from("messenger_sessions").upsert({ ...s, state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
