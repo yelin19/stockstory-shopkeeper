@@ -558,14 +558,15 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
-      await save({ state: "cancel_order", data: {
-        public_order_id: publicOrderId,
-        product: order.product_name,
-        unit: order.product_unit,
-        quantity: order.quantity,
-        cancel_customer: { name: order.customer_name, phone: order.phone, address: order.address },
-      } });
-      return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nဒီအော်ဒါကို မယူတော့ဘဲ ပယ်ဖျက်မှာ သေချာပါသလား။`);
+      const { data: cancelled, error: cancelError } = await callShopRpc(db, "cancel_order_by_customer", {
+        _owner: owner, _psid: psid, _public_order_id: publicOrderId,
+      });
+      const customer = { name: order.customer_name, phone: order.phone, address: order.address };
+      await save({ state: "idle", data: { last_customer: customer } });
+      if (cancelError || !cancelled) return text(psid, "အော်ဒါကို ချက်ချင်းဖျက်မရပါ။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
+      const cancelledOrder = cancelled as { product_id?: string | null };
+      if (cancelledOrder.product_id) await retryLowStockAlerts(owner, cancelledOrder.product_id);
+      return text(psid, `Order ID: ${publicOrderId} ကို ချက်ချင်းဖျက်ပြီးပါပြီရှင်။ Stock ကိုလည်း ပြန်ထည့်ပြီးပါပြီ။`);
     }
     await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
     return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
