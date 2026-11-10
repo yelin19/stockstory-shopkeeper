@@ -78,7 +78,17 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           return Response.json({ ok: true, payment_status: body.payment_status });
         }
 
-        const trackingUrl = body.tracking_url?.trim() || null;
+        const rawTrackingUrl = body.tracking_url?.trim() || null;
+        let trackingUrl: string | null = null;
+        if (rawTrackingUrl) {
+          const candidate = /^https?:\/\//i.test(rawTrackingUrl) ? rawTrackingUrl : `https://${rawTrackingUrl}`;
+          try {
+            const parsedUrl = new URL(candidate);
+            if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") trackingUrl = parsedUrl.toString();
+          } catch {
+            trackingUrl = null;
+          }
+        }
         const trackingNumber = body.tracking_number?.trim() || null;
         const imageUrl = body.image_url?.trim() || null;
         const imagePath = body.image_path?.trim() || null;
@@ -115,7 +125,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           return Response.json({ ok: true, accepted: true, delivery_status: deliveryStatus, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် အခြေအနေကိုသိမ်းပြီးပါပြီ" });
         }
         if (!order.psid) return Response.json({ error: "ဒီအော်ဒါမှာ Messenger customer မရှိပါ" }, { status: 400 });
-        if (!/^https?:\/\//i.test(trackingUrl ?? "")) return Response.json({ error: "Invalid tracking link" }, { status: 400 });
+        if (!trackingUrl) return Response.json({ error: "Tracking link မမှန်ပါ။ ဥပမာ https://share.google/... သို့မဟုတ် kex-express.com/... ပုံစံဖြင့် ထည့်ပါ။" }, { status: 400 });
         const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
         if (!tokenValue) return Response.json({ error: "Facebook Page Access Token မတွေ့ပါ" }, { status: 500 });
 
