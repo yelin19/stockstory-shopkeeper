@@ -416,10 +416,13 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+      const normalizedTrackingUrl = trackingUrl.trim()
+        ? (/^https?:\/\//i.test(trackingUrl.trim()) ? trackingUrl.trim() : `https://${trackingUrl.trim()}`)
+        : "";
       const response = await fetch("/api/admin/order-shipping", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: trackingUrl, image_url: imageUrl, image_path: imagePath }),
+        body: JSON.stringify({ order_id: order.id, delivery_status: deliveryStatus, tracking_number: trackingNumber, tracking_url: normalizedTrackingUrl, image_url: imageUrl, image_path: imagePath }),
       });
       const result = await response.json() as { error?: string; accepted?: boolean; returned?: boolean; notified?: boolean; delivery_status?: string; image_cleanup_failed?: boolean };
       if (!response.ok) throw new Error(result.error || "Messenger သို့ ပို့မရပါ");

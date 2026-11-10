@@ -79,16 +79,9 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         }
 
         const rawTrackingUrl = body.tracking_url?.trim() || null;
-        let trackingUrl: string | null = null;
-        if (rawTrackingUrl) {
-          const candidate = /^https?:\/\//i.test(rawTrackingUrl) ? rawTrackingUrl : `https://${rawTrackingUrl}`;
-          try {
-            const parsedUrl = new URL(candidate);
-            if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") trackingUrl = parsedUrl.toString();
-          } catch {
-            trackingUrl = null;
-          }
-        }
+        const trackingUrl = rawTrackingUrl
+          ? (/^https?:\/\//i.test(rawTrackingUrl) ? rawTrackingUrl : `https://${rawTrackingUrl}`)
+          : null;
         const trackingNumber = body.tracking_number?.trim() || null;
         const imageUrl = body.image_url?.trim() || null;
         const imagePath = body.image_path?.trim() || null;
