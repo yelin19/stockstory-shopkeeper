@@ -24,6 +24,7 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminStockRouteImport } from './routes/_authenticated/admin.stock'
 import { Route as ApiAdminDataCleanupRouteImport } from './routes/api/admin/data-cleanup'
 import { Route as ApiAdminLowStockAlertRouteImport } from './routes/api/admin/low-stock-alert'
+import { Route as ApiAdminOrderDeleteRouteImport } from './routes/api/admin/order-delete'
 import { Route as ApiAdminOrderShippingRouteImport } from './routes/api/admin/order-shipping'
 import { Route as ApiPublicShopMessengerRouteImport } from './routes/api/public/shop-messenger'
 import { Route as ApiPublicProductImageCodeRouteImport } from './routes/api/public/product-image.$code'
@@ -106,6 +107,11 @@ const ApiAdminLowStockAlertRoute = ApiAdminLowStockAlertRouteImport.update({
   path: '/api/admin/low-stock-alert',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminOrderDeleteRoute = ApiAdminOrderDeleteRouteImport.update({
+  id: '/api/admin/order-delete',
+  path: '/api/admin/order-delete',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAdminOrderShippingRoute = ApiAdminOrderShippingRouteImport.update({
   id: '/api/admin/order-shipping',
   path: '/api/admin/order-shipping',
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/admin/stock': typeof AuthenticatedAdminStockRoute
   '/api/admin/data-cleanup': typeof ApiAdminDataCleanupRoute
   '/api/admin/low-stock-alert': typeof ApiAdminLowStockAlertRoute
+  '/api/admin/order-delete': typeof ApiAdminOrderDeleteRoute
   '/api/admin/order-shipping': typeof ApiAdminOrderShippingRoute
   '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByTo {
   '/admin/stock': typeof AuthenticatedAdminStockRoute
   '/api/admin/data-cleanup': typeof ApiAdminDataCleanupRoute
   '/api/admin/low-stock-alert': typeof ApiAdminLowStockAlertRoute
+  '/api/admin/order-delete': typeof ApiAdminOrderDeleteRoute
   '/api/admin/order-shipping': typeof ApiAdminOrderShippingRoute
   '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -176,6 +184,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/stock': typeof AuthenticatedAdminStockRoute
   '/api/admin/data-cleanup': typeof ApiAdminDataCleanupRoute
   '/api/admin/low-stock-alert': typeof ApiAdminLowStockAlertRoute
+  '/api/admin/order-delete': typeof ApiAdminOrderDeleteRoute
   '/api/admin/order-shipping': typeof ApiAdminOrderShippingRoute
   '/api/public/shop-messenger': typeof ApiPublicShopMessengerRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -197,6 +206,7 @@ export interface FileRouteTypes {
     | '/admin/stock'
     | '/api/admin/data-cleanup'
     | '/api/admin/low-stock-alert'
+    | '/api/admin/order-delete'
     | '/api/admin/order-shipping'
     | '/api/public/shop-messenger'
     | '/admin/'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/admin/stock'
     | '/api/admin/data-cleanup'
     | '/api/admin/low-stock-alert'
+    | '/api/admin/order-delete'
     | '/api/admin/order-shipping'
     | '/api/public/shop-messenger'
     | '/admin'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/stock'
     | '/api/admin/data-cleanup'
     | '/api/admin/low-stock-alert'
+    | '/api/admin/order-delete'
     | '/api/admin/order-shipping'
     | '/api/public/shop-messenger'
     | '/_authenticated/admin/'
@@ -248,6 +260,7 @@ export interface RootRouteChildren {
   ShopRoute: typeof ShopRouteWithChildren
   ApiAdminDataCleanupRoute: typeof ApiAdminDataCleanupRoute
   ApiAdminLowStockAlertRoute: typeof ApiAdminLowStockAlertRoute
+  ApiAdminOrderDeleteRoute: typeof ApiAdminOrderDeleteRoute
   ApiAdminOrderShippingRoute: typeof ApiAdminOrderShippingRoute
   ApiPublicShopMessengerRoute: typeof ApiPublicShopMessengerRoute
   ApiPublicProductImageCodeRoute: typeof ApiPublicProductImageCodeRoute
@@ -360,6 +373,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminLowStockAlertRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/order-delete': {
+      id: '/api/admin/order-delete'
+      path: '/api/admin/order-delete'
+      fullPath: '/api/admin/order-delete'
+      preLoaderRoute: typeof ApiAdminOrderDeleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/admin/order-shipping': {
       id: '/api/admin/order-shipping'
       path: '/api/admin/order-shipping'
@@ -435,6 +455,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShopRoute: ShopRouteWithChildren,
   ApiAdminDataCleanupRoute: ApiAdminDataCleanupRoute,
   ApiAdminLowStockAlertRoute: ApiAdminLowStockAlertRoute,
+  ApiAdminOrderDeleteRoute: ApiAdminOrderDeleteRoute,
   ApiAdminOrderShippingRoute: ApiAdminOrderShippingRoute,
   ApiPublicShopMessengerRoute: ApiPublicShopMessengerRoute,
   ApiPublicProductImageCodeRoute: ApiPublicProductImageCodeRoute,
