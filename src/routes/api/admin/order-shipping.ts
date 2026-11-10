@@ -60,20 +60,35 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
         const { data: userData, error: userError } = await authClient.auth.getUser(token);
         if (userError || !userData.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, product_name, total, delivery_status, payment_status, status").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
+        const { data: order, error: orderError } = await authClient.from("orders").select("id, owner_id, psid, order_no, public_order_id, product_name, product_unit, quantity, total, delivery_status, payment_status, status, currency").eq("id", body.order_id).eq("owner_id", userData.user.id).maybeSingle();
         if (orderError) return Response.json({ error: orderError.message }, { status: 500 });
         if (!order) return Response.json({ error: "Order not found" }, { status: 404 });
         if (order.status === "cancelled") return Response.json({ error: "Order is cancelled" }, { status: 409 });
+        const { data: orderGroup, error: groupError } = await authClient.from("orders")
+          .select("id, psid, public_order_id, product_name, product_unit, quantity, total, delivery_status, payment_status, status, currency")
+          .eq("owner_id", userData.user.id).eq("public_order_id", order.public_order_id);
+        if (groupError) return Response.json({ error: groupError.message }, { status: 500 });
+        const group = orderGroup ?? [order];
+        const groupIds = group.map((item) => item.id);
+        const groupProducts = group.map((item) => `${item.product_name} × ${item.quantity}${item.product_unit ? ` ${item.product_unit}` : ""}`).join(", ");
+        const groupTotal = group.reduce((sum, item) => sum + Number(item.total), 0);
+        const updateOrderGroup = async (values: Record<string, unknown>) => {
+          for (const id of groupIds) {
+            const { error } = await authClient.from("orders").update(values)
+              .eq("owner_id", userData.user.id).eq("id", id);
+            if (error) return error;
+          }
+          return null;
+        };
 
         if (body.payment_status) {
           if (body.payment_status === "approved" && !order.psid) return Response.json({ error: "ဒီအော်ဒါမှာ Messenger customer မရှိပါ" }, { status: 400 });
           const now = new Date().toISOString();
-          const { error: paymentError } = await authClient.from("orders").update({ payment_status: body.payment_status, payment_approved_at: body.payment_status === "approved" ? now : null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          const paymentError = await updateOrderGroup({ payment_status: body.payment_status, payment_approved_at: body.payment_status === "approved" ? now : null, updated_at: now });
           if (paymentError) return Response.json({ error: paymentError.message }, { status: 500 });
           if (body.payment_status === "approved" && order.psid) {
-            const { data: orderCurrency } = await authClient.from("orders").select("currency").eq("id", order.id).eq("owner_id", userData.user.id).maybeSingle();
             const tokenValue = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
-            if (tokenValue) await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: `✅ Order ID: ${order.public_order_id} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းအမည်: ${order.product_name}\nပေးချေပြီးငွေ: ${formatCurrency(order.total, orderCurrency?.currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။` } }) });
+            if (tokenValue) await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(tokenValue)}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recipient: { id: order.psid }, messaging_type: "UPDATE", message: { text: `✅ Order ID: ${order.public_order_id} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းများ: ${groupProducts}\nပေးချေပြီးငွေ: ${formatCurrency(groupTotal, order.currency)}` } }) });
           }
           return Response.json({ ok: true, payment_status: body.payment_status });
         }
@@ -99,7 +114,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
             const imageRemoved = await removeTemporaryDeliveryImage(userData.user.id, imagePath);
             return Response.json({ error: "ပို့ဆောင်မှုမအောင်မြင်ပါ status တွင် ဓာတ်ပုံမပို့နိုင်ပါ", image_cleanup_failed: !imageRemoved }, { status: 400 });
           }
-          const { error: returnedError } = await authClient.from("orders").update({ delivery_status: "returned", updated_at: new Date().toISOString() }).eq("id", order.id).eq("owner_id", userData.user.id);
+          const returnedError = await updateOrderGroup({ delivery_status: "returned", updated_at: new Date().toISOString() });
           if (returnedError) return Response.json({ error: returnedError.message }, { status: 500 });
           return Response.json({ ok: true, returned: true, delivery_status: "returned", message: "ပို့ဆောင်မှုမအောင်မြင်ပါအဖြစ် သိမ်းပြီးပါပြီ" });
         }
@@ -113,7 +128,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           : body.delivery_status ?? "confirmed";
         const now = new Date().toISOString();
         if (!readyToShip) {
-          const { error: acceptedError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: null, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+          const acceptedError = await updateOrderGroup({ delivery_status: deliveryStatus, sent: false, sent_at: null, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: null, updated_at: now });
           if (acceptedError) return Response.json({ error: acceptedError.message }, { status: 500 });
           return Response.json({ ok: true, accepted: true, delivery_status: deliveryStatus, message: "Tracking ID နှင့် Link နှစ်ခုလုံးမပြည့်သေးပါသဖြင့် အခြေအနေကိုသိမ်းပြီးပါပြီ" });
         }
@@ -130,7 +145,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           in_transit: "ပို့ဆောင်နေပါပြီ",
           delivered: "ပစ္စည်းရောက်ရှိပြီးပါပြီ",
         };
-        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ${statusMessage[deliveryStatus] ?? statusMessage["shipped"]}\nပစ္စည်းအမည်: ${order.product_name}\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
+        const message = `🚚 ဝယ်ယူမှု ID: ${orderId} အခြေအနေ — ${statusMessage[deliveryStatus] ?? statusMessage["shipped"]}\nပစ္စည်းများ: ${groupProducts}\nစုစုပေါင်း: ${formatCurrency(groupTotal, order.currency)}\nစာတိုက် Tracking ID: ${trackingNumber}\nTracking link: ${trackingUrl}`;
         const sendText = await sendMessengerMessage(tokenValue, order.psid, { text: message });
         if (!sendText?.ok) {
           const imageRemoved = await removeTemporaryDeliveryImage(userData.user.id, imagePath);
@@ -143,7 +158,7 @@ export const Route = createFileRoute("/api/admin/order-shipping")({
           if (!sendImage?.ok) return Response.json({ error: sendImage ? "ပို့ဆောင်မှုဓာတ်ပုံကို Messenger သို့ ပို့မရပါ။ ဓာတ်ပုံလင့်ခ်ကို Facebook မဖတ်နိုင်ပါ။" : "Messenger server သို့ ချိတ်ဆက်မရပါ။ ဓာတ်ပုံမပို့နိုင်ပါ။", image_cleanup_failed: imageCleanupFailed }, { status: 502 });
         }
 
-        const { error: updateError } = await authClient.from("orders").update({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: now, updated_at: now }).eq("id", order.id).eq("owner_id", userData.user.id);
+        const updateError = await updateOrderGroup({ delivery_status: deliveryStatus, sent: true, sent_at: now, tracking_number: trackingNumber, tracking_url: trackingUrl, delivery_notified_at: now, updated_at: now });
         if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
         return Response.json({ ok: true, public_order_id: orderId, delivery_status: deliveryStatus, notified: true, image_cleanup_failed: imageCleanupFailed });
       },

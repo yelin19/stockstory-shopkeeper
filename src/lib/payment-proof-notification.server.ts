@@ -6,8 +6,8 @@ const envFirst = (...names: string[]) => names.map((name) => process.env[name]).
 export type PaymentProofReview = {
   orderId: string;
   product: string;
-  quantity: number;
-  unit: string;
+  quantity?: number;
+  unit?: string;
   total: number;
   currency?: string | null;
   customerName: string;
@@ -16,7 +16,8 @@ export type PaymentProofReview = {
 };
 
 export function formatPaymentProofReviewMessage(order: PaymentProofReview) {
-  return `🧾 ကြိုတင်ငွေလွှဲအော်ဒါ စစ်ဆေးရန်\nOrder ID: ${order.orderId}\nပစ္စည်း: ${order.product}\nအရေအတွက်: ${formatQuantity(order.quantity, order.unit)}\nစုစုပေါင်း: ${formatCurrency(order.total, order.currency)}\nဝယ်သူ: ${order.customerName}\nဖုန်း: ${order.phone}\nလိပ်စာ: ${order.address}\n\nငွေလွှဲဖြတ်ပိုင်းပုံကို အပေါ်တွင် ပို့ထားပါသည်။ အောက်ပါခလုတ်ကိုနှိပ်၍ အတည်ပြု သို့မဟုတ် ပယ်ဖျက်နိုင်ပါသည်။`;
+  const quantityLine = order.quantity !== undefined && order.unit ? `\nအရေအတွက်: ${formatQuantity(order.quantity, order.unit)}` : "";
+  return `🧾 ကြိုတင်ငွေလွှဲအော်ဒါ စစ်ဆေးရန်\nOrder ID: ${order.orderId}\nပစ္စည်း: ${order.product}${quantityLine}\nစုစုပေါင်း: ${formatCurrency(order.total, order.currency)}\nဝယ်သူ: ${order.customerName}\nဖုန်း: ${order.phone}\nလိပ်စာ: ${order.address}\n\nငွေလွှဲဖြတ်ပိုင်းပုံကို အပေါ်တွင် ပို့ထားပါသည်။ အောက်ပါခလုတ်ကိုနှိပ်၍ အတည်ပြု သို့မဟုတ် ပယ်ဖျက်နိုင်ပါသည်။`;
 }
 
 export function paymentReviewButtonTemplate(orderId: string) {

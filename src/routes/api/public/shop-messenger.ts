@@ -283,14 +283,22 @@ async function handlePaymentReviewAction(
   currency?: string | null,
 ) {
   const { data: order, error: orderError } = await db.from("orders")
-    .select("id, psid, public_order_id, order_no, product_name, total, status, payment_status, product_id, delivery_status, sent")
-    .eq("owner_id", owner).eq("public_order_id", orderId).maybeSingle();
+    .select("id, psid, public_order_id, order_no, product_name, product_unit, quantity, total, status, payment_status, product_id, delivery_status, sent, currency")
+    .eq("owner_id", owner).eq("public_order_id", orderId).order("created_at", { ascending: true }).limit(1).maybeSingle();
   if (orderError) return text(adminPsid, "Order အချက်အလက်ကို ဖတ်မရပါ။ အက်ပ်ထဲတွင် စစ်ဆေးပါ။");
   if (!order) return text(adminPsid, `Order ID: ${orderId} ကို မတွေ့ပါ။`);
+  const { data: orderGroup, error: groupError } = await db.from("orders")
+    .select("id, psid, product_name, product_unit, quantity, total, status, payment_status, product_id, delivery_status, sent, currency")
+    .eq("owner_id", owner).eq("public_order_id", orderId).order("created_at", { ascending: true });
+  if (groupError) return text(adminPsid, "Order အုပ်စုအချက်အလက်ကို ဖတ်မရပါ။ အက်ပ်ထဲတွင် စစ်ဆေးပါ။");
+  const group = orderGroup ?? [order];
+  const groupIds = group.map((item) => item.id);
+  const groupProducts = group.map((item) => `${item.product_name} × ${item.quantity}${item.product_unit ? ` ${item.product_unit}` : ""}`).join(", ");
+  const groupTotal = group.reduce((sum, item) => sum + Number(item.total), 0);
   if (action === "CANCEL_KEEP") return text(adminPsid, `Order ID: ${orderId} ကို မပယ်ဖျက်တော့ပါ။`);
-  if (order.status === "cancelled") return text(adminPsid, `Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးဖြစ်ပါသည်။`);
-  if (order.payment_status !== "proof_submitted") return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
-  if (orderIsLocked(order)) return text(adminPsid, `Order ID: ${orderId} ကို ပို့ဆောင်ရေးအခြေအနေကြောင့် ယခု မပြင်ဆင်နိုင်ပါ။`);
+  if (group.every((item) => item.status === "cancelled")) return text(adminPsid, `Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးဖြစ်ပါသည်။`);
+  if (group.some((item) => item.payment_status !== "proof_submitted")) return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
+  if (group.some((item) => orderIsLocked(item))) return text(adminPsid, `Order ID: ${orderId} ကို ပို့ဆောင်ရေးအခြေအနေကြောင့် ယခု မပြင်ဆင်နိုင်ပါ။`);
 
   if (action === "CANCEL") {
     await send(adminPsid, {
@@ -313,11 +321,11 @@ async function handlePaymentReviewAction(
     const now = new Date().toISOString();
     const { data: approved, error: approvalError } = await db.from("orders")
       .update({ payment_status: "approved", payment_approved_at: now, updated_at: now })
-      .eq("id", order.id).eq("owner_id", owner).eq("payment_status", "proof_submitted")
-      .select("id").maybeSingle();
+      .eq("owner_id", owner).in("id", groupIds).eq("payment_status", "proof_submitted")
+      .select("id");
     if (approvalError) return text(adminPsid, "ငွေပေးချေမှုကို အတည်ပြုမရပါ။ အက်ပ်ထဲတွင် ထပ်စစ်ပါ။");
-    if (!approved) return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
-    const buyerMessage = `✅ Order ID: ${orderId} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းအမည်: ${order.product_name}\nပေးချေပြီးငွေ: ${formatCurrency(Number(order.total), currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။`;
+    if (!approved?.length) return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
+    const buyerMessage = `✅ Order ID: ${orderId} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းများ: ${groupProducts}\nပေးချေပြီးငွေ: ${formatCurrency(groupTotal, currency ?? order.currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။`;
     if (order.psid && !(await sendUpdate(order.psid, buyerMessage))) console.error("Could not notify customer that prepaid order was approved");
     await text(adminPsid, `✅ Order ID: ${orderId} ကို အတည်ပြုပြီး ဝယ်သူထံ အကြောင်းကြားပါပြီ။`);
     return;
@@ -330,9 +338,9 @@ async function handlePaymentReviewAction(
   if (cancelError || !cancelled) return text(adminPsid, "Order ကို ပယ်ဖျက်မရပါ။ ပို့ဆောင်ရေးအခြေအနေကို အက်ပ်ထဲတွင် စစ်ဆေးပါ။");
   const now = new Date().toISOString();
   const { error: paymentError } = await db.from("orders").update({ payment_status: "rejected", updated_at: now })
-    .eq("id", order.id).eq("owner_id", owner).eq("payment_status", "proof_submitted");
+    .eq("owner_id", owner).in("id", groupIds).eq("payment_status", "proof_submitted");
   if (paymentError) console.error("Could not mark cancelled payment proof as rejected", paymentError.message);
-  if (order.product_id) await retryLowStockAlerts(owner, order.product_id);
+  for (const item of group) if (item.product_id) await retryLowStockAlerts(owner, item.product_id);
   const buyerMessage = `Order ID: ${orderId} ကို ဆိုင်ဘက်မှ ပယ်ဖျက်လိုက်ပါပြီရှင်။ ငွေလွှဲပြီးသားဖြစ်ပါက ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။`;
   if (!(await sendUpdate(order.psid, buyerMessage))) console.error("Could not notify customer that prepaid order was cancelled");
   await text(adminPsid, `❌ Order ID: ${orderId} ကို ပယ်ဖျက်ပြီးပါပြီ။`);
@@ -524,7 +532,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const cancelOrderId = orderCommand(msg, ["ဖျက်", "ဖျက်မယ်", "မယူတော့ဘူး", "မယူတော့ပါ", "cancel"]);
   if (editOrderId || cancelOrderId) {
     const publicOrderId = editOrderId ?? cancelOrderId!;
-    const { data: order } = await db.from("orders").select("*").eq("owner_id", owner).eq("psid", psid).eq("public_order_id", publicOrderId).maybeSingle();
+    const { data: order } = await db.from("orders").select("*").eq("owner_id", owner).eq("psid", psid).eq("public_order_id", publicOrderId).order("created_at", { ascending: true }).limit(1).maybeSingle();
     if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
@@ -679,48 +687,19 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           _note: cartItemsNote,
           _payment_method: isPrepaidCart ? "prepaid" : paymentMethod,
         };
-        let result = await callShopRpc(db, "place_cart_orders_from_messenger", cartArgs);
-        // Older deployments may not have migration 0026 yet. Fall back to the
-        // original service-role order function so checkout remains usable while
-        // the migration is being applied. The first created ID is shown to the
-        // customer as the cart's reference ID.
-        if (result.error && /function .*place_cart_orders_from_messenger|does not exist|public_order_id/i.test(result.error.message)) {
-          const fallbackRows: unknown[] = [];
-          let fallbackError: { message: string } | null = null;
-          for (const item of d.cart) {
-            const created = await callShopRpc(db, "place_order", {
-              _owner: owner,
-              _psid: psid,
-              _product_id: item.product_id,
-              _qty: item.qty,
-              _name: String(d.name),
-              _phone: String(d.phone),
-              _township: "",
-              _address: String(d.address),
-              _note: cartItemsNote,
-            });
-            if (created.error) {
-              fallbackError = created.error;
-              break;
-            }
-            const row = created.data as { id?: string; product_id?: string | null };
-            fallbackRows.push(row);
-            if (row.id) {
-              const { error: paymentError } = await db.from("orders").update({ payment_method: cartArgs._payment_method }).eq("id", row.id).eq("owner_id", owner);
-              if (paymentError) console.error("Could not save fallback cart payment method", paymentError.message);
-            }
-          }
-          result = fallbackError ? { data: null, error: fallbackError } : { data: fallbackRows, error: null };
-        }
+        const result = await callShopRpc(db, "place_cart_orders_from_messenger", cartArgs);
         if (result.error) {
           console.error("Cart checkout RPC failed", { owner, psid: psid.slice(-6), message: result.error.message });
           await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
           const outOfStockItem = d.cart.find((item) => result.error?.message.includes(item.product));
+          const migrationMissing = /function .*place_cart_orders_from_messenger|does not exist|public_order_id|duplicate key/i.test(result.error.message);
           return text(psid, result.error.message.includes("OUT_OF_STOCK")
             ? `${outOfStockItem?.product ?? "ပစ္စည်း"} အတွက် လက်ကျန်မလုံလောက်တော့ပါရှင်။`
+            : migrationMissing
+              ? "Cart အော်ဒါတင်စနစ်ကို ပြင်ဆင်နေဆဲဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါရှင်။"
             : "Cart အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါရှင်။");
         }
-        const createdRows = (Array.isArray(result.data) ? result.data : result.data ? [result.data] : []) as Array<{ public_order_id?: string; order_no?: number; product_id?: string | null }>;
+        const createdRows = (Array.isArray(result.data) ? result.data : result.data ? [result.data] : []) as Array<{ id?: string; public_order_id?: string; order_no?: number; product_id?: string | null; total?: number }>;
         const firstCreated = createdRows[0];
         const orderId = firstCreated?.public_order_id ?? String(firstCreated?.order_no ?? "").padStart(6, "0");
         for (const row of createdRows) {
@@ -728,6 +707,28 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         }
         await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
         const summary = `Order ID: ${orderId}\n${draftItems(d)}\nစုစုပေါင်း: ${fmt(draftTotal(d))}\n\nCart ထဲက ပစ္စည်းများကို အော်ဒါတင်ပြီးပါပြီရှင်။`;
+        if (isPrepaidCart) {
+          const proofUrl = String((d as Draft & { payment_proof_url?: string }).payment_proof_url ?? "");
+          const rowIds = createdRows.map((row) => row.id).filter((id): id is string => Boolean(id));
+          const now = new Date().toISOString();
+          const { data: submittedProof, error: proofUpdateError } = await db.from("orders")
+            .update({ payment_method: "prepaid", payment_status: "proof_submitted", payment_proof_url: proofUrl || null, payment_submitted_at: now })
+            .eq("owner_id", owner).in("id", rowIds).neq("payment_status", "proof_submitted").select("id");
+          if (proofUpdateError) console.error("Could not save prepaid cart payment proof", proofUpdateError.message);
+          if (submittedProof?.length && shopCurrency?.low_stock_alert_psid && proofUrl) {
+            const reviewMessage = formatPaymentProofReviewMessage({
+              orderId,
+              product: draftItems(d),
+              total: draftTotal(d),
+              currency: shopCurrency.currency,
+              customerName: String(d.name ?? ""),
+              phone: String(d.phone ?? ""),
+              address: String(d.address ?? ""),
+            });
+            const delivery = await sendPaymentProofNotification(shopCurrency.low_stock_alert_psid, reviewMessage, proofUrl, orderId);
+            if (!delivery.textSent || !delivery.receiptSent) console.error("Could not deliver prepaid cart review to the configured Messenger recipient", delivery.reason);
+          }
+        }
         if (!isPrepaidCart) await send(psid, { text: `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}` });
         return text(psid, isPrepaidCart ? `${summary}\nငွေကြိုလွှဲအော်ဒါများကို Admin စစ်ဆေးရန် ပို့ထားပါပြီရှင်။` : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`);
       }
