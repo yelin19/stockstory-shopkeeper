@@ -28,7 +28,7 @@ export const getPublicProduct = createServerFn({ method: "GET" })
     const url = new URL(req.url);
     const sandboxHost = url.hostname === "localhost" ? req.headers.get("x-forwarded-host") : null;
     const origin = sandboxHost ? `https://${sandboxHost}` : url.origin;
-    return { product: rows?.[0] ?? null, origin };
+    return { product: rows?.[0]?.stock > 0 ? rows[0] : null, origin };
   });
 
 export const getPublicCatalog = createServerFn({ method: "GET" })
@@ -45,6 +45,7 @@ export const getPublicCatalog = createServerFn({ method: "GET" })
       .select("id,code,name,category,price,stock,unit,image_url,description,active")
       .eq("owner_id", settings.owner_id)
       .eq("active", true)
+      .gt("stock", 0)
       .order("code");
     if (error) throw error;
     const { data: orders, error: ordersError } = await supabaseAdmin
