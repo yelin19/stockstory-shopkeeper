@@ -680,6 +680,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           _payment_method: isPrepaidCart ? "prepaid" : paymentMethod,
         });
         if (result.error) {
+          console.error("Cart checkout RPC failed", { owner, psid: psid.slice(-6), message: result.error.message });
           await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
           const outOfStockItem = d.cart.find((item) => result.error?.message.includes(item.product));
           return text(psid, result.error.message.includes("OUT_OF_STOCK")
