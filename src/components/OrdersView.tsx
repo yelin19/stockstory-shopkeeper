@@ -146,16 +146,16 @@ export function OrdersView({ mode }: { mode: Mode }) {
     if (!window.confirm(message)) return;
     setBulkDeleteBusy(true);
     try {
-      if (mode === "orders") {
-        const rowsToCancel = orders.filter((o) => orderIds.includes(o.public_order_id) && o.status !== "cancelled" && !isOrderShipped(o));
-        for (const order of rowsToCancel) {
-          const { error } = await supabase.rpc("cancel_order", { _order_id: order.id });
-          if (error) throw error;
-        }
-      } else {
-        const { error } = await supabase.rpc("delete_shipped_order_records", { _public_order_ids: orderIds });
-        if (error) throw error;
-      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("အကောင့်ဝင်ထားရန်လိုပါသည်");
+      const response = await fetch("/api/admin/order-delete", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ public_order_ids: orderIds, mode: mode === "orders" ? "pending" : "shipped" }),
+      });
+      const result = await response.json() as { error?: string; deleted?: number };
+      if (!response.ok) throw new Error(result.error || "အော်ဒါများဖျက်မရပါ");
       toast.success(`${orderIds.length} ခုကို ဖျက်ပြီးပါပြီ`);
       setSelectedOrderIds([]);
       qc.invalidateQueries();
