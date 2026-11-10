@@ -2,7 +2,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { FileSpreadsheet, Copy, Truck, Undo2, Check, Printer } from "lucide-react";
+import { FileSpreadsheet, Copy, Truck, Undo2, Check, Printer, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isOrderShipped, ordersQuery, settingsQuery, type Order } from "@/lib/shop-data";
 import { exportXlsx, money, type Row } from "@/lib/export";
@@ -52,6 +52,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
   const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
   const [approvingPaymentId, setApprovingPaymentId] = useState<string | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
   const scopedOrders = useMemo(
     () => orders.filter((o) => mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o)),
@@ -186,6 +187,25 @@ export function OrdersView({ mode }: { mode: Mode }) {
       qc.invalidateQueries();
     } catch (err) { toast.error((err as Error).message); }
     finally { setApprovingPaymentId(null); }
+  }
+
+  async function deleteOrder(o: Order) {
+    if (deletingOrderId) return;
+    const related = orders.filter((item) => item.public_order_id === o.public_order_id && item.status !== "cancelled" && !isOrderShipped(item));
+    if (!window.confirm(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ဖျက်မည်လား။ Stock ကို ပြန်ထည့်ပါမည်။`)) return;
+    setDeletingOrderId(o.id);
+    try {
+      for (const item of related) {
+        const { error } = await supabase.rpc("cancel_order", { _order_id: item.id });
+        if (error) throw error;
+      }
+      toast.success(`ဝယ်ယူမှု ID ${o.public_order_id} ကို ဖျက်ပြီး Stock ပြန်ထည့်ပြီးပါပြီ`);
+      qc.invalidateQueries();
+    } catch (err) {
+      toast.error(`အော်ဒါဖျက်မရပါ: ${(err as Error).message}`);
+    } finally {
+      setDeletingOrderId(null);
+    }
   }
 
   // group by category → product for print
@@ -349,6 +369,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                           <div className="no-print mt-2 flex flex-wrap justify-end gap-1">
                             {o.payment_status === "proof_submitted" && <Button size="sm" variant="default" className="h-8 px-2 text-xs" title="ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အတည်ပြုမည်" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "ငွေပေးချေမှု အတည်ပြုမည်"}</Button>}
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="Tracking ID၊ Link နှင့် ပုံထည့်ပြီး Customer ဆီ Messenger ပို့မည်" onClick={() => setEditingDeliveryId(editingDeliveryId === o.id ? null : o.id)}><Truck /> ပို့ဆောင်ရေး</Button>
+                            <Button size="sm" variant="destructive" className="h-8 px-2 text-xs" title="အော်ဒါဖျက်ပြီး Stock ပြန်ထည့်မည်" onClick={() => deleteOrder(o)} disabled={deletingOrderId === o.id}><Trash2 /> {deletingOrderId === o.id ? "ဖျက်နေသည်..." : "ဖျက်မည်"}</Button>
                             <Button size="sm" variant="outline" className="h-8 px-2 text-xs" title="ဝယ်ယူသူ၏ ပို့ဆောင်မည့်လိပ်စာကို Copy လုပ်မည်" onClick={() => copyAddress(o)}><Copy /> လိပ်စာ Copy</Button>
                           </div>
                         )}
@@ -444,8 +465,8 @@ function DeliveryEditor({ order, onSaved }: { order: Order; onSaved: () => void 
   return (
     <div className="mt-2 space-y-2 rounded-lg border bg-muted p-3 text-left text-xs" onClick={(e) => e.stopPropagation()}>
       <div className="font-semibold">ဝယ်ယူမှု ID: {order.public_order_id} — ပို့ဆောင်ရေးအချက်အလက်</div>
-      <label className="block text-xs font-medium">ပို့ဆောင်မှုအခြေအနေ<select className={`${sel} mt-1 w-full`} value={deliveryStatus} onChange={(e) => setDeliveryStatus(e.target.value)}>
-        {Object.entries(deliveryLabels).filter(([key]) => key !== "cancelled").map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      <label className="block text-xs font-medium">ပို့ဆောင်မှုအခြေအနေ<select className={`${sel} mt-1 w-full`} value="confirmed" disabled>
+        <option value="confirmed">အော်ဒါလက်ခံပြီး</option>
       </select></label>
       <Input value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} placeholder="Tracking ID (ဒီအော်ဒါအတွက် သီးသန့်)" />
       <Input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (တူရင် အုပ်စုလိုက်ထည့်နိုင်)" />
