@@ -434,7 +434,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       const previousCustomer = previousOrder
         ? readCustomerDetails({ name: previousOrder.customer_name, phone: previousOrder.phone, address: previousOrder.address })
-        : null;
+        : readCustomerDetails(s.data["last_customer"]);
       const data: CartDraft = {
         cart,
         prepay_allowed: allPrepaid,
