@@ -707,6 +707,14 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
       if (d.cart?.length) {
         const isPrepaidCart = d.payment_method === "prepaid";
+        if (isPrepaidCart && !d.payment_proof_url) {
+          const { data: bank } = await db.from("shop_settings")
+            .select("bank_name,bank_account_name,bank_account_number")
+            .eq("owner_id", owner)
+            .maybeSingle();
+          await save({ state: "awaiting_payment_proof", data: d });
+          return text(psid, `ငွေလွှဲပြီးသားဖြတ်ပိုင်းကို အရင်ပို့ပေးပါရှင်။ ဖြတ်ပိုင်းရပြီးမှ အော်ဒါကို အတည်ပြုတင်ပေးပါမယ်။\n\nငွေလွှဲရန်ဘဏ်အချက်အလက်\nဘဏ်: ${bank?.bank_name ?? "Admin ထံ ဆက်သွယ်ပါ"}\nအကောင့်အမည်: ${bank?.bank_account_name ?? "မသတ်မှတ်ရသေးပါ"}\nအကောင့်နံပါတ်: ${bank?.bank_account_number ?? "မသတ်မှတ်ရသေးပါ"}\nပေးချေရန်ပမာဏ: ${fmt(draftTotal(d))}\n\nငွေလွှဲပြီးပါက ဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပါရှင်။`);
+        }
         const paymentMethod: CashPaymentMethod = "seller_delivery_cash";
         const cartItemsNote = `CART_ITEMS:${JSON.stringify(d.cart.map((item) => ({ product: item.product, qty: item.qty, unit: item.unit, price: item.price })))}`;
         const cartArgs = {
@@ -889,8 +897,16 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
 async function handlePaymentProof(db: Admin, owner: string, psid: string, imageUrl: string) {
   const { data: existing } = await db.from("messenger_sessions").select("*").eq("owner_id", owner).eq("psid", psid).maybeSingle();
   const s = existing as Session | null;
-  if (!s || s.state !== "awaiting_payment_proof") return text(psid, "ငွေပေးချေရန်စောင့်နေသော အော်ဒါမရှိပါ။ အရင်ဆုံး ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါရှင်။");
+  if (!s || s.state !== "awaiting_payment_proof") return text(psid, "ငွေကြိုပေးချေရန်စောင့်နေသော အော်ဒါမရှိပါ။ အရင်ဆုံး ပစ္စည်း Code နှင့် အရေအတွက်ကို ပို့ပါရှင်။");
   const data: Record<string, unknown> = { ...(s.data as Record<string, unknown>), payment_proof_url: imageUrl };
+  if (Array.isArray(data["cart"]) && data["name"] && data["phone"] && data["address"]) {
+    await db.from("messenger_sessions").upsert({ ...s, state: "confirm", data: data as never, updated_at: new Date().toISOString() });
+    const cart = data["cart"] as Array<{ product: string; qty: number; unit: string; price: number }>;
+    const { data: shop } = await db.from("shop_settings").select("currency").eq("owner_id", owner).maybeSingle();
+    const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${formatCurrency(item.price * item.qty, shop?.currency)}`).join("\n");
+    const total = cart.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
+    return text(psid, `ငွေလွှဲဖြတ်ပိုင်း ရရှိပါပြီရှင်။\n\n🧾 အော်ဒါစာရင်း\n${lines}\nစုစုပေါင်း: ${formatCurrency(total, shop?.currency)}\nငွေပေးချေမှု: ${paymentMethodLabel("prepaid")}\nငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီး အော်ဒါအတည်ပြုရန် YES ကိုနှိပ်ပါ။\n\nအမည်: ${data["name"]}\nဖုန်း: ${data["phone"]}\nလိပ်စာ: ${data["address"]}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုပို့ပါရှင်။`);
+  }
   const previousCustomer = readCustomerDetails(data["previous_customer"]);
   await db.from("messenger_sessions").upsert({ ...s, state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: data as never, updated_at: new Date().toISOString() });
   if (previousCustomer) return reuseCustomerDetailsChoice(psid, previousCustomer);
