@@ -450,6 +450,7 @@ export type Database = {
     }
     Functions: {
       cancel_order: { Args: { _order_id: string }; Returns: undefined }
+      delete_shipped_order_records: { Args: { _public_order_ids: string[] }; Returns: number }
       cancel_order_by_customer: {
         Args: { _owner: string; _psid: string; _public_order_id: string }
         Returns: {

@@ -53,6 +53,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
   const [approvingPaymentId, setApprovingPaymentId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
 
   const scopedOrders = useMemo(
     () => orders.filter((o) => mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o)),
@@ -131,8 +132,38 @@ export function OrdersView({ mode }: { mode: Mode }) {
   }
 
   function toggleAllFiltered() {
-    const ids = filtered.filter((o) => o.status !== "cancelled").map((o) => o.id);
+    const ids = filtered.filter((o) => o.status !== "cancelled" && (mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o))).map((o) => o.id);
     setSelectedOrderIds((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]);
+  }
+
+  async function deleteSelectedOrders() {
+    const selected = filtered.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled" && (mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o)));
+    if (!selected.length) return void toast.info("ဖျက်မည့်အော်ဒါကို အရင်ရွေးပါ");
+    const orderIds = [...new Set(selected.map((o) => o.public_order_id))];
+    const message = mode === "orders"
+      ? `${orderIds.length} ခုသော အော်ဒါကို ဖျက်မည်လား။ Stock ကို ပြန်ထည့်ပါမည်။`
+      : `${orderIds.length} ခုသော ပို့ပြီးသား Order မှတ်တမ်းကို အပြီးဖျက်မည်လား။ Stock ပြန်မထည့်ပါ။`;
+    if (!window.confirm(message)) return;
+    setBulkDeleteBusy(true);
+    try {
+      if (mode === "orders") {
+        const rowsToCancel = orders.filter((o) => orderIds.includes(o.public_order_id) && o.status !== "cancelled" && !isOrderShipped(o));
+        for (const order of rowsToCancel) {
+          const { error } = await supabase.rpc("cancel_order", { _order_id: order.id });
+          if (error) throw error;
+        }
+      } else {
+        const { error } = await supabase.rpc("delete_shipped_order_records", { _public_order_ids: orderIds });
+        if (error) throw error;
+      }
+      toast.success(`${orderIds.length} ခုကို ဖျက်ပြီးပါပြီ`);
+      setSelectedOrderIds([]);
+      qc.invalidateQueries();
+    } catch (err) {
+      toast.error(`အော်ဒါများဖျက်မရပါ: ${(err as Error).message}`);
+    } finally {
+      setBulkDeleteBusy(false);
+    }
   }
 
   async function applyBulkTrackingLink() {
@@ -298,12 +329,16 @@ export function OrdersView({ mode }: { mode: Mode }) {
         </div>}
       </div>
 
-      {mode === "orders" && <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
-        <div className="basis-full text-sm font-semibold">အော်ဒါအများစုအတွက် Tracking Link ထည့်ရန်</div>
+      <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
+        <div className="basis-full text-sm font-semibold">{mode === "orders" ? "အော်ဒါများကို ရွေးချယ်စီမံရန်" : "ပို့ပြီးသော Order များကို ရွေးချယ်စီမံရန်"}</div>
         <Button size="sm" variant="outline" onClick={toggleAllFiltered} disabled={!filtered.length}>
-          {filtered.filter((o) => o.status !== "cancelled").every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အော်ဒါများရွေးမည်"}
+          {filtered.filter((o) => o.status !== "cancelled" && (mode === "orders" ? !isOrderShipped(o) : isOrderShipped(o))).every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အားလုံးရွေးမည်"}
         </Button>
         <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedOrderIds.length} ခု</span>
+        <Button size="sm" variant="destructive" onClick={deleteSelectedOrders} disabled={!selectedOrderIds.length || bulkDeleteBusy}>
+          <Trash2 /> {bulkDeleteBusy ? "ဖျက်နေသည်..." : "ရွေးထားတာဖျက်မည်"}
+        </Button>
+        {mode === "orders" && <>
         <Button size="sm" variant="outline" onClick={printAddressLabels} disabled={!selectedAddressOrders.length} title="ရွေးထားသောအော်ဒါတစ်ခုစီအတွက် 100×75 မီလီမီတာ လိပ်စာတံဆိပ် တစ်ခုစီထုတ်မည်"><Printer /> လိပ်စာတံဆိပ် ပုံနှိပ်မည် ({selectedAddressOrders.length})</Button>
         <Input className="min-w-[240px] flex-1" value={bulkTrackingUrl} onChange={(e) => setBulkTrackingUrl(e.target.value)} placeholder="တူညီသော Tracking link (https://...)" />
         <Button size="sm" onClick={applyBulkTrackingLink} disabled={!selectedOrderIds.length || bulkTrackingBusy}>
@@ -311,7 +346,9 @@ export function OrdersView({ mode }: { mode: Mode }) {
         </Button>
         <span className="basis-full text-xs text-muted-foreground">Tracking link တူသောအော်ဒါများကို ရွေးပြီး ထည့်ပါ။ Tracking ID ကို အော်ဒါတစ်ခုချင်းစီမှာ သီးသန့်ထည့်နိုင်ပါသည်။</span>
         <span className="basis-full text-xs text-muted-foreground">လိပ်စာပုံနှိပ်ရာတွင် ရွေးထားသော အော်ဒါတစ်ခုစီကို 100×75 မီလီမီတာ စာရွက်တစ်ရွက်စီဖြင့် ထုတ်ပေးပါမည်။</span>
-      </div>}
+        </>}
+        {mode === "addresses" && <span className="basis-full text-xs text-muted-foreground">ပို့ပြီးသား Order မှတ်တမ်းကိုသာ ဖယ်ရှားမည်ဖြစ်ပြီး Stock နှင့် Customer လိပ်စာကို မပြောင်းလဲပါ။</span>}
+      </div>
 
       <div className="no-print rounded-2xl border bg-card p-3">
         <div className="mb-2 text-sm font-semibold">အော်ဒါရှာဖွေခြင်းနှင့် စစ်ထုတ်ခြင်း</div>
