@@ -250,8 +250,8 @@ const deliveryPaymentChoices = (psid: string, t: string, choices = customerPayme
 const reuseCustomerDetailsChoice = (psid: string, customer: CustomerDetails) => send(psid, {
   text: `အရင်အော်ဒါက အမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို ဒီအော်ဒါအတွက် ပြန်သုံးမလား။\nအမည်: ${customer.name}\nဖုန်း: ${customer.phone}\nလိပ်စာ: ${customer.address}\n\n${customerDetailsPhotoDisclosure}`,
   quick_replies: [
-    { content_type: "text", title: "အဟောင်းသုံးမည်", payload: "REUSE_CUSTOMER_DETAILS" },
-    { content_type: "text", title: "အသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
+    { content_type: "text", title: "လိပ်စာအဟောင်းသုံးမည်", payload: "REUSE_CUSTOMER_DETAILS" },
+    { content_type: "text", title: "လိပ်စာအသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
   ],
 });
 const orderActions = (psid: string, t: string, orderId: string) => send(psid, {
