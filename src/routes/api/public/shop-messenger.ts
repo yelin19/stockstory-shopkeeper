@@ -827,7 +827,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const allowedChoices = getProductPaymentChoices(p);
   if (paymentFlow === "unavailable") return text(psid, "ဒီပစ္စည်းအတွက် ငွေပေးချေနည်းလမ်း မသတ်မှတ်ရသေးပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
   const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
-    .eq("owner_id", owner).eq("psid", psid).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    .eq("owner_id", owner).eq("psid", psid).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const customer = readCustomerDetails(previous ? { name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address } : s.data["last_customer"]);
   if (paymentFlow === "prepaid") return startPrepaidPayment(p, req.qty, customer);
   if (paymentFlow === "seller_delivery_cash") return startSellerDeliveryCash(p, req.qty, customer);
