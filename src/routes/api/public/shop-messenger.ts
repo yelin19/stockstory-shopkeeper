@@ -667,27 +667,34 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       if (d.cart?.length) {
         const isPrepaidCart = d.payment_method === "prepaid";
         const paymentMethod: CashPaymentMethod = "seller_delivery_cash";
-        const orderIds: string[] = [];
         const cartItemsNote = `CART_ITEMS:${JSON.stringify(d.cart.map((item) => ({ product: item.product, qty: item.qty, unit: item.unit, price: item.price })))}`;
-        for (const item of d.cart) {
-          const itemData: Draft = { ...d, cart: undefined, product_id: item.product_id, code: item.code, product: item.product, unit: item.unit, price: item.price, qty: item.qty };
-          await save({ state: "confirm", data: itemData });
-          const baseArgs = { _owner: owner, _psid: psid, _product_id: item.product_id, _qty: item.qty, _name: String(d.name), _phone: String(d.phone), _township: "", _address: String(d.address), _note: cartItemsNote };
-          const result = isPrepaidCart
-            ? await callShopRpc(db, "place_order_from_messenger", baseArgs)
-            : await callShopRpc(db, "place_order_from_messenger_with_payment_method", { ...baseArgs, _payment_method: paymentMethod });
-          if (result.error) {
-            await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
-            return text(psid, result.error.message.includes("OUT_OF_STOCK") ? `${item.product} အတွက် လက်ကျန်မလုံလောက်တော့ပါရှင်။` : "Cart အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါရှင်။");
-          }
-          const created = result.data as { public_order_id?: string; order_no?: number; product_id?: string | null };
-          const orderId = created.public_order_id ?? String(created.order_no ?? "").padStart(6, "0");
-          orderIds.push(orderId);
-          if (created.product_id) await retryLowStockAlerts(owner, created.product_id);
+        const result = await callShopRpc(db, "place_cart_orders_from_messenger", {
+          _owner: owner,
+          _psid: psid,
+          _items: d.cart.map((item) => ({ product_id: item.product_id, qty: item.qty })),
+          _name: String(d.name),
+          _phone: String(d.phone),
+          _township: "",
+          _address: String(d.address),
+          _note: cartItemsNote,
+          _payment_method: isPrepaidCart ? "prepaid" : paymentMethod,
+        });
+        if (result.error) {
+          await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
+          const outOfStockItem = d.cart.find((item) => result.error?.message.includes(item.product));
+          return text(psid, result.error.message.includes("OUT_OF_STOCK")
+            ? `${outOfStockItem?.product ?? "ပစ္စည်း"} အတွက် လက်ကျန်မလုံလောက်တော့ပါရှင်။`
+            : "Cart အော်ဒါတင်ရာတွင် အမှားဖြစ်ပါသည်။ ခဏနေပြီး ထပ်စမ်းပါရှင်။");
+        }
+        const createdRows = (Array.isArray(result.data) ? result.data : result.data ? [result.data] : []) as Array<{ public_order_id?: string; order_no?: number; product_id?: string | null }>;
+        const firstCreated = createdRows[0];
+        const orderId = firstCreated?.public_order_id ?? String(firstCreated?.order_no ?? "").padStart(6, "0");
+        for (const row of createdRows) {
+          if (row.product_id) await retryLowStockAlerts(owner, row.product_id);
         }
         await save({ state: "idle", data: { last_customer: { name: d.name, phone: d.phone, address: d.address } } });
-        const summary = `Order ID များ: ${orderIds.join(", ")}\n${draftItems(d)}\nစုစုပေါင်း: ${fmt(draftTotal(d))}\n\nCart ထဲက ပစ္စည်းများကို အော်ဒါတင်ပြီးပါပြီရှင်။`;
-        if (!isPrepaidCart && orderIds.length === 1) await orderActions(psid, `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`, orderIds[0]!);
+        const summary = `Order ID: ${orderId}\n${draftItems(d)}\nစုစုပေါင်း: ${fmt(draftTotal(d))}\n\nCart ထဲက ပစ္စည်းများကို အော်ဒါတင်ပြီးပါပြီရှင်။`;
+        if (!isPrepaidCart) await send(psid, { text: `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}` });
         return text(psid, isPrepaidCart ? `${summary}\nငွေကြိုလွှဲအော်ဒါများကို Admin စစ်ဆေးရန် ပို့ထားပါပြီရှင်။` : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}`);
       }
       const baseArgs = {
