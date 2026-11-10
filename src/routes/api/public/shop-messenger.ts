@@ -76,6 +76,11 @@ const normalizeBotText = (value: string) => value
   .replace(/[၊။!?၊,\.\-_/]+/g, " ")
   .replace(/\s+/g, " ")
   .trim();
+const publicShopUrl = "https://stockstory-shopkeeper.lovable.app/shop";
+const isCatalogQuestion = (message: string) => {
+  const normalized = message.toLocaleLowerCase().replace(/[၊။!?၊,\.\-_/]+/g, " ").replace(/\s+/g, " ").trim();
+  return /ဘာ\s*(တွေ|များ)?\s*(ရောင်း|ရှိ)|ဘာ\s*ပစ္စည်း(တွေ|များ)?\s*(ရောင်း|ရှိ)|ဘာ\s*(ဝယ်|မှာ)လို့ရ|ပစ္စည်း\s*(စာရင်း|list)|product\s*(list|catalog)|what\s*(do you|is)\s*(sell|have)|show\s*(me\s*)?(products|items)/i.test(normalized);
+};
 const findSavedBotReply = async (db: Admin, owner: string, message: string) => {
   const { data, error } = await db.from("bot_replies")
     .select("question,answer,quick_replies")
@@ -360,6 +365,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (paired !== true) return text(psid, "PIN မမှန်ပါ၊ သက်တမ်းကုန်နေပါသည်၊ သို့မဟုတ် ထပ်မံကြိုးစားမှုများလွန်းနေပါသည်။ ဆက်တင်များတွင် PIN အသစ်သတ်မှတ်ပါ။");
     await retryLowStockAlerts(owner);
     return text(psid, lowStockPairingConfirmation());
+  }
+  if (s.state === "idle" && isCatalogQuestion(msg)) {
+    const catalogReply = `ဆိုင်မှာရောင်းနေတဲ့ ပစ္စည်းတွေ၊ လက်ကျန်နဲ့ ဈေးနှုန်းတွေကို ဒီလင့်မှာ ဝင်ကြည့်နိုင်ပါတယ်ရှင်။\n${publicShopUrl}\n\nပစ္စည်းတစ်ခုချင်းစီကို နှိပ်ပြီး ဖော်ပြချက်ကြည့်နိုင်သလို Cart ထဲထည့်ပြီး Messenger ကနေ အော်ဒါတင်နိုင်ပါတယ်ရှင်။`;
+    await rememberChatMessage(db, owner, psid, "shop", catalogReply);
+    return text(psid, catalogReply);
   }
   const paymentReview = msg.trim().match(/^PAYMENT_REVIEW_(CANCEL_CONFIRM|CANCEL_KEEP|APPROVE|CANCEL):([0-9]{6})$/);
   if (paymentReview) {
