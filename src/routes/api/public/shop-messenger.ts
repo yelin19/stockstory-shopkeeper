@@ -558,7 +558,13 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
-      await save({ state: "cancel_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
+      await save({ state: "cancel_order", data: {
+        public_order_id: publicOrderId,
+        product: order.product_name,
+        unit: order.product_unit,
+        quantity: order.quantity,
+        cancel_customer: { name: order.customer_name, phone: order.phone, address: order.address },
+      } });
       return confirmation(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nဒီအော်ဒါကို မယူတော့ဘဲ ပယ်ဖျက်မှာ သေချာပါသလား။`);
     }
     await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
@@ -583,6 +589,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     }
     await save({ state: "idle", data: {} });
     return text(psid, "❌ အော်ဒါကို ပယ်ဖျက်လိုက်ပါပြီ။ ပစ္စည်း Code နှင့် အရေအတွက်ကို ထပ်ပို့နိုင်ပါတယ်။");
+  }
+
+  if (s.state === "awaiting_payment_proof") {
+    return text(psid, "ငွေကြိုလွှဲအော်ဒါတင်ရန် ငွေလွှဲပြီးသားဖြတ်ပိုင်းဓာတ်ပုံကို ဒီ Messenger မှာ ပို့ပေးပါရှင်။ ပုံမပို့ရသေးသဖြင့် အော်ဒါကို မတင်ရသေးပါ။ မဝယ်တော့ပါက NO ကိုပို့နိုင်ပါတယ်ရှင်။");
   }
 
 
@@ -677,7 +687,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const { data: cancelled, error } = await callShopRpc(db, "cancel_order_by_customer", {
         _owner: owner, _psid: psid, _public_order_id: String((d as { public_order_id?: string }).public_order_id),
       });
-      await save({ state: "idle", data: {} });
+      const cancelledCustomer = (d as Draft & { cancel_customer?: CustomerDetails }).cancel_customer;
+      await save({ state: "idle", data: cancelledCustomer ? { last_customer: cancelledCustomer } : {} });
       if (error) return text(psid, "အော်ဒါဖျက်ရာတွင် အမှားဖြစ်ပါသည်။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
       const cancelledOrder = cancelled as { product_id?: string | null } | null;
       if (cancelledOrder?.product_id) await retryLowStockAlerts(owner, cancelledOrder.product_id);
