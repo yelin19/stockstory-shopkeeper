@@ -47,6 +47,7 @@ const shop = {
   low_stock_alert_pin_hash: null,
 };
 let session: Row | null;
+let sentMessages: Array<Record<string, unknown>>;
 
 function signedRequest(body: string) {
   const signature = createHmac("sha256", secret).update(body).digest("hex");
@@ -70,8 +71,21 @@ async function message(text: string) {
 beforeEach(() => {
   vi.stubEnv("SHOP_FB_APP_SECRET", secret);
   vi.stubEnv("SHOP_FB_VERIFY_TOKEN", "test-only-verify-token");
-  vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "");
+  vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "test-only-page-access-token");
   session = null;
+  sentMessages = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (typeof init?.body === "string") {
+        const requestBody = JSON.parse(init.body) as {
+          message?: Record<string, unknown>;
+        };
+        if (requestBody.message) sentMessages.push(requestBody.message);
+      }
+      return new Response(null, { status: 200 });
+    }),
+  );
   database.from.mockReset();
   database.rpc.mockReset();
   database.from.mockImplementation((table: string): Chain => {
@@ -140,7 +154,10 @@ beforeEach(() => {
     return { data: null, error: null };
   });
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 const cartWithAddress = [
   "CART_ORDER",
@@ -167,6 +184,17 @@ const cartWithMultiplePostalCode = [
 describe("Messenger cart order with a website-selected address", () => {
   it("keeps the province and asks only for name and phone before placing the order", async () => {
     await message(cartWithAddress);
+    const initialMessage = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(initialMessage).toContain("🛒 รายการสั่งซื้อ");
+    expect(initialMessage).toContain("ที่อยู่จัดส่ง:");
+    expect(initialMessage).toContain("ตำบลมหาชัย");
+    expect(initialMessage).toContain("อำเภอเมืองสมุทรสาคร");
+    expect(initialMessage).toContain("จังหวัดสมุทรสาคร");
+    expect(initialMessage).not.toContain("လိပ်စာ:");
+    expect(sentMessages.at(-1)?.["quick_replies"]).toMatchObject([
+      { title: "ยืนยัน", payload: "YES" },
+      { title: "ยกเลิก", payload: "NO" },
+    ]);
     expect(session?.["state"]).toBe("cart_confirm");
     expect(session?.["data"]).toMatchObject({
       township: "เมืองสมุทรสาคร",
@@ -179,13 +207,31 @@ describe("Messenger cart order with a website-selected address", () => {
       postal_code: "74000",
     });
 
-    await message("YES");
+    await message("ยืนยัน");
     expect(session?.["state"]).toBe("ask_name_phone");
+    expect(String(sentMessages.at(-1)?.["text"] ?? "")).toContain("ชื่อผู้รับ:");
 
-    await message("Test Customer\n09123456789");
+    await message("ชื่อผู้รับ: Test Customer\nหมายเลขโทรศัพท์: 09123456789");
     expect(session?.["state"]).toBe("confirm");
+    const confirmationMessage = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(confirmationMessage).toContain("🧾 รายการสั่งซื้อ");
+    expect(confirmationMessage).toContain("ชื่อผู้รับ: Test Customer");
+    expect(confirmationMessage).toContain("หมายเลขโทรศัพท์: 09123456789");
+    expect(confirmationMessage).toContain(
+      "ที่อยู่จัดส่ง: 123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
+    );
+    expect(confirmationMessage).not.toContain("အမည်:");
+    expect(confirmationMessage).not.toContain("ပြည်နယ်:");
 
-    await message("YES");
+    await message("ยืนยัน");
+    const completedMessage = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(completedMessage).toContain("หมายเลขคำสั่งซื้อ:");
+    expect(completedMessage).toContain("ชื่อผู้รับ: Test Customer");
+    expect(completedMessage).toContain("ที่อยู่จัดส่ง:");
+    expect(completedMessage).not.toContain("အော်ဒါစာရင်း");
+    expect(sentMessages.at(-1)?.["quick_replies"]).toMatchObject([
+      { title: "ยกเลิกคำสั่งซื้อ", payload: "မယူတော့ဘူး 100001" },
+    ]);
     expect(database.rpc).toHaveBeenCalledWith(
       "place_cart_orders_from_messenger",
       expect.objectContaining({
@@ -200,6 +246,13 @@ describe("Messenger cart order with a website-selected address", () => {
       }),
     );
     expect(session).toMatchObject({ state: "idle" });
+  });
+
+  it("accepts the Thai cancel label in the initial cart confirmation", async () => {
+    await message(cartWithAddress);
+    await message("ยกเลิก");
+    expect(session).toMatchObject({ state: "idle" });
+    expect(String(sentMessages.at(-1)?.["text"] ?? "")).toContain("ยกเลิกคำสั่งซื้อแล้ว");
   });
 
   it("preserves a selected secondary postcode and village range in the order address", async () => {

@@ -23,8 +23,8 @@ export function usernameToEmail(username: string) {
 }
 
 export function isYes(t: string) {
-  return /^(y|yes|ok|confirm|ဟုတ်|ဟုတ်ကဲ့)$/i.test(t.trim());
+  return /^(y|yes|ok|confirm|ยืนยัน|ใช่|ตกลง|ဟုတ်|ဟုတ်ကဲ့)$/i.test(t.trim());
 }
 export function isNo(t: string) {
-  return /^(n|no|cancel|မလုပ်|မဟုတ်|မယူဘူး|မယူတော့ဘူး)$/i.test(t.trim());
+  return /^(n|no|cancel|ยกเลิก|ไม่ใช่|မလုပ်|မဟုတ်|မယူဘူး|မယူတော့ဘူး)$/i.test(t.trim());
 }
