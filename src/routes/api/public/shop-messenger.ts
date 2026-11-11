@@ -252,8 +252,9 @@ async function sendCommentPrivateReply(pageId: string, commentId: string, messag
   return sendPrivateReply(pageId, commentId, message, pageToken || envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"));
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
-const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
-const namePhoneExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx";
+const customerDetailsExample =
+  "ชื่อผู้รับ: မောင်မောင်\nเบอร์โทรศัพท์: 09xxxxxxxxx\nที่อยู่: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
+const namePhoneExample = "ชื่อผู้รับ: မောင်မောင်\nเบอร์โทรศัพท์: 09xxxxxxxxx";
 const customerDetailsRequest = (intro: string) =>
   `${intro}\n${customerDetailsExample}\n\n${customerDetailsPhotoDisclosure}`;
 async function sendUpdate(psid: string, messageText: string, cancellableOrderId?: string) {
@@ -333,7 +334,7 @@ const deliveryPaymentChoices = (psid: string, t: string, choices = customerPayme
   });
 const reuseCustomerDetailsChoice = (psid: string, customer: CustomerDetails) =>
   send(psid, {
-    text: `အရင်အော်ဒါက အမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို ဒီအော်ဒါအတွက် ပြန်သုံးမလား။\nအမည်: ${customer.name}\nဖုန်း: ${customer.phone}\nလိပ်စာ: ${customer.address}\n\n${customerDetailsPhotoDisclosure}`,
+    text: `အရင်အော်ဒါက အမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို ဒီအော်ဒါအတွက် ပြန်သုံးမလား။\nชื่อผู้รับ: ${customer.name}\nเบอร์โทรศัพท์: ${customer.phone}\nที่อยู่: ${customer.address}\n\n${customerDetailsPhotoDisclosure}`,
     quick_replies: [
       { content_type: "text", title: "လိပ်စာအဟောင်းသုံးမည်", payload: "REUSE_CUSTOMER_DETAILS" },
       { content_type: "text", title: "လိပ်စာအသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
@@ -579,7 +580,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         )
         .join("\n");
       const addressSummary = address
-        ? `\n📍 လိပ်စာ: ${thaiDeliveryAddress({
+        ? `\n📍 ที่อยู่: ${thaiDeliveryAddress({
             province_code: address.province.code,
             province_name: address.province.name,
             township: address.district?.name ?? thaiProvinceTownship(address.province),
@@ -807,19 +808,19 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     ? draft.cart.reduce((sum, item) => sum + item.price * item.qty, 0)
     : Number(draft.price ?? 0) * Number(draft.qty ?? 0);
   const draftAddressText = (draft: Draft) => {
-    if (draft.cart?.length) return `လိပ်စာ: ${thaiDeliveryAddress(draft)}`;
+    if (draft.cart?.length) return `ที่อยู่: ${thaiDeliveryAddress(draft)}`;
     if (draft.district_name || draft.subdistrict_name || draft.postal_code) {
-      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nအำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
+      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nအำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}\nรายละเอียดที่อยู่: ${draft.address ?? ""}`;
     }
     if (draft.province_name) {
-      return `ပြည်နယ်: ${draft.province_name}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
+      return `ပြည်နယ်: ${draft.province_name}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nรายละเอียดที่อยู่: ${draft.address ?? ""}`;
     }
     return draft.township && draft.address
-      ? `ခရိုင်/ပြည်နယ်: ${draft.township}\nလိပ်စာ: ${draft.address}`
-      : `လိပ်စာ: ${draft.address ?? ""}`;
+      ? `ခရိုင်/ပြည်နယ်: ${draft.township}\nที่อยู่: ${draft.address}`
+      : `ที่อยู่: ${draft.address ?? ""}`;
   };
   const cartOrderConfirmation = (draft: Draft) =>
-    `🧾 အော်ဒါစာရင်း\n${draftItems(draft)}\nစုစုပေါင်း: ${fmt(draftTotal(draft))}\nငွေပေးချေမှု: ${paymentMethodLabel(draft.payment_method)}\n${paymentMethodInstruction(draft.payment_method)}\n\nအမည်: ${draft.name ?? ""}\nဖုန်း: ${draft.phone ?? ""}\n${draftAddressText(draft)}\n\nအချက်အလက်မှန်ကန်ပါက “အတည်ပြု”၊ ပြင်လိုပါက “ပြင်မည်” ကိုနှိပ်ပါရှင်။`;
+    `🧾 အော်ဒါစာရင်း\n${draftItems(draft)}\nစုစုပေါင်း: ${fmt(draftTotal(draft))}\nငွေပေးချေမှု: ${paymentMethodLabel(draft.payment_method)}\n${paymentMethodInstruction(draft.payment_method)}\n\nชื่อผู้รับ: ${draft.name ?? ""}\nเบอร์โทรศัพท์: ${draft.phone ?? ""}\n${draftAddressText(draft)}\n\nအချက်အလက်မှန်ကန်ပါက “အတည်ပြု”၊ ပြင်လိုပါက “ပြင်မည်” ကိုနှိပ်ပါရှင်။`;
   const persistedAddress = (draft: Draft) =>
     draft.subdistrict_name && draft.province_name && draft.postal_code
       ? `${draft.address ?? ""}, ${draft.subdistrict_name}, ${draft.province_name}, ${draft.postal_code}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}`
@@ -874,7 +875,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         psid,
         nd.cart?.length
           ? cartOrderConfirmation(nd)
-          : `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\n${draftAddressText(nd)}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`,
+          : `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nชื่อผู้รับ: ${nd.name}\nเบอร์โทรศัพท์: ${nd.phone}\n${draftAddressText(nd)}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`,
         nd.cart?.length ? { yes: "အတည်ပြု", no: "ပြင်မည်" } : undefined,
       );
     }
@@ -899,7 +900,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           psid,
           nd.cart?.length
             ? cartOrderConfirmation(nd)
-            : `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\n${draftAddressText(nd)}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`,
+            : `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nชื่อผู้รับ: ${nd.name}\nเบอร์โทรศัพท์: ${nd.phone}\n${draftAddressText(nd)}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`,
           nd.cart?.length ? { yes: "အတည်ပြု", no: "ပြင်မည်" } : undefined,
         );
       }
@@ -983,7 +984,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         psid,
         nd.cart?.length
           ? `${imageNotice}${cartOrderConfirmation(nd)}`
-          : `${imageNotice}🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\n${draftAddressText(nd)}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုပို့ပါ။`,
+          : `${imageNotice}🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nชื่อผู้รับ: ${nd.name}\nเบอร์โทรศัพท์: ${nd.phone}\n${draftAddressText(nd)}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုပို့ပါ။`,
         nd.cart?.length ? { yes: "အတည်ပြု", no: "ပြင်မည်" } : undefined,
       );
     }
@@ -1071,8 +1072,8 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           }
         }
         const orderMessage = isPrepaidCart
-          ? `${summary}\n\nငွေလွှဲဖြတ်ပိုင်းရရှိပါပြီရှင်။ ဆိုင်ရှင်က စစ်ဆေးပြီး အတည်ပြုပေးပါမယ်။\n\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
-          : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`;
+          ? `${summary}\n\nငွေလွှဲဖြတ်ပိုင်းရရှိပါပြီရှင်။ ဆိုင်ရှင်က စစ်ဆေးပြီး အတည်ပြုပေးပါမယ်။\n\nชื่อผู้รับ: ${d.name}\nเบอร์โทรศัพท์: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
+          : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\n\nชื่อผู้รับ: ${d.name}\nเบอร์โทรศัพท์: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`;
         return orderActions(psid, orderMessage, orderId, false);
       }
       const baseArgs = {
@@ -1115,7 +1116,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         }
         return orderActions(psid, `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။\n\nမပို့ဆောင်မီ အောက်က “မယူတော့ဘူး” ခလုတ်ကို နှိပ်ပြီး အော်ဒါကို ဖျက်နိုင်ပါသည်ရှင်။`, orderId, false);
       }
-      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
+      await orderActions(
+        psid,
+        `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nชื่อผู้รับ: ${d.name}\nเบอร์โทรศัพท์: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`,
+        orderId,
+      );
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
@@ -1256,7 +1261,7 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
     return true;
   }
 
-  const detailsMessage = `အမည်: ${extracted.details.name}\nဖုန်း: ${extracted.details.phone}\nလိပ်စာ: ${extracted.details.address}`;
+  const detailsMessage = `ชื่อผู้รับ: ${extracted.details.name}\nเบอร์โทรศัพท์: ${extracted.details.phone}\nที่อยู่: ${extracted.details.address}`;
   await handleText(db, owner, psid, detailsMessage, origin, pageUsername, true);
   return true;
 }
