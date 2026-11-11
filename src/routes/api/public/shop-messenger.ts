@@ -9,6 +9,7 @@ import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
+import { decodeCartAddressLines, thaiProvinceTownship, type CartAddress } from "@/lib/thai-provinces";
 import { matchProductCode } from "@/lib/product-code-match";
 import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
@@ -23,7 +24,7 @@ type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["su
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
 type CustomerDetails = { name: string; phone: string; address: string };
 type CartItem = { product_id: string; code: string; product: string; unit: string; price: number; qty: number };
-type CartDraft = { cart?: CartItem[]; product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; address?: string; previous_customer?: CustomerDetails; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
+type CartDraft = { cart?: CartItem[]; product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; province_code?: string; province_abbr?: string; province_name?: string; previous_customer?: CustomerDetails; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
 function readCustomerDetails(value: unknown): CustomerDetails | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const data = value as Record<string, unknown>;
@@ -145,19 +146,24 @@ async function send(psid: string, message: Record<string, unknown>) {
   if (!res.ok) console.error("Messenger send failed", res.status, (await res.text().catch(() => "")).slice(0, 500));
 }
 const text = (psid: string, t: string) => send(psid, { text: t });
-const decodeCartPayload = (message: string): Array<{ code: string; qty: number }> | null => {
+type CartRequest = { items: Array<{ code: string; qty: number }>; address: CartAddress | null };
+const decodeCartPayload = (message: string): CartRequest | null => {
   const trimmed = message.trim();
   if (trimmed.startsWith("CART_ORDER")) {
+    const lines = trimmed.split(/\r?\n/).slice(1);
     const items: Array<{ code: string; qty: number }> = [];
-    for (const line of trimmed.split(/\r?\n/).slice(1)) {
-      const match = line.match(/^\s*\d+\.\s+.+?\s+[—-]\s+([0-9]+)\s+[^\[]*\[([^\]]+)\]\s*$/);
+    for (const line of lines) {
+      const match = line.match(/^\s*\d+\.\s+.+?\s+[—-]\s+([0-9]+)\s+[^[]*\[([^\]]+)\]\s*$/);
       if (!match) continue;
       const qty = Number(match[1]);
       const code = match[2]!.trim();
       if (!code || !Number.isInteger(qty) || qty < 1 || qty > 9999) return null;
       items.push({ code, qty });
     }
-    return items.length > 0 && items.length <= 50 ? items : null;
+    if (items.length < 1 || items.length > 50) return null;
+    // The province and street address are chosen on the website, so the bot can
+    // skip asking for them again. Older links without these lines still work.
+    return { items, address: decodeCartAddressLines(lines) };
   }
   if (!trimmed.startsWith("CART:")) return null;
   try {
@@ -170,7 +176,7 @@ const decodeCartPayload = (message: string): Array<{ code: string; qty: number }
       if (!code || !Number.isInteger(qty) || qty < 1 || qty > 9999) throw new Error("invalid_cart");
       return { code, qty };
     });
-    return items;
+    return { items, address: null };
   } catch { return null; }
 };
 type SavedBotReply = { answer: string; quickReplies: Array<{ title: string; payload: string }> };
@@ -187,6 +193,7 @@ async function sendCommentPrivateReply(pageId: string, commentId: string, messag
 }
 const customerDetailsPhotoDisclosure = "အချက်အလက်အသစ်ကို စာသားဖြင့်ပို့နိုင်သလို အမည်၊ ဖုန်းနံပါတ်နှင့် လိပ်စာပါသော ပုံကိုလည်း ပို့နိုင်ပါသည်။";
 const customerDetailsExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx\nလိပ်စာ: အိမ်အမှတ်၊ လမ်း၊ မြို့နယ်";
+const namePhoneExample = "အမည်: မောင်မောင်\nဖုန်း: 09xxxxxxxxx";
 const customerDetailsRequest = (intro: string) => `${intro}\n${customerDetailsExample}\n\n${customerDetailsPhotoDisclosure}`;
 async function sendUpdate(psid: string, messageText: string, cancellableOrderId?: string) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
@@ -286,6 +293,31 @@ function parseCustomerDetails(msg: string): CustomerDetails | null {
   const address = get(/(?:လိပ်စာ|ပို့ရမည့်လိပ်စာ|address)\s*[:：-]\s*(.+)/i) ?? lines.slice(2).join(" ");
   if (!name || !phone || !address || !/^[0-9+\-\s]{6,20}$/.test(phone)) return null;
   return { name: name.slice(0, 100), phone: phone.slice(0, 20), address: address.slice(0, 500) };
+}
+
+/**
+ * Name and phone only. Used when the delivery province and address were
+ * already chosen on the website cart, so the customer does not retype them.
+ */
+function parseNamePhone(msg: string): { name: string; phone: string } | null {
+  const lines = msg.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+  const get = (re: RegExp) => msg.match(re)?.[1]?.trim();
+  let name = get(/(?:အမည်|နာမည်|name)\s*[:：-]\s*(.+)/i);
+  let phone = get(/(?:ဖုန်း(?:နံပါတ်)?|phone)\s*[:：-]\s*([0-9+\-\s]{6,20})/i);
+  if (!name && !phone && lines.length >= 2) {
+    name = lines[0];
+    phone = lines[1];
+  } else if (name && !phone && lines.length >= 2) {
+    phone = lines[1];
+  } else if (!name && lines.length === 1) {
+    const combined = lines[0]!.match(/^(.*?)[\s,၊]+([0-9+\-\s]{6,20})$/);
+    if (combined) {
+      name = combined[1]?.trim();
+      phone = combined[2]?.trim();
+    }
+  }
+  if (!name || !phone || !/^[0-9+\-\s]{6,20}$/.test(phone)) return null;
+  return { name: name.slice(0, 100), phone: phone.slice(0, 20) };
 }
 
 async function handlePaymentReviewAction(
@@ -415,13 +447,14 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   if (s.state === "idle") {
     const cartRequest = decodeCartPayload(msg);
     if (cartRequest) {
+      const { items: cartRequestItems, address } = cartRequest;
       const { data: cartProducts } = await db.from("products")
         .select("id,code,name,unit,price,stock,allow_prepaid,allow_seller_delivery_cash")
         .eq("owner_id", owner).eq("active", true)
-        .in("code", cartRequest.map((item) => item.code));
+        .in("code", cartRequestItems.map((item) => item.code));
       const byCode = new Map((cartProducts ?? []).map((product) => [product.code.toLocaleLowerCase(), product]));
       const cart: CartItem[] = [];
-      for (const item of cartRequest) {
+      for (const item of cartRequestItems) {
         const product = byCode.get(item.code.toLocaleLowerCase());
         if (!product) return text(psid, `${item.code} ပစ္စည်းကို မတွေ့ပါရှင်။ Cart ကို ပြန်ဖွင့်ပြီး ထပ်စမ်းပါ။`);
         if (Number(product.stock) < item.qty) return text(psid, `${product.name} အတွက် လက်ကျန် ${formatQuantity(Number(product.stock), product.unit)} သာရှိပါသည်။ Cart ထဲမှာ အရေအတွက်လျှော့ပြီး ထပ်စမ်းပါရှင်။`);
@@ -431,22 +464,35 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const allPrepaid = (cartProducts ?? []).every((product) => product.allow_prepaid);
       const allSellerCash = (cartProducts ?? []).every((product) => product.allow_seller_delivery_cash);
       if (!allPrepaid && !allSellerCash) return text(psid, "Cart ထဲက ပစ္စည်းများတွင် ငွေပေးချေနည်းလမ်း မတူညီသောကြောင့် တစ်မျိုးတည်းဖြင့် အော်ဒါတင်၍မရပါရှင်။ ပစ္စည်းတစ်မျိုးချင်းစီ အော်ဒါတင်ပေးပါ။");
-      const { data: previousOrder } = await db.from("orders")
-        .select("customer_name,phone,address")
-        .eq("owner_id", owner).eq("psid", psid)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      const previousCustomer = previousOrder
-        ? readCustomerDetails({ name: previousOrder.customer_name, phone: previousOrder.phone, address: previousOrder.address })
-        : readCustomerDetails(s.data["last_customer"]);
+      // When the address already came from the website, do not offer an older
+      // address again: it would silently replace the province just selected.
+      const previousCustomer = address ? null : await (async () => {
+        const { data: previousOrder } = await db.from("orders")
+          .select("customer_name,phone,address")
+          .eq("owner_id", owner).eq("psid", psid)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        return previousOrder
+          ? readCustomerDetails({ name: previousOrder.customer_name, phone: previousOrder.phone, address: previousOrder.address })
+          : readCustomerDetails(s.data["last_customer"]);
+      })();
       const data: CartDraft = {
         cart,
+        ...(address ? {
+          township: thaiProvinceTownship(address.province),
+          address: address.detail,
+          province_code: address.province.code,
+          province_abbr: address.province.abbr,
+          province_name: address.province.name,
+        } : {}),
         prepay_allowed: allPrepaid,
         payment_method: allPrepaid ? "prepaid" : "seller_delivery_cash",
         ...(previousCustomer ? { previous_customer: previousCustomer } : {}),
       };
       await save({ state: "cart_confirm", data });
       const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${fmt(item.price * item.qty)}`).join("\n");
-      return confirmation(psid, `🛒 Cart အော်ဒါစာရင်း\n${lines}\n\nစုစုပေါင်း: ${fmt(total)}\nငွေပေးချေမှု: ${paymentMethodLabel(data.payment_method)}\n\nဒီပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES ကိုနှိပ်ပါ၊ မယူတော့ပါက NO ကိုနှိပ်ပါရှင်။`);
+      const addressSummary = address ? `\n📍 လိပ်စာ: ${thaiProvinceTownship(address.province)} · ${address.detail}` : "";
+      const nextStep = address ? "\n\nအတည်ပြုပြီးနောက် နာမည်နဲ့ ဖုန်းနံပါတ်သာ ဖြည့်ရပါမယ်ရှင်။" : "";
+      return confirmation(psid, `🛒 Cart အော်ဒါစာရင်း\n${lines}\n\nစုစုပေါင်း: ${fmt(total)}\nငွေပေးချေမှု: ${paymentMethodLabel(data.payment_method)}${addressSummary}${nextStep}\n\nဒီပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES ကိုနှိပ်ပါ၊ မယူတော့ပါက NO ကိုနှိပ်ပါရှင်။`);
     }
   }
   const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
@@ -585,7 +631,17 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   }
 
   if (s.state === "confirm" && isNo(msg)) {
-    await save({ state: "ask_customer_details", data: s.data });
+    const reenterData = { ...s.data } as Record<string, unknown>;
+    // The customer wants to correct the delivery details, so drop the address
+    // chosen on the website and collect the complete address in the chat.
+    if (reenterData["province_code"] || reenterData["township"]) {
+      delete reenterData["township"];
+      delete reenterData["province_code"];
+      delete reenterData["province_abbr"];
+      delete reenterData["province_name"];
+      delete reenterData["address"];
+    }
+    await save({ state: "ask_customer_details", data: reenterData });
     return text(psid, customerDetailsRequest("အချက်အလက်အသစ်ကို ဒီပုံစံနဲ့ ပို့ပါရှင်။"));
   }
   if (s.state === "confirm") {
@@ -625,14 +681,31 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const draftTotal = (draft: Draft) => draft.cart?.length
     ? draft.cart.reduce((sum, item) => sum + item.price * item.qty, 0)
     : Number(draft.price ?? 0) * Number(draft.qty ?? 0);
+  const draftAddressText = (draft: Draft) => draft.township && draft.address
+    ? `ခရိုင်/ပြည်နယ်: ${draft.township}\nလိပ်စာ: ${draft.address}`
+    : `လိပ်စာ: ${draft.address ?? ""}`;
 
   switch (s.state) {
     case "cart_confirm": {
       if (isNo(msg)) { await save({ state: "idle", data: {} }); return text(psid, "ဟုတ်ကဲ့ပါရှင်။ Cart အော်ဒါကို မတင်တော့ပါ။"); }
       if (!isYes(msg)) return confirmation(psid, "Cart ထဲက ပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES သို့မဟုတ် NO ကိုနှိပ်ပါရှင်။");
       const previousCustomer = previousCustomerFromDraft(d);
+      if (d.address && d.township) {
+        await save({ state: "ask_name_phone", data: d });
+        return text(psid, `📍 လိပ်စာ: ${d.township} · ${d.address}\n\nနောက်ဆုံးအဆင့်အနေနဲ့ ဝယ်သူအမည်နဲ့ ဖုန်းနံပါတ်ကို ပို့ပေးပါရှင်။\n${namePhoneExample}`);
+      }
       await save({ state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: d });
       return previousCustomer ? reuseCustomerDetailsChoice(psid, previousCustomer) : text(psid, customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။"));
+    }
+    case "ask_name_phone": {
+      const contact = parseNamePhone(msg);
+      if (!contact) {
+        return text(psid, `အမည်နဲ့ ဖုန်းနံပါတ်ကို ဒီပုံစံနဲ့ ပို့ပေးပါရှင်။\n${namePhoneExample}\n\nလိပ်စာကို website မှာ ရွေးပြီးသားဖြစ်ပါသည်: ${d.township ?? ""} · ${d.address ?? ""}`);
+      }
+      const nd: Draft = { ...d, ...contact };
+      await save({ state: "confirm", data: nd });
+      const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
+      return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\n${draftAddressText(nd)}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
     }
     case "reuse_customer_details": {
       const previousCustomer = previousCustomerFromDraft(d);
@@ -646,7 +719,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         delete nd.previous_customer;
         await save({ state: "confirm", data: nd });
         const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
-        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
+        return confirmation(psid, `🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\n${draftAddressText(nd)}\n\nအချက်အလက်မှန်ကန်ပါက YES ကိုနှိပ်ပါ။ ပြင်လိုပါက NO ကိုနှိပ်ပါရှင်။`);
       }
       if (choice === "new") {
         await save({ state: "ask_customer_details", data: clearCustomerDetails(d) });
@@ -714,7 +787,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       await save({ state: "confirm", data: nd });
       const selectedMethod = nd.prepay_allowed ? "prepaid" : nd.payment_method;
       const imageNotice = detailsFromImage ? "📷 ပုံမှ ဖတ်ထုတ်ထားသော အချက်အလက်ဖြစ်ပါသည်။ အောက်ပါအချက်အလက်များကို စစ်ဆေးပေးပါ။\n\n" : "";
-      return confirmation(psid, `${imageNotice}🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\nလိပ်စာ: ${nd.address}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုပို့ပါ။`);
+      return confirmation(psid, `${imageNotice}🧾 အော်ဒါစာရင်း\n${draftItems(nd)}\nစုစုပေါင်း: ${fmt(draftTotal(nd))}\nငွေပေးချေမှု: ${paymentMethodLabel(selectedMethod)}\n${paymentMethodInstruction(selectedMethod)}\n\nအမည်: ${nd.name}\nဖုန်း: ${nd.phone}\n${draftAddressText(nd)}\n\nလိပ်စာမှန်ကန်ရင် YES ကိုနှိပ်ပါ။ ပြင်လိုရင် NO ကိုပို့ပါ။`);
     }
     case "confirm": {
       if (!isYes(msg)) return text(psid, "လိပ်စာမှန်ကန်ရင် “yes” လို့ ပြန်ပို့ပါ။ ပြင်လိုရင် “no” လို့ ပို့ပါ။");
@@ -736,7 +809,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           _items: d.cart.map((item) => ({ product_id: item.product_id, qty: item.qty })),
           _name: String(d.name),
           _phone: String(d.phone),
-          _township: "",
+          _township: String(d.township ?? ""),
           _address: String(d.address),
           _note: cartItemsNote,
           _payment_method: isPrepaidCart ? "prepaid" : paymentMethod,
@@ -777,15 +850,15 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
               currency: shopCurrency.currency,
               customerName: String(d.name ?? ""),
               phone: String(d.phone ?? ""),
-              address: String(d.address ?? ""),
+              address: d.township ? `${d.township} · ${String(d.address ?? "")}` : String(d.address ?? ""),
             });
             const delivery = await sendPaymentProofNotification(shopCurrency.low_stock_alert_psid, reviewMessage, proofUrl, orderId);
             if (!delivery.textSent || !delivery.receiptSent) console.error("Could not deliver prepaid cart review to the configured Messenger recipient", delivery.reason);
           }
         }
         const orderMessage = isPrepaidCart
-          ? `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။\n\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
-          : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`;
+          ? `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။\n\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ဖျက်နိုင်ပါသည်။`
+          : `${summary}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`;
         return orderActions(psid, orderMessage, orderId, false);
       }
       const baseArgs = {
@@ -828,7 +901,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         }
         return orderActions(psid, `Order ID: ${orderId}\nနာမည်၊ ဖုန်းနံပါတ်၊ လိပ်စာ ရရှိပါပြီရှင်။ ငွေလွှဲဖြတ်ပိုင်းနဲ့အတူ Admin စစ်ဆေးရန် ပို့ထားပါပြီ။ Admin က အတည်ပြုခလုတ်နှိပ်ပြီးမှ ဝယ်ယူမှုအောင်မြင်ပါမယ်ရှင်။\n\nမပို့ဆောင်မီ အောက်က “မယူတော့ဘူး” ခလုတ်ကို နှိပ်ပြီး အော်ဒါကို ဖျက်နိုင်ပါသည်ရှင်။`, orderId, false);
       }
-      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\nလိပ်စာ: ${d.address}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
+      await orderActions(psid, `Order ID: ${orderId}\nပစ္စည်းအမည်: ${d.product}\nအရေအတွက်: ${formatQuantity(d.qty ?? 0, d.unit)}\nငွေပေးချေမှု: ${paymentMethodLabel(paymentMethod)}\n${paymentMethodInstruction(paymentMethod)}\nအမည်: ${d.name}\nဖုန်း: ${d.phone}\n${draftAddressText(d)}\n\nမပို့ဆောင်မီ အော်ဒါကို ပြင်နိုင်၊ ဖျက်နိုင်ပါသည်။`, orderId);
       if (pageUsername) {
         await send(psid, { attachment: { type: "template", payload: { template_type: "button", text: "နောက်ဆုံးအော်ဒါအခြေအနေများ သိရှိရန် Page ကို Follow လုပ်ထားပါ။", buttons: [{ type: "web_url", url: `https://www.facebook.com/${pageUsername.replace(/^@/, "")}`, title: "Page ကို Follow လုပ်ရန်" }] } } });
       }
@@ -930,7 +1003,7 @@ async function handleCustomerDetailsImage(db: Admin, owner: string, psid: string
     return true;
   }
   const session = existing as Session | null;
-  if (!session || !["ask_customer_details", "reuse_customer_details"].includes(session.state)) return false;
+  if (!session || !["ask_customer_details", "reuse_customer_details", "ask_name_phone"].includes(session.state)) return false;
 
   if (session.state === "reuse_customer_details") {
     const data = { ...session.data };

@@ -1,0 +1,215 @@
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
+import { messengerHandlers } from "@/routes/api/public/shop-messenger";
+
+type Row = Record<string, unknown>;
+type Chain = {
+  select: () => Chain;
+  eq: (column: string, value: unknown) => Chain;
+  neq: (column: string, value: unknown) => Chain;
+  gt: (column: string, value: unknown) => Chain;
+  in: (column: string, values: unknown[]) => Chain;
+  order: (column: string, options?: unknown) => Chain;
+  limit: (count: number) => Chain;
+  maybeSingle: () => Promise<{ data: Row | null; error: null }>;
+  upsert: (value: Row) => Promise<{ error: null }>;
+  insert: (value: Row) => Promise<{ error: null }>;
+  update: (value: Row) => Chain;
+  then: (
+    resolve: (value: unknown) => unknown,
+    reject: (reason: unknown) => unknown,
+  ) => Promise<unknown>;
+};
+
+const database = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: database }));
+
+const secret = "test-only-messenger-signing-key";
+const product = {
+  id: "00000000-0000-4000-8000-000000000001",
+  owner_id: "owner-test",
+  code: "111",
+  name: "Test item",
+  unit: "ခု",
+  price: 1000,
+  stock: 5,
+  allow_prepaid: false,
+  allow_seller_delivery_cash: true,
+  active: true,
+};
+const shop = {
+  owner_id: "owner-test",
+  currency: "THB",
+  fb_page_id: "123",
+  messenger_username: "testshop",
+  low_stock_alert_psid: null,
+  low_stock_alert_pin_hash: null,
+};
+let session: Row | null;
+
+function signedRequest(body: string) {
+  const signature = createHmac("sha256", secret).update(body).digest("hex");
+  return new Request("http://localhost/api/public/shop-messenger", {
+    method: "POST",
+    body,
+    headers: { "x-hub-signature-256": `sha256=${signature}` },
+  });
+}
+async function message(text: string) {
+  return messengerHandlers.POST({
+    request: signedRequest(
+      JSON.stringify({
+        object: "page",
+        entry: [{ id: "123", messaging: [{ sender: { id: "456" }, message: { text } }] }],
+      }),
+    ),
+  });
+}
+
+beforeEach(() => {
+  vi.stubEnv("SHOP_FB_APP_SECRET", secret);
+  vi.stubEnv("SHOP_FB_VERIFY_TOKEN", "test-only-verify-token");
+  vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "");
+  session = null;
+  database.from.mockReset();
+  database.rpc.mockReset();
+  database.from.mockImplementation((table: string): Chain => {
+    const filters: Record<string, unknown> = {};
+    const rows = () => {
+      const base: Row[] =
+        table === "messenger_sessions"
+          ? session
+            ? [session]
+            : []
+          : table === "products"
+            ? [product]
+            : table === "shop_settings"
+              ? [shop]
+              : [];
+      return base.filter((row) =>
+        Object.entries(filters).every(([key, value]) =>
+          key.startsWith("in:")
+            ? (value as unknown[]).includes(row[key.slice(3)])
+            : row[key] === value,
+        ),
+      );
+    };
+    const chain: Chain = {
+      select: () => chain,
+      eq: (column, value) => {
+        filters[column] = value;
+        return chain;
+      },
+      neq: () => chain,
+      gt: () => chain,
+      in: (column, values) => {
+        filters[`in:${column}`] = values;
+        return chain;
+      },
+      order: () => chain,
+      limit: () => chain,
+      maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
+      upsert: async (value) => {
+        if (table === "messenger_sessions") session = { ...value };
+        return { error: null };
+      },
+      insert: async () => ({ error: null }),
+      update: () => chain,
+      then: (resolve, reject) =>
+        Promise.resolve({ data: rows(), error: null }).then(resolve, reject),
+    };
+    return chain;
+  });
+  database.rpc.mockImplementation(async (name: string) => {
+    if (name === "verify_shop_pin") return { data: true, error: null };
+    if (name === "place_cart_orders_from_messenger") {
+      return {
+        data: [
+          {
+            id: "row-1",
+            public_order_id: "100001",
+            order_no: 1,
+            product_id: product.id,
+            total: 2000,
+          },
+        ],
+        error: null,
+      };
+    }
+    return { data: null, error: null };
+  });
+});
+afterEach(() => vi.unstubAllEnvs());
+
+const cartWithAddress = [
+  "CART_ORDER",
+  "ADDR_PROVINCE: 10|กท|กรุงเทพมหานคร",
+  "ADDR_DETAIL: 123 Sukhumvit, Khlong Toei",
+  "1. Test item — 2 ခု [111]",
+  "",
+  "အော်ဒါတင်ရန် ပို့ပေးပါသည်။",
+].join("\n");
+
+describe("Messenger cart order with a website-selected address", () => {
+  it("keeps the province and asks only for name and phone before placing the order", async () => {
+    await message(cartWithAddress);
+    expect(session?.["state"]).toBe("cart_confirm");
+    expect(session?.["data"]).toMatchObject({
+      township: "กรุงเทพมหานคร (กท)",
+      address: "123 Sukhumvit, Khlong Toei",
+      province_code: "10",
+      province_abbr: "กท",
+    });
+
+    await message("YES");
+    expect(session?.["state"]).toBe("ask_name_phone");
+
+    await message("Test Customer\n09123456789");
+    expect(session?.["state"]).toBe("confirm");
+
+    await message("YES");
+    expect(database.rpc).toHaveBeenCalledWith(
+      "place_cart_orders_from_messenger",
+      expect.objectContaining({
+        _owner: "owner-test",
+        _psid: "456",
+        _items: [{ product_id: product.id, qty: 2 }],
+        _name: "Test Customer",
+        _phone: "09123456789",
+        _township: "กรุงเทพมหานคร (กท)",
+        _address: "123 Sukhumvit, Khlong Toei",
+        _payment_method: "seller_delivery_cash",
+      }),
+    );
+    expect(session).toMatchObject({ state: "idle" });
+  });
+
+  it("keeps asking for the full address on older cart links without address lines", async () => {
+    await message("CART_ORDER\n1. Test item — 2 ခု [111]");
+    expect(session?.["state"]).toBe("cart_confirm");
+    expect(session?.["data"]).not.toMatchObject({ township: expect.anything() });
+    await message("YES");
+    expect(session?.["state"]).toBe("ask_customer_details");
+  });
+
+  it("falls back to the full address form when the province code is unknown", async () => {
+    await message(
+      "CART_ORDER\nADDR_PROVINCE: 999|xx|ไม่ทราบ\nADDR_DETAIL: 123 Sukhumvit\n1. Test item — 2 ခု [111]",
+    );
+    expect(session?.["state"]).toBe("cart_confirm");
+    await message("YES");
+    expect(session?.["state"]).toBe("ask_customer_details");
+  });
+
+  it("re-asks for name and phone instead of creating an order with an invalid contact", async () => {
+    await message(cartWithAddress);
+    await message("YES");
+    await message("only a name");
+    expect(session?.["state"]).toBe("ask_name_phone");
+    expect(database.rpc).not.toHaveBeenCalledWith(
+      "place_cart_orders_from_messenger",
+      expect.anything(),
+    );
+  });
+});
