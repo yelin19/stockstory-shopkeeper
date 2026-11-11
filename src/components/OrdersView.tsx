@@ -17,6 +17,8 @@ type Mode = "orders" | "addresses";
 
 const sel = "h-9 rounded-md border bg-card px-2 text-sm";
 type CartItemSummary = { product: string; qty: number; unit: string; price: number };
+const recipientAddressText = (order: Pick<Order, "township" | "address">) =>
+  [order.township, order.address].filter(Boolean).join("၊ ");
 
 function cartItemsFromNote(note: string | null | undefined): CartItemSummary[] {
   const marker = "CART_ITEMS:";
@@ -101,11 +103,11 @@ export function OrdersView({ mode }: { mode: Mode }) {
       ? {
           "ဝယ်ယူမှု ID": o.public_order_id, "ငွေပေးချေမှုနည်းလမ်း": paymentMethodLabel(o.payment_method), Date: format(new Date(o.created_at), "dd/MM/yyyy HH:mm"), Code: o.product_code,
           Product: o.product_name, Qty: o.quantity, Unit: o.product_unit, Currency: o.currency ?? settings?.currency ?? "MMK", "Unit price": Number(o.unit_price), Total: Number(o.total),
-          Customer: o.customer_name, Phone: o.phone, Address: o.address, Note: o.note ?? "",
+          Customer: o.customer_name, Phone: o.phone, Address: recipientAddressText(o), Note: o.note ?? "",
           Status: o.status,
         }
       : {
-          "ဝယ်ယူမှု ID": o.public_order_id, "ငွေပေးချေမှုနည်းလမ်း": paymentMethodLabel(o.payment_method), Customer: o.customer_name, Phone: o.phone, Address: o.address,
+          "ဝယ်ယူမှု ID": o.public_order_id, "ငွေပေးချေမှုနည်းလမ်း": paymentMethodLabel(o.payment_method), Customer: o.customer_name, Phone: o.phone, Address: recipientAddressText(o),
           Product: `${o.product_code} ${o.product_name}`, Qty: o.quantity, Unit: o.product_unit, Currency: o.currency ?? settings?.currency ?? "MMK", Total: Number(o.total), Note: o.note ?? "",
       },
   );
@@ -113,7 +115,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const fname = `${mode}-${format(new Date(), "yyyyMMdd-HHmm")}`;
 
   async function copyAddress(o: Order) {
-    const recipientAddress = `${o.township ? `${o.township}၊ ` : ""}${o.address}`;
+    const recipientAddress = recipientAddressText(o);
     const text = [
       "Sender",
       settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ",
@@ -321,7 +323,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
               <div className="thermal-label-phone">Phone: {o.phone}</div>
               <div className="thermal-label-address">
                 <strong>Address</strong>
-                <div>{o.township ? `${o.township}၊ ` : ""}{o.address}</div>
+                <div>{recipientAddressText(o)}</div>
               </div>
             </div>
             <div className="thermal-label-product">{orderProductsText(o).map((line) => <div key={line}>{line}</div>)}</div>
@@ -377,7 +379,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
         <h2 className="mb-3 text-lg font-bold">ငွေလွှဲဖြတ်ပိုင်း စစ်ဆေးရန် (ပို့ဆောင်မှုမအောင်မြင်ခဲ့သော Customer)</h2>
         <div className="space-y-3">
           {pendingPaymentOrders.map((o) => <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 text-sm">
-            <div><b>Order ID: {o.public_order_id}</b><div>{o.product_name} · {formatQuantity(o.quantity, o.product_unit)} · {money(o.total, o.currency ?? settings?.currency)}</div><div>{o.customer_name} · {o.phone} · {o.address}</div></div>
+            <div><b>Order ID: {o.public_order_id}</b><div>{o.product_name} · {formatQuantity(o.quantity, o.product_unit)} · {money(o.total, o.currency ?? settings?.currency)}</div><div>{o.customer_name} · {o.phone} · {recipientAddressText(o)}</div></div>
             <div className="flex flex-wrap gap-2"><a className="rounded-md border px-3 py-2 text-xs font-semibold text-primary underline" href={o.payment_proof_url ?? "#"} target="_blank" rel="noreferrer">ငွေလွှဲဖြတ်ပိုင်းကြည့်မည်</a><Button size="sm" onClick={() => approvePayment(o)} disabled={approvingPaymentId === o.id}><Check /> {approvingPaymentId === o.id ? "စစ်ဆေးနေသည်..." : "အတည်ပြုမည်"}</Button></div>
           </div>)}
         </div>
@@ -403,7 +405,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                       <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={mode === "addresses" && o.status === "cancelled"} /></td>
                       <td className="px-4 py-2 font-mono text-xs">{firstOrderRowIds.has(o.id) && <span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span>}<div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
-                      <td className="py-2"><div className="max-w-xs text-muted-foreground">{o.address}</div>{o.note && !o.note.startsWith("CART_ITEMS:") && <div className="text-xs italic">“{o.note}”</div>}{cartItemsFromNote(o.note).length > 0 && <div className="mt-1 text-xs text-muted-foreground">Cart: {cartItemsFromNote(o.note).map((item) => `${item.product} × ${formatQuantity(item.qty, item.unit)}`).join(", ")}</div>}</td>
+                      <td className="py-2"><div className="max-w-xs text-muted-foreground">{recipientAddressText(o)}</div>{o.note && !o.note.startsWith("CART_ITEMS:") && <div className="text-xs italic">“{o.note}”</div>}{cartItemsFromNote(o.note).length > 0 && <div className="mt-1 text-xs text-muted-foreground">Cart: {cartItemsFromNote(o.note).map((item) => `${item.product} × ${formatQuantity(item.qty, item.unit)}`).join(", ")}</div>}</td>
                       <td className="py-2 text-right">{formatQuantity(o.quantity, o.product_unit)} × {money(o.unit_price, o.currency ?? settings?.currency)}<div className="font-bold">{money(o.total, o.currency ?? settings?.currency)}</div><div className="mt-1 text-xs text-muted-foreground">{paymentMethodLabel(o.payment_method)}</div></td>
                       <td className="px-4 py-2 text-right">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${o.status === "cancelled" ? "bg-destructive/15 text-destructive" : o.sent ? "bg-success/15 text-success" : "bg-warning/20"}`}>

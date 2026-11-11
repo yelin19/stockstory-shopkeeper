@@ -144,8 +144,10 @@ afterEach(() => vi.unstubAllEnvs());
 
 const cartWithAddress = [
   "CART_ORDER",
-  "ADDR_PROVINCE: 10|กท|กรุงเทพมหานคร",
-  "ADDR_DETAIL: 123 Sukhumvit, Khlong Toei",
+  "ADDR_PROVINCE: 74|สค|สมุทรสาคร",
+  "ADDR_DISTRICT: 7401|เมืองสมุทรสาคร",
+  "ADDR_SUBDISTRICT: 740101|มหาชัย|74000",
+  "ADDR_DETAIL: 123/4 หมู่ 5",
   "1. Test item — 2 ခု [111]",
   "",
   "အော်ဒါတင်ရန် ပို့ပေးပါသည်။",
@@ -156,10 +158,14 @@ describe("Messenger cart order with a website-selected address", () => {
     await message(cartWithAddress);
     expect(session?.["state"]).toBe("cart_confirm");
     expect(session?.["data"]).toMatchObject({
-      township: "กรุงเทพมหานคร (กท)",
-      address: "123 Sukhumvit, Khlong Toei",
-      province_code: "10",
-      province_abbr: "กท",
+      township: "เมืองสมุทรสาคร",
+      address: "123/4 หมู่ 5",
+      province_code: "74",
+      province_abbr: "สค",
+      province_name: "สมุทรสาคร",
+      district_name: "เมืองสมุทรสาคร",
+      subdistrict_name: "มหาชัย",
+      postal_code: "74000",
     });
 
     await message("YES");
@@ -177,8 +183,8 @@ describe("Messenger cart order with a website-selected address", () => {
         _items: [{ product_id: product.id, qty: 2 }],
         _name: "Test Customer",
         _phone: "09123456789",
-        _township: "กรุงเทพมหานคร (กท)",
-        _address: "123 Sukhumvit, Khlong Toei",
+        _township: "เมืองสมุทรสาคร",
+        _address: "123/4 หมู่ 5, มหาชัย, สมุทรสาคร, 74000",
         _payment_method: "seller_delivery_cash",
       }),
     );

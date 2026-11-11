@@ -11,6 +11,7 @@ import {
   sanitizeAddressDetail,
   thaiProvinceLabel,
   thaiProvinceTownship,
+  type ThaiAddressData,
 } from "@/lib/thai-provinces";
 import { Button } from "@/components/ui/button";
 
@@ -34,41 +35,100 @@ function ShopCatalog() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [openCart, setOpenCart] = useState(false);
   const [provinceCode, setProvinceCode] = useState("");
+  const [districtCode, setDistrictCode] = useState("");
+  const [subdistrictCode, setSubdistrictCode] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
+  const [addressData, setAddressData] = useState<ThaiAddressData | null>(null);
+  const [addressDataLoading, setAddressDataLoading] = useState(false);
+  const [addressDataError, setAddressDataError] = useState(false);
+  const [addressHydrated, setAddressHydrated] = useState(false);
   const currency = shop.currency ?? "MMK";
   const storageKey = `${ADDRESS_STORAGE_PREFIX}${shop.owner_id}`;
   const selected = useMemo(() => products.filter((p) => (cart[p.code] ?? 0) > 0), [cart, products]);
   const cartCount = selected.reduce((sum, p) => sum + (cart[p.code] ?? 0), 0);
   const total = selected.reduce((sum, p) => sum + Number(p.price) * (cart[p.code] ?? 0), 0);
   const province = findThaiProvince(provinceCode);
+  const districts = useMemo(
+    () => addressData?.districts.filter((item) => item.provinceCode === provinceCode) ?? [],
+    [addressData, provinceCode],
+  );
+  const district = districts.find((item) => item.code === districtCode) ?? null;
+  const subdistricts = useMemo(
+    () =>
+      addressData?.subdistricts.filter(
+        (item) => item.provinceCode === provinceCode && item.districtCode === districtCode,
+      ) ?? [],
+    [addressData, districtCode, provinceCode],
+  );
+  const subdistrict = subdistricts.find((item) => item.code === subdistrictCode) ?? null;
   const cleanAddress = sanitizeAddressDetail(addressDetail);
-  const addressReady = Boolean(province) && cleanAddress.length >= 3;
+  const addressReady = Boolean(province && district && subdistrict) && cleanAddress.length >= 3;
+
+  useEffect(() => {
+    if (!openCart || addressData) return;
+    let cancelled = false;
+    setAddressDataLoading(true);
+    setAddressDataError(false);
+    fetch(`${import.meta.env.BASE_URL}data/thai-addresses.json`)
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load Thai address data");
+        return response.json() as Promise<ThaiAddressData>;
+      })
+      .then((data) => {
+        if (!cancelled) setAddressData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setAddressDataError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAddressDataLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addressData, openCart]);
 
   // Remember the last delivery address on this device so repeat customers only
-  // choose the province once.
+  // choose their administrative area once.
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(storageKey);
-      if (!raw) return;
-      const saved = JSON.parse(raw) as { provinceCode?: unknown; addressDetail?: unknown };
-      const savedProvince =
-        typeof saved.provinceCode === "string" ? findThaiProvince(saved.provinceCode) : null;
-      if (savedProvince) setProvinceCode(savedProvince.code);
-      if (typeof saved.addressDetail === "string")
-        setAddressDetail(saved.addressDetail.slice(0, 300));
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          provinceCode?: unknown;
+          districtCode?: unknown;
+          subdistrictCode?: unknown;
+          addressDetail?: unknown;
+        };
+        const savedProvince =
+          typeof saved.provinceCode === "string" ? findThaiProvince(saved.provinceCode) : null;
+        if (savedProvince) setProvinceCode(savedProvince.code);
+        if (typeof saved.districtCode === "string") setDistrictCode(saved.districtCode);
+        if (typeof saved.subdistrictCode === "string") setSubdistrictCode(saved.subdistrictCode);
+        if (typeof saved.addressDetail === "string")
+          setAddressDetail(saved.addressDetail.slice(0, 300));
+      }
     } catch {
       // Ignore unavailable or corrupt storage; the form still works.
+    } finally {
+      setAddressHydrated(true);
     }
   }, [storageKey]);
 
   useEffect(() => {
+    if (!addressHydrated) return;
     try {
-      if (!provinceCode && !addressDetail) window.localStorage.removeItem(storageKey);
-      else window.localStorage.setItem(storageKey, JSON.stringify({ provinceCode, addressDetail }));
+      if (!provinceCode && !districtCode && !subdistrictCode && !addressDetail)
+        window.localStorage.removeItem(storageKey);
+      else
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({ provinceCode, districtCode, subdistrictCode, addressDetail }),
+        );
     } catch {
       // Private browsing may block storage; ordering must not depend on it.
     }
-  }, [storageKey, provinceCode, addressDetail]);
+  }, [addressHydrated, storageKey, provinceCode, districtCode, subdistrictCode, addressDetail]);
 
   const change = (p: CatalogProduct, delta: number) =>
     setCart((current) => {
@@ -94,7 +154,10 @@ function ShopCatalog() {
     const lines = selected.map(
       (p, index) => `${index + 1}. ${p.name} — ${cart[p.code]} ${p.unit} [${p.code}]`,
     );
-    const addressLines = province ? encodeCartAddressLines(province, cleanAddress) : [];
+    const addressLines =
+      province && district && subdistrict
+        ? encodeCartAddressLines(province, cleanAddress, district, subdistrict)
+        : [];
     const payload = [
       "CART_ORDER",
       ...addressLines,
@@ -260,39 +323,106 @@ function ShopCatalog() {
                     <h3 className="text-base font-bold">နေရပ်လိပ်စာ (ที่อยู่จัดส่ง)</h3>
                   </div>
                   <label className="block text-sm font-semibold" htmlFor="province-select">
-                    ခရိုင် / ပြည်နယ် (จังหวัด)
+                    ပြည်နယ် (จังหวัด)
                   </label>
                   <select
                     id="province-select"
                     className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
                     value={provinceCode}
-                    onChange={(e) => setProvinceCode(e.target.value)}
+                    onChange={(e) => {
+                      setProvinceCode(e.target.value);
+                      setDistrictCode("");
+                      setSubdistrictCode("");
+                    }}
                   >
-                    <option value="">— ခရိုင်ရွေးပါ —</option>
+                    <option value="">— ပြည်နယ်ရွေးပါ —</option>
                     {THAI_PROVINCES_BY_NAME.map((item) => (
                       <option key={item.code} value={item.code}>
                         {thaiProvinceLabel(item)}
                       </option>
                     ))}
                   </select>
+                  <label className="block text-sm font-semibold" htmlFor="district-select">
+                    အำเภอ / เขต (District)
+                  </label>
+                  <select
+                    id="district-select"
+                    className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                    value={districtCode}
+                    disabled={!province || !addressData || addressDataLoading}
+                    onChange={(e) => {
+                      setDistrictCode(e.target.value);
+                      setSubdistrictCode("");
+                    }}
+                  >
+                    <option value="">
+                      {province ? "— အำเภอ / เขต ရွေးပါ —" : "— ပြည်နယ်ကို အရင်ရွေးပါ —"}
+                    </option>
+                    {districts.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.nameTh} · {item.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="block text-sm font-semibold" htmlFor="subdistrict-select">
+                    ตำบล / แขวง (Subdistrict)
+                  </label>
+                  <select
+                    id="subdistrict-select"
+                    className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                    value={subdistrictCode}
+                    disabled={!district || !addressData}
+                    onChange={(e) => setSubdistrictCode(e.target.value)}
+                  >
+                    <option value="">
+                      {district ? "— ตำบล / แขวง ရွေးပါ —" : "— အำเภอ / เขต ကို အရင်ရွေးပါ —"}
+                    </option>
+                    {subdistricts.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.nameTh} · {item.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="block text-sm font-semibold" htmlFor="postal-code">
+                    รหัสไปรษณีย์ (Postal code)
+                  </label>
+                  <input
+                    id="postal-code"
+                    className="h-11 w-full rounded-xl border border-input bg-muted px-3 text-base"
+                    value={subdistrict?.postalCode ?? ""}
+                    readOnly
+                    placeholder="ตำบล / แขวง ရွေးပြီး အလိုအလျောက်ပြပါမည်"
+                  />
                   <label className="block text-sm font-semibold" htmlFor="address-detail">
-                    လိပ်စာအသေးစိတ် (บ้านเลขที่ / หมู่ / ตำบล / อำเภอ / รหัสไปรษณีย์)
+                    လိပ်စာအသေးစိတ် (အိမ်အမှတ် / หมู่ / လမ်း / ซอย)
                   </label>
                   <textarea
                     id="address-detail"
                     className="min-h-[72px] w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
                     maxLength={300}
-                    placeholder="ဥပမာ 123/4 หมู่ 5 ต.บางรัก อ.เมือง 10500"
+                    placeholder="ဥပမာ 123/4 หมู่ 5 ถนนสุขุมวิท ซอย 10"
                     value={addressDetail}
                     onChange={(e) => setAddressDetail(e.target.value)}
                   />
-                  {addressReady && province ? (
+                  {addressDataLoading && (
+                    <p className="text-sm text-muted-foreground">
+                      ထိုင်းနိုင်ငံ၏ လိပ်စာစာရင်းကို ဖွင့်နေပါသည်…
+                    </p>
+                  )}
+                  {addressDataError && (
+                    <p className="text-sm text-destructive">
+                      လိပ်စာစာရင်းကို ဖွင့်မရပါ။ အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ဖွင့်ပါ။
+                    </p>
+                  )}
+                  {addressReady && province && district && subdistrict ? (
                     <p className="text-sm font-medium text-emerald-700">
-                      ✓ {thaiProvinceTownship(province)} · {cleanAddress}
+                      ✓ {thaiProvinceTownship(province)} · {district.nameTh} · {subdistrict.nameTh}{" "}
+                      · {subdistrict.postalCode} · {cleanAddress}
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Messenger မှာ ခရိုင်ပြန်ရွေးစရာ မလိုအောင် ဒီနေရာမှာ အရင်ရွေးပါ။
+                      ပြည်နယ်၊ အำเภอ/เขต၊ ตำบล/แขวง နဲ့ လိပ်စာအသေးစိတ်ကို ရွေးဖြည့်ပါ။
+                      စာတိုက်ကုဒ်ကို အလိုအလျောက်ဖြည့်ပေးပါမယ်။
                     </p>
                   )}
                 </div>

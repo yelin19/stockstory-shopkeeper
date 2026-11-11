@@ -6,6 +6,8 @@ import {
   findThaiProvince,
   thaiProvinceLabel,
   thaiProvinceTownship,
+  type ThaiDistrict,
+  type ThaiSubdistrict,
 } from "@/lib/thai-provinces";
 
 describe("Thai province reference", () => {
@@ -71,6 +73,67 @@ describe("Thai province reference", () => {
     const decoded = decodeCartAddressLines(["CART_ORDER", ...lines, "1. Test — 1 ชิ้น [111]"]);
     expect(decoded?.province.code).toBe("81");
     expect(decoded?.detail).toBe("123/4 หมู่ 5 ต.อ่าวนาง อ.เมือง 81000");
+  });
+
+  it("encodes the complete province, district, subdistrict, and postal code", () => {
+    const province = findThaiProvince("74")!;
+    const district: ThaiDistrict = {
+      provinceCode: "74",
+      code: "7401",
+      nameTh: "เมืองสมุทรสาคร",
+      nameEn: "Mueang Samut Sakhon",
+      postalCode: "74000",
+    };
+    const subdistrict: ThaiSubdistrict = {
+      provinceCode: "74",
+      districtCode: "7401",
+      code: "740101",
+      nameTh: "มหาชัย",
+      nameEn: "Mahachai",
+      postalCode: "74000",
+    };
+    const lines = encodeCartAddressLines(province, "123/4 หมู่ 5", district, subdistrict);
+    expect(lines).toEqual([
+      "ADDR_PROVINCE: 74|สค|สมุทรสาคร",
+      "ADDR_DISTRICT: 7401|เมืองสมุทรสาคร",
+      "ADDR_SUBDISTRICT: 740101|มหาชัย|74000",
+      "ADDR_DETAIL: 123/4 หมู่ 5",
+    ]);
+    expect(decodeCartAddressLines(lines)).toMatchObject({
+      province: { code: "74", name: "สมุทรสาคร" },
+      district: { code: "7401", name: "เมืองสมุทรสาคร" },
+      subdistrict: { code: "740101", name: "มหาชัย" },
+      postalCode: "74000",
+      detail: "123/4 หมู่ 5",
+    });
+  });
+
+  it("rejects mismatched district and subdistrict selections", () => {
+    const province = findThaiProvince("74")!;
+    const district: ThaiDistrict = {
+      provinceCode: "74",
+      code: "7401",
+      nameTh: "เมืองสมุทรสาคร",
+      nameEn: "Mueang Samut Sakhon",
+      postalCode: "74000",
+    };
+    const subdistrict: ThaiSubdistrict = {
+      provinceCode: "74",
+      districtCode: "7402",
+      code: "740201",
+      nameTh: "ตลาดกระทุ่มแบน",
+      nameEn: "Talat Krathum Baen",
+      postalCode: "74110",
+    };
+    expect(encodeCartAddressLines(province, "123/4", district, subdistrict)).toEqual([]);
+    expect(
+      decodeCartAddressLines([
+        "ADDR_PROVINCE: 74|สค|สมุทรสาคร",
+        "ADDR_DISTRICT: 7401|เมืองสมุทรสาคร",
+        "ADDR_SUBDISTRICT: 740201|ตลาดกระทุ่มแบน|74110",
+        "ADDR_DETAIL: 123/4",
+      ]),
+    ).toBeNull();
   });
 
   it("does not accept incomplete or unknown addresses", () => {

@@ -9,7 +9,11 @@ import { formatQuantity, normalizeProductUnit } from "@/lib/product-unit";
 import { formatPaymentProofReviewMessage, sendPaymentProofNotification } from "@/lib/payment-proof-notification.server";
 import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow, parsePaymentChoice, paymentMethodInstruction, paymentMethodLabel, type CashPaymentMethod, type OrderPaymentMethod } from "@/lib/payment-method";
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
-import { decodeCartAddressLines, thaiProvinceTownship, type CartAddress } from "@/lib/thai-provinces";
+import {
+  decodeCartAddressLines,
+  thaiProvinceTownship,
+  type CartAddress,
+} from "@/lib/thai-provinces";
 import { matchProductCode } from "@/lib/product-code-match";
 import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
@@ -24,7 +28,30 @@ type Admin = Awaited<typeof import("@/integrations/supabase/client.server")>["su
 type Session = { owner_id: string; psid: string; pin_verified: boolean; state: string; data: Record<string, unknown> };
 type CustomerDetails = { name: string; phone: string; address: string };
 type CartItem = { product_id: string; code: string; product: string; unit: string; price: number; qty: number };
-type CartDraft = { cart?: CartItem[]; product_id?: string; code?: string; product?: string; unit?: string; price?: number; qty?: number; name?: string; phone?: string; township?: string; address?: string; province_code?: string; province_abbr?: string; province_name?: string; previous_customer?: CustomerDetails; note?: string; payment_method?: OrderPaymentMethod; prepay_allowed?: boolean; payment_proof_url?: string };
+type CartDraft = {
+  cart?: CartItem[];
+  product_id?: string;
+  code?: string;
+  product?: string;
+  unit?: string;
+  price?: number;
+  qty?: number;
+  name?: string;
+  phone?: string;
+  township?: string;
+  address?: string;
+  province_code?: string;
+  province_abbr?: string;
+  province_name?: string;
+  district_name?: string;
+  subdistrict_name?: string;
+  postal_code?: string;
+  previous_customer?: CustomerDetails;
+  note?: string;
+  payment_method?: OrderPaymentMethod;
+  prepay_allowed?: boolean;
+  payment_proof_url?: string;
+};
 function readCustomerDetails(value: unknown): CustomerDetails | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const data = value as Record<string, unknown>;
@@ -161,8 +188,8 @@ const decodeCartPayload = (message: string): CartRequest | null => {
       items.push({ code, qty });
     }
     if (items.length < 1 || items.length > 50) return null;
-    // The province and street address are chosen on the website, so the bot can
-    // skip asking for them again. Older links without these lines still work.
+    // The Thai administrative area and street address are chosen on the website,
+    // so the bot can skip asking for them again. Older links still work.
     return { items, address: decodeCartAddressLines(lines) };
   }
   if (!trimmed.startsWith("CART:")) return null;
@@ -477,22 +504,39 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       })();
       const data: CartDraft = {
         cart,
-        ...(address ? {
-          township: thaiProvinceTownship(address.province),
-          address: address.detail,
-          province_code: address.province.code,
-          province_abbr: address.province.abbr,
-          province_name: address.province.name,
-        } : {}),
+        ...(address
+          ? {
+              township: address.district?.name ?? thaiProvinceTownship(address.province),
+              address: address.detail,
+              province_code: address.province.code,
+              province_abbr: address.province.abbr,
+              province_name: address.province.name,
+              ...(address.district ? { district_name: address.district.name } : {}),
+              ...(address.subdistrict ? { subdistrict_name: address.subdistrict.name } : {}),
+              ...(address.postalCode ? { postal_code: address.postalCode } : {}),
+            }
+          : {}),
         prepay_allowed: allPrepaid,
         payment_method: allPrepaid ? "prepaid" : "seller_delivery_cash",
         ...(previousCustomer ? { previous_customer: previousCustomer } : {}),
       };
       await save({ state: "cart_confirm", data });
-      const lines = cart.map((item) => `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${fmt(item.price * item.qty)}`).join("\n");
-      const addressSummary = address ? `\n📍 လိပ်စာ: ${thaiProvinceTownship(address.province)} · ${address.detail}` : "";
-      const nextStep = address ? "\n\nအတည်ပြုပြီးနောက် နာမည်နဲ့ ဖုန်းနံပါတ်သာ ဖြည့်ရပါမယ်ရှင်။" : "";
-      return confirmation(psid, `🛒 Cart အော်ဒါစာရင်း\n${lines}\n\nစုစုပေါင်း: ${fmt(total)}\nငွေပေးချေမှု: ${paymentMethodLabel(data.payment_method)}${addressSummary}${nextStep}\n\nဒီပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES ကိုနှိပ်ပါ၊ မယူတော့ပါက NO ကိုနှိပ်ပါရှင်။`);
+      const lines = cart
+        .map(
+          (item) =>
+            `• ${item.product} × ${formatQuantity(item.qty, item.unit)} = ${fmt(item.price * item.qty)}`,
+        )
+        .join("\n");
+      const addressSummary = address
+        ? `\n📍 လိပ်စာ: ${address.province.name}${address.district ? ` · ${address.district.name}` : ""}${address.subdistrict ? ` · ${address.subdistrict.name}` : ""}${address.postalCode ? ` · ${address.postalCode}` : ""} · ${address.detail}`
+        : "";
+      const nextStep = address
+        ? "\n\nအတည်ပြုပြီးနောက် နာမည်နဲ့ ဖုန်းနံပါတ်သာ ဖြည့်ရပါမယ်ရှင်။"
+        : "";
+      return confirmation(
+        psid,
+        `🛒 Cart အော်ဒါစာရင်း\n${lines}\n\nစုစုပေါင်း: ${fmt(total)}\nငွေပေးချေမှု: ${paymentMethodLabel(data.payment_method)}${addressSummary}${nextStep}\n\nဒီပစ္စည်းများအားလုံးကို မှာယူမှာ သေချာပါသလား။ YES ကိုနှိပ်ပါ၊ မယူတော့ပါက NO ကိုနှိပ်ပါရှင်။`,
+      );
     }
   }
   const isGreeting = /^(မင်္ဂလာပါ|မဂ်လာပါ|မင်္ဂလာပါရှင်|ဟယ်လို|hello|hi|ဟိုင်း|နေကောင်းလား|မေးချင်လို့ပါ)[\s!။၊,.]*$/i.test(msg.trim());
@@ -639,6 +683,9 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       delete reenterData["province_code"];
       delete reenterData["province_abbr"];
       delete reenterData["province_name"];
+      delete reenterData["district_name"];
+      delete reenterData["subdistrict_name"];
+      delete reenterData["postal_code"];
       delete reenterData["address"];
     }
     await save({ state: "ask_customer_details", data: reenterData });
@@ -681,9 +728,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const draftTotal = (draft: Draft) => draft.cart?.length
     ? draft.cart.reduce((sum, item) => sum + item.price * item.qty, 0)
     : Number(draft.price ?? 0) * Number(draft.qty ?? 0);
-  const draftAddressText = (draft: Draft) => draft.township && draft.address
-    ? `ခရိုင်/ပြည်နယ်: ${draft.township}\nလိပ်စာ: ${draft.address}`
-    : `လိပ်စာ: ${draft.address ?? ""}`;
+  const draftAddressText = (draft: Draft) => {
+    if (draft.district_name || draft.subdistrict_name || draft.postal_code) {
+      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nအำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
+    }
+    if (draft.province_name) {
+      return `ပြည်နယ်: ${draft.province_name}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
+    }
+    return draft.township && draft.address
+      ? `ခရိုင်/ပြည်နယ်: ${draft.township}\nလိပ်စာ: ${draft.address}`
+      : `လိပ်စာ: ${draft.address ?? ""}`;
+  };
+  const persistedAddress = (draft: Draft) =>
+    draft.subdistrict_name && draft.province_name && draft.postal_code
+      ? `${draft.address ?? ""}, ${draft.subdistrict_name}, ${draft.province_name}, ${draft.postal_code}`
+      : String(draft.address ?? "");
 
   switch (s.state) {
     case "cart_confirm": {
@@ -692,7 +751,10 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       const previousCustomer = previousCustomerFromDraft(d);
       if (d.address && d.township) {
         await save({ state: "ask_name_phone", data: d });
-        return text(psid, `📍 လိပ်စာ: ${d.township} · ${d.address}\n\nနောက်ဆုံးအဆင့်အနေနဲ့ ဝယ်သူအမည်နဲ့ ဖုန်းနံပါတ်ကို ပို့ပေးပါရှင်။\n${namePhoneExample}`);
+        return text(
+          psid,
+          `📍 လိပ်စာ:\n${draftAddressText(d)}\n\nနောက်ဆုံးအဆင့်အနေနဲ့ ဝယ်သူအမည်နဲ့ ဖုန်းနံပါတ်ကို ပို့ပေးပါရှင်။\n${namePhoneExample}`,
+        );
       }
       await save({ state: previousCustomer ? "reuse_customer_details" : "ask_customer_details", data: d });
       return previousCustomer ? reuseCustomerDetailsChoice(psid, previousCustomer) : text(psid, customerDetailsRequest("ဝယ်သူအမည်၊ ဖုန်းနံပါတ်၊ ပို့ရမည့်လိပ်စာကို တစ်ခါတည်း ဒီပုံစံနဲ့ ပို့ပါ။"));
@@ -700,7 +762,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     case "ask_name_phone": {
       const contact = parseNamePhone(msg);
       if (!contact) {
-        return text(psid, `အမည်နဲ့ ဖုန်းနံပါတ်ကို ဒီပုံစံနဲ့ ပို့ပေးပါရှင်။\n${namePhoneExample}\n\nလိပ်စာကို website မှာ ရွေးပြီးသားဖြစ်ပါသည်: ${d.township ?? ""} · ${d.address ?? ""}`);
+        return text(psid, `အမည်နဲ့ ဖုန်းနံပါတ်ကို ဒီပုံစံနဲ့ ပို့ပေးပါရှင်။\n${namePhoneExample}\n\nwebsite မှာ ရွေးထားသော လိပ်စာ:\n${draftAddressText(d)}`);
       }
       const nd: Draft = { ...d, ...contact };
       await save({ state: "confirm", data: nd });
@@ -810,7 +872,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
           _name: String(d.name),
           _phone: String(d.phone),
           _township: String(d.township ?? ""),
-          _address: String(d.address),
+          _address: persistedAddress(d),
           _note: cartItemsNote,
           _payment_method: isPrepaidCart ? "prepaid" : paymentMethod,
         };
@@ -850,7 +912,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
               currency: shopCurrency.currency,
               customerName: String(d.name ?? ""),
               phone: String(d.phone ?? ""),
-              address: d.township ? `${d.township} · ${String(d.address ?? "")}` : String(d.address ?? ""),
+              address: d.township ? `${d.township} · ${persistedAddress(d)}` : persistedAddress(d),
             });
             const delivery = await sendPaymentProofNotification(shopCurrency.low_stock_alert_psid, reviewMessage, proofUrl, orderId);
             if (!delivery.textSent || !delivery.receiptSent) console.error("Could not deliver prepaid cart review to the configured Messenger recipient", delivery.reason);

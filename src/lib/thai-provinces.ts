@@ -169,15 +169,66 @@ export function sanitizeAddressDetail(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, 300);
 }
 
-export type CartAddress = { province: ThaiProvince; detail: string };
+export type ThaiDistrict = {
+  provinceCode: string;
+  code: string;
+  nameTh: string;
+  nameEn: string;
+  postalCode: string;
+};
+
+export type ThaiSubdistrict = {
+  provinceCode: string;
+  districtCode: string;
+  code: string;
+  nameTh: string;
+  nameEn: string;
+  postalCode: string;
+};
+
+export type ThaiAddressData = {
+  revision: string;
+  districts: ThaiDistrict[];
+  subdistricts: ThaiSubdistrict[];
+};
+
+export type CartAddress = {
+  province: ThaiProvince;
+  detail: string;
+  district?: { code: string; name: string };
+  subdistrict?: { code: string; name: string };
+  postalCode?: string;
+};
 
 /**
  * Builds the two extra lines of the Messenger cart payload so the customer does
  * not have to type the province again in the chat.
  */
-export function encodeCartAddressLines(province: ThaiProvince, detail: string): string[] {
+export function encodeCartAddressLines(
+  province: ThaiProvince,
+  detail: string,
+  district?: ThaiDistrict | null,
+  subdistrict?: ThaiSubdistrict | null,
+): string[] {
   const clean = sanitizeAddressDetail(detail);
   if (!clean) return [];
+  if (district && subdistrict) {
+    if (
+      district.provinceCode !== province.code ||
+      subdistrict.provinceCode !== province.code ||
+      subdistrict.districtCode !== district.code ||
+      !/^\d{4}$/.test(district.code) ||
+      !/^\d{6}$/.test(subdistrict.code) ||
+      !/^\d{5}$/.test(subdistrict.postalCode)
+    )
+      return [];
+    return [
+      `ADDR_PROVINCE: ${province.code}|${province.abbr}|${province.name}`,
+      `ADDR_DISTRICT: ${district.code}|${district.nameTh}`,
+      `ADDR_SUBDISTRICT: ${subdistrict.code}|${subdistrict.nameTh}|${subdistrict.postalCode}`,
+      `ADDR_DETAIL: ${clean}`,
+    ];
+  }
   return [
     `ADDR_PROVINCE: ${province.code}|${province.abbr}|${province.name}`,
     `ADDR_DETAIL: ${clean}`,
@@ -202,5 +253,33 @@ export function decodeCartAddressLines(lines: readonly string[]): CartAddress | 
     .find((candidate): candidate is ThaiProvince => Boolean(candidate));
   const detail = sanitizeAddressDetail(detailLine.slice(detailLine.indexOf(":") + 1));
   if (!province || detail.length < 3) return null;
-  return { province, detail };
+  const districtLine = find("DISTRICT");
+  const subdistrictLine = find("SUBDISTRICT");
+  if (!districtLine && !subdistrictLine) return { province, detail };
+  if (!districtLine || !subdistrictLine) return null;
+  const [districtCode = "", districtName = ""] = districtLine
+    .slice(districtLine.indexOf(":") + 1)
+    .trim()
+    .split("|");
+  const [subdistrictCode = "", subdistrictName = "", postalCode = ""] = subdistrictLine
+    .slice(subdistrictLine.indexOf(":") + 1)
+    .trim()
+    .split("|");
+  if (
+    !/^\d{4}$/.test(districtCode) ||
+    !districtCode.startsWith(province.code) ||
+    !districtName.trim() ||
+    !/^\d{6}$/.test(subdistrictCode) ||
+    !subdistrictCode.startsWith(districtCode) ||
+    !subdistrictName.trim() ||
+    !/^\d{5}$/.test(postalCode)
+  )
+    return null;
+  return {
+    province,
+    detail,
+    district: { code: districtCode, name: districtName.trim().slice(0, 80) },
+    subdistrict: { code: subdistrictCode, name: subdistrictName.trim().slice(0, 80) },
+    postalCode,
+  };
 }
