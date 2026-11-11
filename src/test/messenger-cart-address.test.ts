@@ -47,6 +47,7 @@ const shop = {
   low_stock_alert_pin_hash: null,
 };
 let session: Row | null;
+let previousOrder: Row | null;
 const sentMessages: Row[] = [];
 
 function signedRequest(body: string) {
@@ -73,6 +74,7 @@ beforeEach(() => {
   vi.stubEnv("SHOP_FB_VERIFY_TOKEN", "test-only-verify-token");
   vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "test-only-page-access-token");
   session = null;
+  previousOrder = null;
   sentMessages.length = 0;
   vi.stubGlobal(
     "fetch",
@@ -100,7 +102,11 @@ beforeEach(() => {
             ? [product]
             : table === "shop_settings"
               ? [shop]
-              : [];
+              : table === "orders"
+                ? previousOrder
+                  ? [previousOrder]
+                  : []
+                : [];
       return base.filter((row) =>
         Object.entries(filters).every(([key, value]) =>
           key.startsWith("in:")
@@ -273,12 +279,72 @@ describe("Messenger cart order with a website-selected address", () => {
     );
   });
 
-  it("keeps asking for the full address on older cart links without address lines", async () => {
+  it("asks a new customer for their address when they skip it on the website", async () => {
     await message("CART_ORDER\n1. Test item — 2 ခု [111]");
     expect(session?.["state"]).toBe("cart_confirm");
     expect(session?.["data"]).not.toMatchObject({ township: expect.anything() });
     await message("အတည်ပြု");
     expect(session?.["state"]).toBe("ask_customer_details");
+    const addressPrompt = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(addressPrompt).toContain("အမည်");
+    expect(addressPrompt).toContain("ဖုန်း");
+    expect(addressPrompt).toContain("လိပ်စာ");
+
+    const typedAddress = "123/4 หมู่ 5, ตำบลมหาชัย, จังหวัดสมุทรสาคร, 74000";
+    await message(`အမည်: New Customer\nဖုန်း: 09123456789\nလိပ်စာ: ${typedAddress}`);
+    expect(session?.["state"]).toBe("confirm");
+    const confirmation = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(confirmation).toContain("အမည်: New Customer");
+    expect(confirmation).toContain(`လိပ်စာ: ${typedAddress}`);
+
+    await message("အတည်ပြု");
+    expect(database.rpc).toHaveBeenCalledWith(
+      "place_cart_orders_from_messenger",
+      expect.objectContaining({
+        _name: "New Customer",
+        _phone: "09123456789",
+        _township: "",
+        _address: typedAddress,
+      }),
+    );
+  });
+
+  it("offers a saved address to returning customers who skip website address entry", async () => {
+    previousOrder = {
+      owner_id: "owner-test",
+      psid: "456",
+      customer_name: "Returning Customer",
+      phone: "08123456789",
+      address: "123/4 หมู่ 5, ตำบลมหาชัย, จังหวัดสมุทรสาคร, 74000",
+    };
+
+    await message("CART_ORDER\n1. Test item — 2 ခု [111]");
+    await message("အတည်ပြု");
+    expect(session?.["state"]).toBe("reuse_customer_details");
+    const reuseMessage = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(reuseMessage).toContain("အရင်အော်ဒါ");
+    expect(reuseMessage).toContain("အမည်: Returning Customer");
+    expect(reuseMessage).toContain("ဖုန်း: 08123456789");
+    expect(reuseMessage).toContain("123/4 หมู่ 5");
+    expect(sentMessages.at(-1)?.["quick_replies"]).toMatchObject([
+      { title: "လိပ်စာအဟောင်းသုံးမည်", payload: "REUSE_CUSTOMER_DETAILS" },
+      { title: "လိပ်စာအသစ်ထည့်မည်", payload: "ENTER_CUSTOMER_DETAILS" },
+    ]);
+
+    await message("REUSE_CUSTOMER_DETAILS");
+    expect(session?.["state"]).toBe("confirm");
+    expect(String(sentMessages.at(-1)?.["text"] ?? "")).toContain(
+      "လိပ်စာ: 123/4 หมู่ 5, ตำบลมหาชัย, จังหวัดสมุทรสาคร, 74000",
+    );
+    await message("အတည်ပြု");
+    expect(database.rpc).toHaveBeenCalledWith(
+      "place_cart_orders_from_messenger",
+      expect.objectContaining({
+        _name: "Returning Customer",
+        _phone: "08123456789",
+        _address: "123/4 หมู่ 5, ตำบลมหาชัย, จังหวัดสมุทรสาคร, 74000",
+      }),
+    );
   });
 
   it("falls back to the full address form when the province code is unknown", async () => {

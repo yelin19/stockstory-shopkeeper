@@ -39,6 +39,7 @@ function ShopCatalog() {
   const [subdistrictCode, setSubdistrictCode] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
+  const [addressSkipped, setAddressSkipped] = useState(false);
   const [addressData, setAddressData] = useState<ThaiAddressData | null>(null);
   const [addressDataLoading, setAddressDataLoading] = useState(false);
   const [addressDataError, setAddressDataError] = useState(false);
@@ -179,7 +180,7 @@ function ShopCatalog() {
       (p, index) => `${index + 1}. ${p.name} — ${cart[p.code]} ${p.unit} [${p.code}]`,
     );
     const addressLines =
-      province && district && subdistrict
+      !addressSkipped && addressReady && province && district && subdistrict
         ? encodeCartAddressLines(
             province,
             cleanAddress,
@@ -198,6 +199,7 @@ function ShopCatalog() {
     ].join("\n");
     return `https://m.me/${String(shop.messenger_username ?? "").replace(/^@/, "")}?text=${encodeURIComponent(payload)}`;
   };
+  const canStartCheckout = Boolean(shop.messenger_username) && (addressSkipped || addressReady);
 
   return (
     <div className="min-h-screen bg-background">
@@ -349,10 +351,31 @@ function ShopCatalog() {
                 </div>
 
                 <div className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="size-5 text-blue-700" />
-                    <h3 className="text-base font-bold">နေရပ်လိပ်စာ (ที่อยู่จัดส่ง)</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="size-5 text-blue-700" />
+                      <h3 className="text-base font-bold">ပို့ဆောင်မည့်လိပ်စာ</h3>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-pressed={addressSkipped}
+                      onClick={() => setAddressSkipped((skipped) => !skipped)}
+                    >
+                      {addressSkipped
+                        ? "Website မှာ လိပ်စာဖြည့်မည်"
+                        : "လိပ်စာမဖြည့်ဘဲ Messenger မှာ ဖြည့်မည်"}
+                    </Button>
                   </div>
+                  {addressSkipped && (
+                    <p
+                      className="rounded-xl bg-white p-3 text-sm text-muted-foreground"
+                      role="status"
+                    >
+                      Messenger မှာ လိပ်စာကို ဆက်ဖြည့်နိုင်ပါတယ်။ အရင်ဝယ်ဖူးပြီး လိပ်စာရှိပါက
+                      အဟောင်းကို ပြန်သုံးနိုင်ပြီး၊ မရှိပါက Messenger က လိပ်စာမေးပါမယ်။
+                    </p>
+                  )}
                   <label className="block text-sm font-semibold" htmlFor="province-select">
                     ပြည်နယ် (จังหวัด)
                   </label>
@@ -360,6 +383,7 @@ function ShopCatalog() {
                     id="province-select"
                     className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
                     value={provinceCode}
+                    disabled={addressSkipped}
                     onChange={(e) => {
                       setProvinceCode(e.target.value);
                       setDistrictCode("");
@@ -381,7 +405,7 @@ function ShopCatalog() {
                     id="district-select"
                     className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
                     value={districtCode}
-                    disabled={!province || !addressData || addressDataLoading}
+                    disabled={addressSkipped || !province || !addressData || addressDataLoading}
                     onChange={(e) => {
                       setDistrictCode(e.target.value);
                       setSubdistrictCode("");
@@ -404,7 +428,7 @@ function ShopCatalog() {
                     id="subdistrict-select"
                     className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
                     value={subdistrictCode}
-                    disabled={!district || !addressData}
+                    disabled={addressSkipped || !district || !addressData}
                     onChange={(e) => {
                       const nextCode = e.target.value;
                       const next = subdistricts.find((item) => item.code === nextCode);
@@ -434,7 +458,7 @@ function ShopCatalog() {
                       className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
                       value={postalOption?.postalCode ?? ""}
                       onChange={(e) => setPostalCode(e.target.value)}
-                      disabled={!subdistrict}
+                      disabled={addressSkipped || !subdistrict}
                     >
                       {postalOptions.map((option) => (
                         <option key={option.postalCode} value={option.postalCode}>
@@ -449,7 +473,7 @@ function ShopCatalog() {
                       className="h-11 w-full rounded-xl border border-input bg-muted px-3 text-base"
                       value={postalOption?.postalCode ?? ""}
                       readOnly
-                      disabled={!subdistrict}
+                      disabled={addressSkipped || !subdistrict}
                       placeholder="ตำบล / แขวง ရွေးပြီး အလိုအလျောက်ပြပါမည်"
                     />
                   )}
@@ -467,6 +491,7 @@ function ShopCatalog() {
                     maxLength={300}
                     placeholder="ဥပမာ 123/4 หมู่ 5 ถนนสุขุมวิท ซอย 10"
                     value={addressDetail}
+                    disabled={addressSkipped}
                     onChange={(e) => setAddressDetail(e.target.value)}
                   />
                   {addressDataLoading && (
@@ -479,7 +504,11 @@ function ShopCatalog() {
                       လိပ်စာစာရင်းကို ဖွင့်မရပါ။ အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ဖွင့်ပါ။
                     </p>
                   )}
-                  {addressReady && province && district && subdistrict && postalOption ? (
+                  {addressSkipped ? null : addressReady &&
+                    province &&
+                    district &&
+                    subdistrict &&
+                    postalOption ? (
                     <p className="text-sm font-medium text-emerald-700">
                       ✓ {thaiProvinceTownship(province)} · {district.nameTh} · {subdistrict.nameTh}{" "}
                       · {postalOption.postalCode}
@@ -496,10 +525,10 @@ function ShopCatalog() {
 
                 <Button
                   className="mt-4 h-12 w-full bg-blue-600 text-base font-bold hover:bg-blue-700"
-                  disabled={!shop.messenger_username || !addressReady}
-                  asChild={Boolean(shop.messenger_username) && addressReady}
+                  disabled={!canStartCheckout}
+                  asChild={canStartCheckout}
                 >
-                  {shop.messenger_username && addressReady ? (
+                  {canStartCheckout ? (
                     <a href={messengerUrl()} target="_blank" rel="noreferrer">
                       <MessageCircle /> Messenger မှာ အော်ဒါတင်မည်
                     </a>
@@ -514,9 +543,10 @@ function ShopCatalog() {
                     ဆိုင်၏ Messenger username မသတ်မှတ်ရသေးပါ။
                   </p>
                 )}
-                {shop.messenger_username && !addressReady && (
+                {shop.messenger_username && !addressReady && !addressSkipped && (
                   <p className="text-sm text-muted-foreground">
-                    ခရိုင်နဲ့ လိပ်စာအသေးစိတ်ကို အရင်ဖြည့်ပါရှင်။
+                    လိပ်စာကို ဒီမှာဖြည့်ပါ၊ သို့မဟုတ် အပေါ်က ခလုတ်နဲ့ Messenger မှာ ဖြည့်ဖို့
+                    ကျော်နိုင်ပါတယ်။
                   </p>
                 )}
               </div>
