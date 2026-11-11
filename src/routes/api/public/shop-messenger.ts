@@ -402,11 +402,14 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     : [];
   const chatHistory = persistentHistory.length > 0 ? persistentHistory : sessionHistory;
   if (s.state === "idle") {
-    const savedBotReply = await findSavedBotReply(db, owner, msg);
-    if (savedBotReply) {
-      await rememberChatMessage(db, owner, psid, "shop", savedBotReply.answer);
-      webhookLog("saved bot reply sent", { quickReplyCount: savedBotReply.quickReplies.length });
-      return sendSavedBotReply(psid, savedBotReply);
+    const isOrderAction = /^(?:ပြင်|ပြင်ဆင်|edit|ဖျက်|ဖျက်မယ်|မယူတော့ဘူး|မယူတော့ပါ|cancel)\s+[0-9]{6}$/i.test(msg.trim());
+    if (!isOrderAction) {
+      const savedBotReply = await findSavedBotReply(db, owner, msg);
+      if (savedBotReply) {
+        await rememberChatMessage(db, owner, psid, "shop", savedBotReply.answer);
+        webhookLog("saved bot reply sent", { quickReplyCount: savedBotReply.quickReplies.length });
+        return sendSavedBotReply(psid, savedBotReply);
+      }
     }
   }
   if (s.state === "idle") {
