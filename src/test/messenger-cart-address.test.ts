@@ -153,6 +153,17 @@ const cartWithAddress = [
   "အော်ဒါတင်ရန် ပို့ပေးပါသည်။",
 ].join("\n");
 
+const cartWithMultiplePostalCode = [
+  "CART_ORDER",
+  "ADDR_PROVINCE: 81|กบ|กระบี่",
+  "ADDR_DISTRICT: 8101|เมืองกระบี่",
+  `ADDR_SUBDISTRICT: 810116|อ่าวนาง|81210|${encodeURIComponent("ม.7 - 8")}`,
+  "ADDR_DETAIL: 123/4 หมู่ 7",
+  "1. Test item — 2 ခု [111]",
+  "",
+  "အော်ဒါတင်ရန် ပို့ပေးပါသည်။",
+].join("\n");
+
 describe("Messenger cart order with a website-selected address", () => {
   it("keeps the province and asks only for name and phone before placing the order", async () => {
     await message(cartWithAddress);
@@ -189,6 +200,29 @@ describe("Messenger cart order with a website-selected address", () => {
       }),
     );
     expect(session).toMatchObject({ state: "idle" });
+  });
+
+  it("preserves a selected secondary postcode and village range in the order address", async () => {
+    await message(cartWithMultiplePostalCode);
+    expect(session?.["data"]).toMatchObject({
+      township: "เมืองกระบี่",
+      address: "123/4 หมู่ 7",
+      province_name: "กระบี่",
+      district_name: "เมืองกระบี่",
+      subdistrict_name: "อ่าวนาง",
+      postal_code: "81210",
+      postal_code_detail: "ม.7 - 8",
+    });
+    await message("YES");
+    await message("Test Customer\n09123456789");
+    await message("YES");
+    expect(database.rpc).toHaveBeenCalledWith(
+      "place_cart_orders_from_messenger",
+      expect.objectContaining({
+        _township: "เมืองกระบี่",
+        _address: "123/4 หมู่ 7, อ่าวนาง, กระบี่, 81210 (ม.7 - 8)",
+      }),
+    );
   });
 
   it("keeps asking for the full address on older cart links without address lines", async () => {

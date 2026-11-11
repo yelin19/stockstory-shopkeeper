@@ -1,6 +1,8 @@
 Third-party data notice
 
-Thailand administrative names, codes, and postal-code relationships in `public/data/thai-addresses.json` are derived from the Thailand Geography JSON dataset, as redistributed by Thailand Administrative Atlas. Source: https://www.xn--o3caafld1cf0cwe8b4hf6czc.com/about-map-data/ . Dataset revision: 2026-08-06.
+The Thai province, district, subdistrict, postcode, and postcode-area lookup in `public/data/thai-addresses.json` and `public/data/thai-postal-code-exceptions.json` is derived from the Thailand Geography JSON project, release v1.3.0 (2026-10-28): https://github.com/thailand-geography-data/thailand-geography-json/tree/v1.3.0 . Its administrative names/codes are documented as aligned to a Department of Provincial Administration registry. The project’s postcode exception list is based on the official Thailand Post nationwide locality poster (status May 2018) and incorporates later corrections documented in its changelog. Thailand Post's official notices for Fao Rai and Khun Nan are recorded in `THAI_ADDRESS_DATA_SOURCES.md`.
+
+The source geography JSON project is MIT-licensed. Postal codes are a point-in-time public lookup; the official poster is dated May 2018 and later changes may occur. See `THAI_ADDRESS_DATA_SOURCES.md` for provenance, official source links, coverage counts, and the lack of a current official bulk postcode feed found during this review.
 
 MIT License
 Copyright (c) 2023-Present Joe Takara

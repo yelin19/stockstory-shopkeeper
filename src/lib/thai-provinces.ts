@@ -177,6 +177,13 @@ export type ThaiDistrict = {
   postalCode: string;
 };
 
+export type ThaiPostalCodeOption = {
+  postalCode: string;
+  isPrimary: boolean;
+  detailTh: string;
+  detailEn: string;
+};
+
 export type ThaiSubdistrict = {
   provinceCode: string;
   districtCode: string;
@@ -184,10 +191,20 @@ export type ThaiSubdistrict = {
   nameTh: string;
   nameEn: string;
   postalCode: string;
+  postalCodes: ThaiPostalCodeOption[];
 };
 
 export type ThaiAddressData = {
   revision: string;
+  sources: {
+    upstream: string;
+    upstreamUrl: string;
+    administrativeNamesAndCodes: string;
+    postalAssignments: string;
+    postalPosterUrl: string;
+    postalChangeNotices: string[];
+  };
+  provinces: Array<ThaiProvince>;
   districts: ThaiDistrict[];
   subdistricts: ThaiSubdistrict[];
 };
@@ -198,6 +215,7 @@ export type CartAddress = {
   district?: { code: string; name: string };
   subdistrict?: { code: string; name: string };
   postalCode?: string;
+  postalCodeDetail?: string;
 };
 
 /**
@@ -209,23 +227,30 @@ export function encodeCartAddressLines(
   detail: string,
   district?: ThaiDistrict | null,
   subdistrict?: ThaiSubdistrict | null,
+  selectedPostalCode?: string,
+  postalCodeDetail?: string,
 ): string[] {
   const clean = sanitizeAddressDetail(detail);
   if (!clean) return [];
   if (district && subdistrict) {
+    const postalCode = selectedPostalCode ?? subdistrict.postalCode;
+    const postalOption = subdistrict.postalCodes.find((option) => option.postalCode === postalCode);
+    const cleanPostalDetail = postalCodeDetail ? sanitizeAddressDetail(postalCodeDetail) : "";
     if (
       district.provinceCode !== province.code ||
       subdistrict.provinceCode !== province.code ||
       subdistrict.districtCode !== district.code ||
       !/^\d{4}$/.test(district.code) ||
       !/^\d{6}$/.test(subdistrict.code) ||
-      !/^\d{5}$/.test(subdistrict.postalCode)
+      !/^\d{5}$/.test(postalCode) ||
+      !postalOption ||
+      (postalCodeDetail && !cleanPostalDetail)
     )
       return [];
     return [
       `ADDR_PROVINCE: ${province.code}|${province.abbr}|${province.name}`,
       `ADDR_DISTRICT: ${district.code}|${district.nameTh}`,
-      `ADDR_SUBDISTRICT: ${subdistrict.code}|${subdistrict.nameTh}|${subdistrict.postalCode}`,
+      `ADDR_SUBDISTRICT: ${subdistrict.code}|${subdistrict.nameTh}|${postalCode}${cleanPostalDetail ? `|${encodeURIComponent(cleanPostalDetail)}` : ""}`,
       `ADDR_DETAIL: ${clean}`,
     ];
   }
@@ -261,10 +286,19 @@ export function decodeCartAddressLines(lines: readonly string[]): CartAddress | 
     .slice(districtLine.indexOf(":") + 1)
     .trim()
     .split("|");
-  const [subdistrictCode = "", subdistrictName = "", postalCode = ""] = subdistrictLine
-    .slice(subdistrictLine.indexOf(":") + 1)
-    .trim()
-    .split("|");
+  const [subdistrictCode = "", subdistrictName = "", postalCode = "", encodedPostalDetail = ""] =
+    subdistrictLine
+      .slice(subdistrictLine.indexOf(":") + 1)
+      .trim()
+      .split("|");
+  let postalCodeDetail = "";
+  try {
+    postalCodeDetail = encodedPostalDetail
+      ? sanitizeAddressDetail(decodeURIComponent(encodedPostalDetail))
+      : "";
+  } catch {
+    return null;
+  }
   if (
     !/^\d{4}$/.test(districtCode) ||
     !districtCode.startsWith(province.code) ||
@@ -281,5 +315,6 @@ export function decodeCartAddressLines(lines: readonly string[]): CartAddress | 
     district: { code: districtCode, name: districtName.trim().slice(0, 80) },
     subdistrict: { code: subdistrictCode, name: subdistrictName.trim().slice(0, 80) },
     postalCode,
+    ...(postalCodeDetail ? { postalCodeDetail } : {}),
   };
 }

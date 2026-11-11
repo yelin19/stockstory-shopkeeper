@@ -91,6 +91,14 @@ describe("Thai province reference", () => {
       nameTh: "มหาชัย",
       nameEn: "Mahachai",
       postalCode: "74000",
+      postalCodes: [
+        {
+          postalCode: "74000",
+          isPrimary: true,
+          detailTh: "ทั้งตำบล",
+          detailEn: "Whole subdistrict",
+        },
+      ],
     };
     const lines = encodeCartAddressLines(province, "123/4 หมู่ 5", district, subdistrict);
     expect(lines).toEqual([
@@ -106,6 +114,43 @@ describe("Thai province reference", () => {
       postalCode: "74000",
       detail: "123/4 หมู่ 5",
     });
+  });
+
+  it("encodes and decodes a non-primary village-specific postcode choice", () => {
+    const province = findThaiProvince("81")!;
+    const district: ThaiDistrict = {
+      provinceCode: "81",
+      code: "8101",
+      nameTh: "เมืองกระบี่",
+      nameEn: "Mueang Krabi",
+      postalCode: "81000",
+    };
+    const subdistrict: ThaiSubdistrict = {
+      provinceCode: "81",
+      districtCode: "8101",
+      code: "810116",
+      nameTh: "อ่าวนาง",
+      nameEn: "Ao Nang",
+      postalCode: "81180",
+      postalCodes: [
+        { postalCode: "81180", isPrimary: true, detailTh: "ม.1 - 6", detailEn: "Moo 1 - 6" },
+        { postalCode: "81210", isPrimary: false, detailTh: "ม.7 - 8", detailEn: "Moo 7 - 8" },
+      ],
+    };
+    const lines = encodeCartAddressLines(
+      province,
+      "123/4 หมู่ 7",
+      district,
+      subdistrict,
+      "81210",
+      "ม.7 - 8",
+    );
+    expect(lines[2]).toContain("|81210|");
+    expect(decodeCartAddressLines(lines)).toMatchObject({
+      postalCode: "81210",
+      postalCodeDetail: "ม.7 - 8",
+    });
+    expect(encodeCartAddressLines(province, "123/4", district, subdistrict, "99999")).toEqual([]);
   });
 
   it("rejects mismatched district and subdistrict selections", () => {
@@ -124,6 +169,14 @@ describe("Thai province reference", () => {
       nameTh: "ตลาดกระทุ่มแบน",
       nameEn: "Talat Krathum Baen",
       postalCode: "74110",
+      postalCodes: [
+        {
+          postalCode: "74110",
+          isPrimary: true,
+          detailTh: "ทั้งตำบล",
+          detailEn: "Whole subdistrict",
+        },
+      ],
     };
     expect(encodeCartAddressLines(province, "123/4", district, subdistrict)).toEqual([]);
     expect(

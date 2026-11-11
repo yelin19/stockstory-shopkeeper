@@ -37,6 +37,7 @@ function ShopCatalog() {
   const [provinceCode, setProvinceCode] = useState("");
   const [districtCode, setDistrictCode] = useState("");
   const [subdistrictCode, setSubdistrictCode] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [addressDetail, setAddressDetail] = useState("");
   const [addressData, setAddressData] = useState<ThaiAddressData | null>(null);
   const [addressDataLoading, setAddressDataLoading] = useState(false);
@@ -61,8 +62,15 @@ function ShopCatalog() {
     [addressData, districtCode, provinceCode],
   );
   const subdistrict = subdistricts.find((item) => item.code === subdistrictCode) ?? null;
+  const postalOptions = subdistrict?.postalCodes ?? [];
+  const postalOption =
+    postalOptions.find((item) => item.postalCode === postalCode) ??
+    postalOptions.find((item) => item.isPrimary) ??
+    postalOptions[0] ??
+    null;
   const cleanAddress = sanitizeAddressDetail(addressDetail);
-  const addressReady = Boolean(province && district && subdistrict) && cleanAddress.length >= 3;
+  const addressReady =
+    Boolean(province && district && subdistrict && postalOption) && cleanAddress.length >= 3;
 
   useEffect(() => {
     if (!openCart || addressData) return;
@@ -98,6 +106,7 @@ function ShopCatalog() {
           provinceCode?: unknown;
           districtCode?: unknown;
           subdistrictCode?: unknown;
+          postalCode?: unknown;
           addressDetail?: unknown;
         };
         const savedProvince =
@@ -105,6 +114,7 @@ function ShopCatalog() {
         if (savedProvince) setProvinceCode(savedProvince.code);
         if (typeof saved.districtCode === "string") setDistrictCode(saved.districtCode);
         if (typeof saved.subdistrictCode === "string") setSubdistrictCode(saved.subdistrictCode);
+        if (typeof saved.postalCode === "string") setPostalCode(saved.postalCode);
         if (typeof saved.addressDetail === "string")
           setAddressDetail(saved.addressDetail.slice(0, 300));
       }
@@ -118,17 +128,31 @@ function ShopCatalog() {
   useEffect(() => {
     if (!addressHydrated) return;
     try {
-      if (!provinceCode && !districtCode && !subdistrictCode && !addressDetail)
+      if (!provinceCode && !districtCode && !subdistrictCode && !postalCode && !addressDetail)
         window.localStorage.removeItem(storageKey);
       else
         window.localStorage.setItem(
           storageKey,
-          JSON.stringify({ provinceCode, districtCode, subdistrictCode, addressDetail }),
+          JSON.stringify({
+            provinceCode,
+            districtCode,
+            subdistrictCode,
+            postalCode,
+            addressDetail,
+          }),
         );
     } catch {
       // Private browsing may block storage; ordering must not depend on it.
     }
-  }, [addressHydrated, storageKey, provinceCode, districtCode, subdistrictCode, addressDetail]);
+  }, [
+    addressHydrated,
+    storageKey,
+    provinceCode,
+    districtCode,
+    subdistrictCode,
+    postalCode,
+    addressDetail,
+  ]);
 
   const change = (p: CatalogProduct, delta: number) =>
     setCart((current) => {
@@ -156,7 +180,14 @@ function ShopCatalog() {
     );
     const addressLines =
       province && district && subdistrict
-        ? encodeCartAddressLines(province, cleanAddress, district, subdistrict)
+        ? encodeCartAddressLines(
+            province,
+            cleanAddress,
+            district,
+            subdistrict,
+            postalOption?.postalCode,
+            postalOptions.length > 1 ? postalOption?.detailTh : undefined,
+          )
         : [];
     const payload = [
       "CART_ORDER",
@@ -333,6 +364,7 @@ function ShopCatalog() {
                       setProvinceCode(e.target.value);
                       setDistrictCode("");
                       setSubdistrictCode("");
+                      setPostalCode("");
                     }}
                   >
                     <option value="">— ပြည်နယ်ရွေးပါ —</option>
@@ -353,6 +385,7 @@ function ShopCatalog() {
                     onChange={(e) => {
                       setDistrictCode(e.target.value);
                       setSubdistrictCode("");
+                      setPostalCode("");
                     }}
                   >
                     <option value="">
@@ -372,7 +405,16 @@ function ShopCatalog() {
                     className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
                     value={subdistrictCode}
                     disabled={!district || !addressData}
-                    onChange={(e) => setSubdistrictCode(e.target.value)}
+                    onChange={(e) => {
+                      const nextCode = e.target.value;
+                      const next = subdistricts.find((item) => item.code === nextCode);
+                      setSubdistrictCode(nextCode);
+                      setPostalCode(
+                        next?.postalCodes.find((item) => item.isPrimary)?.postalCode ??
+                          next?.postalCode ??
+                          "",
+                      );
+                    }}
                   >
                     <option value="">
                       {district ? "— ตำบล / แขวง ရွေးပါ —" : "— အำเภอ / เขต ကို အရင်ရွေးပါ —"}
@@ -386,13 +428,36 @@ function ShopCatalog() {
                   <label className="block text-sm font-semibold" htmlFor="postal-code">
                     รหัสไปรษณีย์ (Postal code)
                   </label>
-                  <input
-                    id="postal-code"
-                    className="h-11 w-full rounded-xl border border-input bg-muted px-3 text-base"
-                    value={subdistrict?.postalCode ?? ""}
-                    readOnly
-                    placeholder="ตำบล / แขวง ရွေးပြီး အလိုအလျောက်ပြပါမည်"
-                  />
+                  {postalOptions.length > 1 ? (
+                    <select
+                      id="postal-code"
+                      className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                      value={postalOption?.postalCode ?? ""}
+                      onChange={(e) => setPostalCode(e.target.value)}
+                      disabled={!subdistrict}
+                    >
+                      {postalOptions.map((option) => (
+                        <option key={option.postalCode} value={option.postalCode}>
+                          {option.postalCode} · {option.detailTh}
+                          {option.isPrimary ? " (พื้นที่ส่วนใหญ่)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id="postal-code"
+                      className="h-11 w-full rounded-xl border border-input bg-muted px-3 text-base"
+                      value={postalOption?.postalCode ?? ""}
+                      readOnly
+                      disabled={!subdistrict}
+                      placeholder="ตำบล / แขวง ရွေးပြီး အလိုအလျောက်ပြပါမည်"
+                    />
+                  )}
+                  {postalOptions.length > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      လိပ်စာအသေးစိတ်နဲ့ ကိုက်ညီတဲ့ หมู่ / လမ်းအပိုင်း၏ postal code ကိုရွေးပါ။
+                    </p>
+                  )}
                   <label className="block text-sm font-semibold" htmlFor="address-detail">
                     လိပ်စာအသေးစိတ် (အိမ်အမှတ် / หมู่ / လမ်း / ซอย)
                   </label>
@@ -414,10 +479,12 @@ function ShopCatalog() {
                       လိပ်စာစာရင်းကို ဖွင့်မရပါ။ အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ဖွင့်ပါ။
                     </p>
                   )}
-                  {addressReady && province && district && subdistrict ? (
+                  {addressReady && province && district && subdistrict && postalOption ? (
                     <p className="text-sm font-medium text-emerald-700">
                       ✓ {thaiProvinceTownship(province)} · {district.nameTh} · {subdistrict.nameTh}{" "}
-                      · {subdistrict.postalCode} · {cleanAddress}
+                      · {postalOption.postalCode}
+                      {postalOptions.length > 1 ? ` (${postalOption.detailTh})` : ""} ·{" "}
+                      {cleanAddress}
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">

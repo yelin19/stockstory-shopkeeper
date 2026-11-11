@@ -46,6 +46,7 @@ type CartDraft = {
   district_name?: string;
   subdistrict_name?: string;
   postal_code?: string;
+  postal_code_detail?: string;
   previous_customer?: CustomerDetails;
   note?: string;
   payment_method?: OrderPaymentMethod;
@@ -514,6 +515,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
               ...(address.district ? { district_name: address.district.name } : {}),
               ...(address.subdistrict ? { subdistrict_name: address.subdistrict.name } : {}),
               ...(address.postalCode ? { postal_code: address.postalCode } : {}),
+              ...(address.postalCodeDetail ? { postal_code_detail: address.postalCodeDetail } : {}),
             }
           : {}),
         prepay_allowed: allPrepaid,
@@ -528,7 +530,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
         )
         .join("\n");
       const addressSummary = address
-        ? `\n📍 လိပ်စာ: ${address.province.name}${address.district ? ` · ${address.district.name}` : ""}${address.subdistrict ? ` · ${address.subdistrict.name}` : ""}${address.postalCode ? ` · ${address.postalCode}` : ""} · ${address.detail}`
+        ? `\n📍 လိပ်စာ: ${address.province.name}${address.district ? ` · ${address.district.name}` : ""}${address.subdistrict ? ` · ${address.subdistrict.name}` : ""}${address.postalCode ? ` · ${address.postalCode}` : ""}${address.postalCodeDetail ? ` (${address.postalCodeDetail})` : ""} · ${address.detail}`
         : "";
       const nextStep = address
         ? "\n\nအတည်ပြုပြီးနောက် နာမည်နဲ့ ဖုန်းနံပါတ်သာ ဖြည့်ရပါမယ်ရှင်။"
@@ -686,6 +688,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       delete reenterData["district_name"];
       delete reenterData["subdistrict_name"];
       delete reenterData["postal_code"];
+      delete reenterData["postal_code_detail"];
       delete reenterData["address"];
     }
     await save({ state: "ask_customer_details", data: reenterData });
@@ -730,7 +733,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     : Number(draft.price ?? 0) * Number(draft.qty ?? 0);
   const draftAddressText = (draft: Draft) => {
     if (draft.district_name || draft.subdistrict_name || draft.postal_code) {
-      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nအำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
+      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nအำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
     }
     if (draft.province_name) {
       return `ပြည်နယ်: ${draft.province_name}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nလိပ်စာအသေးစိတ်: ${draft.address ?? ""}`;
@@ -741,7 +744,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   };
   const persistedAddress = (draft: Draft) =>
     draft.subdistrict_name && draft.province_name && draft.postal_code
-      ? `${draft.address ?? ""}, ${draft.subdistrict_name}, ${draft.province_name}, ${draft.postal_code}`
+      ? `${draft.address ?? ""}, ${draft.subdistrict_name}, ${draft.province_name}, ${draft.postal_code}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}`
       : String(draft.address ?? "");
 
   switch (s.state) {
