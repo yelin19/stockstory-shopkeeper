@@ -339,7 +339,7 @@ async function handlePaymentReviewAction(
       .select("id");
     if (approvalError) return text(adminPsid, "ငွေပေးချေမှုကို အတည်ပြုမရပါ။ အက်ပ်ထဲတွင် ထပ်စစ်ပါ။");
     if (!approved?.length) return text(adminPsid, `Order ID: ${orderId} ၏ ငွေလွှဲဖြတ်ပိုင်းကို စစ်ဆေးပြီးဖြစ်ပါသည်။`);
-    const buyerMessage = `✅ Order ID: ${orderId} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းများ: ${groupProducts}\nပေးချေပြီးငွေ: ${formatCurrency(groupTotal, currency ?? order.currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။`;
+    const buyerMessage = `✅ Order ID: ${orderId} ကို Admin မှ ငွေပေးချေမှုအတည်ပြုပြီးပါပြီရှင်။\nပစ္စည်းများ: ${groupProducts}\nပေးချေပြီးငွေ: ${formatCurrency(groupTotal, currency ?? order.currency)}\nမကြာမီ ပို့ဆောင်ပေးပါမယ်ရှင်။\n\nမပို့ရသေးပါက အောက်က “မယူတော့ဘူး” ခလုတ်ကို နှိပ်ပြီး အော်ဒါကို ချက်ချင်းဖျက်နိုင်ပါသည်ရှင်။`;
     if (order.psid && !(await sendUpdate(order.psid, buyerMessage, orderId))) console.error("Could not notify customer that prepaid order was approved");
     await text(adminPsid, `✅ Order ID: ${orderId} ကို အတည်ပြုပြီး ဝယ်သူထံ အကြောင်းကြားပါပြီ။`);
     return;
