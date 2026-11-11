@@ -810,7 +810,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const draftAddressText = (draft: Draft) => {
     if (draft.cart?.length) return `ที่อยู่: ${thaiDeliveryAddress(draft)}`;
     if (draft.district_name || draft.subdistrict_name || draft.postal_code) {
-      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nအำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}\nรายละเอียดที่อยู่: ${draft.address ?? ""}`;
+      return `ပြည်နယ်: ${draft.province_name ?? ""}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nอำเภอ/เขต: ${draft.district_name ?? draft.township ?? ""}\nตำบล/แขวง: ${draft.subdistrict_name ?? ""}\nစာတိုက်ကုဒ်: ${draft.postal_code ?? ""}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}\nรายละเอียดที่อยู่: ${draft.address ?? ""}`;
     }
     if (draft.province_name) {
       return `ပြည်နယ်: ${draft.province_name}${draft.province_abbr ? ` (${draft.province_abbr})` : ""}\nรายละเอียดที่อยู่: ${draft.address ?? ""}`;

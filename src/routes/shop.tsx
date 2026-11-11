@@ -399,7 +399,7 @@ function ShopCatalog() {
                     ))}
                   </select>
                   <label className="block text-sm font-semibold" htmlFor="district-select">
-                    အำเภอ / เขต (District)
+                    อำเภอ / เขต (District)
                   </label>
                   <select
                     id="district-select"
@@ -413,7 +413,7 @@ function ShopCatalog() {
                     }}
                   >
                     <option value="">
-                      {province ? "— အำเภอ / เขต ရွေးပါ —" : "— ပြည်နယ်ကို အရင်ရွေးပါ —"}
+                      {province ? "— อำเภอ / เขต ရွေးပါ —" : "— ပြည်နယ်ကို အရင်ရွေးပါ —"}
                     </option>
                     {districts.map((item) => (
                       <option key={item.code} value={item.code}>
@@ -441,7 +441,7 @@ function ShopCatalog() {
                     }}
                   >
                     <option value="">
-                      {district ? "— ตำบล / แขวง ရွေးပါ —" : "— အำเภอ / เขต ကို အရင်ရွေးပါ —"}
+                      {district ? "— ตำบล / แขวง ရွေးပါ —" : "— อำเภอ / เขต ကို အရင်ရွေးပါ —"}
                     </option>
                     {subdistricts.map((item) => (
                       <option key={item.code} value={item.code}>
@@ -517,7 +517,7 @@ function ShopCatalog() {
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      ပြည်နယ်၊ အำเภอ/เขต၊ ตำบล/แขวง နဲ့ လိပ်စာအသေးစိတ်ကို ရွေးဖြည့်ပါ။
+                      ပြည်နယ်၊ อำเภอ/เขต၊ ตำบล/แขวง နဲ့ လိပ်စာအသေးစိတ်ကို ရွေးဖြည့်ပါ။
                       စာတိုက်ကုဒ်ကို အလိုအလျောက်ဖြည့်ပေးပါမယ်။
                     </p>
                   )}
