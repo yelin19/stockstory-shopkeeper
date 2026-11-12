@@ -11,6 +11,11 @@ import { formatQuantity } from "@/lib/product-unit";
 import { paymentMethodLabel } from "@/lib/payment-method";
 import { LABEL_HEIGHT_MM, LABEL_PAGE_RULE, LABEL_WIDTH_MM, printLabelsSilently } from "@/lib/label-print";
 import { formatRecipientAddress, selectedOrdersForPrint } from "@/lib/order-print";
+import {
+  toggleAllPublicOrders,
+  togglePublicOrderSelection,
+  uniquePublicOrderIds,
+} from "@/lib/order-selection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -50,7 +55,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const [product, setProduct] = useState("");
   const [orderNo, setOrderNo] = useState("");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [selectedPublicOrderIds, setSelectedPublicOrderIds] = useState<string[]>([]);
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
   const [bulkTrackingBusy, setBulkTrackingBusy] = useState(false);
   const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
@@ -71,6 +76,15 @@ export function OrdersView({ mode }: { mode: Mode }) {
         return true;
       }),
     [scopedOrders, product, orderNo],
+  );
+  const selectablePublicOrderIds = useMemo(
+    () =>
+      uniquePublicOrderIds(
+        filtered.filter((o) =>
+          mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o),
+        ),
+      ),
+    [filtered, mode],
   );
   const firstOrderRowIds = useMemo(() => {
     const seen = new Set<string>();
@@ -117,7 +131,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   async function copyAddress(o: Order) {
     const recipientAddress = recipientAddressText(o);
-    const printable = selectedOrdersForPrint(orders, [o], [o.id])[0];
+    const printable = selectedOrdersForPrint(orders, [o], [o.public_order_id])[0];
     const text = [
       "ผู้ส่ง",
       `ชื่อผู้ส่ง: ${settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}`,
@@ -140,17 +154,21 @@ export function OrdersView({ mode }: { mode: Mode }) {
     }
   }
 
-  function toggleOrder(id: string) {
-    setSelectedOrderIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  function toggleOrder(publicOrderId: string) {
+    setSelectedPublicOrderIds((current) => togglePublicOrderSelection(current, publicOrderId));
   }
 
   function toggleAllFiltered() {
-    const ids = filtered.filter((o) => mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)).map((o) => o.id);
-    setSelectedOrderIds((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]);
+    setSelectedPublicOrderIds((current) =>
+      toggleAllPublicOrders(current, selectablePublicOrderIds),
+    );
   }
 
   async function deleteSelectedOrders() {
-    const selected = filtered.filter((o) => selectedOrderIds.includes(o.id) && (mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)));
+    const selected = filtered.filter((o) =>
+      selectedPublicOrderIds.includes(o.public_order_id) &&
+      (mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)),
+    );
     if (!selected.length) return void toast.info("ဖျက်မည့်အော်ဒါကို အရင်ရွေးပါ");
     const orderIds = [...new Set(selected.map((o) => o.public_order_id))];
     const message = mode === "orders"
@@ -170,7 +188,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
       const result = await response.json() as { error?: string; deleted?: number };
       if (!response.ok) throw new Error(result.error || "အော်ဒါများဖျက်မရပါ");
       toast.success(`${orderIds.length} ခုကို ဖျက်ပြီးပါပြီ`);
-      setSelectedOrderIds([]);
+      setSelectedPublicOrderIds([]);
       qc.invalidateQueries();
     } catch (err) {
       toast.error(`အော်ဒါများဖျက်မရပါ: ${(err as Error).message}`);
@@ -181,15 +199,18 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   async function applyBulkTrackingLink() {
     const link = bulkTrackingUrl.trim();
-    if (!selectedOrderIds.length) return void toast.info("Tracking link ထည့်မည့်အော်ဒါကို အရင်ရွေးပါ");
+    if (!selectedPublicOrderIds.length) return void toast.info("Tracking link ထည့်မည့်အော်ဒါကို အရင်ရွေးပါ");
     if (!/^https?:\/\//i.test(link)) return void toast.error("https:// ဖြင့်စသော Tracking link ထည့်ပါ");
     if (bulkTrackingBusy) return;
     setBulkTrackingBusy(true);
-    const { error } = await supabase.from("orders").update({ tracking_url: link }).in("id", selectedOrderIds);
+    const selectedRowIds = scopedOrders
+      .filter((order) => selectedPublicOrderIds.includes(order.public_order_id))
+      .map((order) => order.id);
+    const { error } = await supabase.from("orders").update({ tracking_url: link }).in("id", selectedRowIds);
     setBulkTrackingBusy(false);
     if (error) return void toast.error(error.message);
-    toast.success(`${selectedOrderIds.length} ခုတွင် Tracking link ထည့်ပြီးပါပြီ`);
-    setSelectedOrderIds([]);
+    toast.success(`${selectedPublicOrderIds.length} ခုတွင် Tracking link ထည့်ပြီးပါပြီ`);
+    setSelectedPublicOrderIds([]);
     setBulkTrackingUrl("");
     qc.invalidateQueries();
   }
@@ -265,8 +286,8 @@ export function OrdersView({ mode }: { mode: Mode }) {
     return m;
   }, [visibleOrders]);
   const selectedAddressOrders = useMemo(
-    () => selectedOrdersForPrint(orders, visibleOrders, selectedOrderIds),
-    [orders, selectedOrderIds, visibleOrders],
+    () => selectedOrdersForPrint(orders, visibleOrders, selectedPublicOrderIds),
+    [orders, selectedPublicOrderIds, visibleOrders],
   );
 
   async function printAddressLabels() {
@@ -352,20 +373,20 @@ export function OrdersView({ mode }: { mode: Mode }) {
       <div className="no-print flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
         <div className="basis-full text-sm font-semibold">{mode === "orders" ? "အော်ဒါများကို ရွေးချယ်စီမံရန်" : "ပို့ပြီးသော Order များကို ရွေးချယ်စီမံရန်"}</div>
         <Button size="sm" variant="outline" onClick={toggleAllFiltered} disabled={!filtered.length}>
-          {filtered.filter((o) => mode === "orders" ? !isOrderShipped(o) : o.status !== "cancelled" && isOrderShipped(o)).every((o) => selectedOrderIds.includes(o.id)) ? "ရွေးထားတာဖြုတ်မည်" : "အားလုံးရွေးမည်"}
+          {selectablePublicOrderIds.length > 0 && selectablePublicOrderIds.every((id) => selectedPublicOrderIds.includes(id)) ? "ရွေးထားတာဖြုတ်မည်" : "အားလုံးရွေးမည်"}
         </Button>
-        <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedOrderIds.length} ခု</span>
-        <Button size="sm" variant="destructive" onClick={deleteSelectedOrders} disabled={!selectedOrderIds.length || bulkDeleteBusy}>
+        <span className="text-sm text-muted-foreground">ရွေးထားသည်: {selectedPublicOrderIds.length} ခု</span>
+        <Button size="sm" variant="destructive" onClick={deleteSelectedOrders} disabled={!selectedPublicOrderIds.length || bulkDeleteBusy}>
           <Trash2 /> {bulkDeleteBusy ? "ဖျက်နေသည်..." : "ရွေးထားတာဖျက်မည်"}
         </Button>
         {mode === "orders" && <>
-        <Button size="sm" variant="outline" onClick={printAddressLabels} disabled={!selectedAddressOrders.length} title="ရွေးထားသောအော်ဒါတစ်ခုစီအတွက် 100×75 မီလီမီတာ လိပ်စာတံဆိပ် တစ်ခုစီထုတ်မည်"><Printer /> လိပ်စာတံဆိပ် ပုံနှိပ်မည် ({selectedAddressOrders.length})</Button>
+        <Button size="sm" variant="outline" onClick={printAddressLabels} disabled={!selectedAddressOrders.length} title="ရွေးထားသောအော်ဒါတစ်ခုစီအတွက် 100×150 မီလီမီတာ လိပ်စာတံဆိပ် တစ်ခုစီထုတ်မည်"><Printer /> လိပ်စာတံဆိပ် ပုံနှိပ်မည် ({selectedAddressOrders.length})</Button>
         <Input className="min-w-[240px] flex-1" value={bulkTrackingUrl} onChange={(e) => setBulkTrackingUrl(e.target.value)} placeholder="တူညီသော Tracking link (https://...)" />
-        <Button size="sm" onClick={applyBulkTrackingLink} disabled={!selectedOrderIds.length || bulkTrackingBusy}>
+        <Button size="sm" onClick={applyBulkTrackingLink} disabled={!selectedPublicOrderIds.length || bulkTrackingBusy}>
           {bulkTrackingBusy ? "သိမ်းနေသည်..." : "ရွေးထားသောအော်ဒါများသို့ Link ထည့်မည်"}
         </Button>
         <span className="basis-full text-xs text-muted-foreground">Tracking link တူသောအော်ဒါများကို ရွေးပြီး ထည့်ပါ။ Tracking ID ကို အော်ဒါတစ်ခုချင်းစီမှာ သီးသန့်ထည့်နိုင်ပါသည်။</span>
-        <span className="basis-full text-xs text-muted-foreground">လိပ်စာပုံနှိပ်ရာတွင် ရွေးထားသော အော်ဒါတစ်ခုစီကို 100×75 မီလီမီတာ စာရွက်တစ်ရွက်စီဖြင့် ထုတ်ပေးပါမည်။</span>
+        <span className="basis-full text-xs text-muted-foreground">လိပ်စာပုံနှိပ်ရာတွင် ရွေးထားသော အော်ဒါတစ်ခုစီကို 100×150 မီလီမီတာ စာရွက်တစ်ရွက်စီဖြင့် ထုတ်ပေးပါမည်။</span>
         </>}
         {mode === "addresses" && <span className="basis-full text-xs text-muted-foreground">ပို့ပြီးသား Order မှတ်တမ်းကိုသာ ဖယ်ရှားမည်ဖြစ်ပြီး Stock နှင့် Customer လိပ်စာကို မပြောင်းလဲပါ။</span>}
       </div>
@@ -411,7 +432,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
                 <tbody>
                   {list.map((o) => (
                     <tr key={o.id} className="border-t align-top first:border-t-0">
-                      <td className="px-2 py-2 align-top"><input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedOrderIds.includes(o.id)} onChange={() => toggleOrder(o.id)} disabled={mode === "addresses" && o.status === "cancelled"} /></td>
+                      <td className="px-2 py-2 align-top">{firstOrderRowIds.has(o.id) && <input aria-label={`${o.public_order_id} ရွေးမည်`} type="checkbox" checked={selectedPublicOrderIds.includes(o.public_order_id)} onChange={() => toggleOrder(o.public_order_id)} disabled={mode === "addresses" && o.status === "cancelled"} />}</td>
                       <td className="px-4 py-2 font-mono text-xs">{firstOrderRowIds.has(o.id) && <span className="font-bold">ဝယ်ယူမှု ID: {o.public_order_id}</span>}<div className="text-muted-foreground">{format(new Date(o.created_at), "dd/MM/yyyy HH:mm")}</div></td>
                       <td className="py-2"><b>{o.customer_name}</b><div>{o.phone}</div></td>
                       <td className="py-2"><div className="max-w-xs text-muted-foreground">{recipientAddressText(o)}</div>{o.note && !o.note.startsWith("CART_ITEMS:") && <div className="text-xs italic">“{o.note}”</div>}{cartItemsFromNote(o.note).length > 0 && <div className="mt-1 text-xs text-muted-foreground">Cart: {cartItemsFromNote(o.note).map((item) => `${item.product} × ${formatQuantity(item.qty, item.unit)}`).join(", ")}</div>}</td>

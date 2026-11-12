@@ -126,18 +126,18 @@ export type PrintableOrder = Order & {
 };
 
 /**
- * Resolve selected visible order rows to their customer-facing order IDs, then
- * combine every database product row for each ID into one printable label.
+ * Resolve selected customer-facing order IDs and combine every database product
+ * row for each ID into one printable label.
  */
 export function selectedOrdersForPrint(
   allOrders: Order[],
   visibleOrders: Order[],
-  selectedOrderIds: string[],
+  selectedPublicOrderIds: string[],
 ): PrintableOrder[] {
-  const selectedIds = new Set(selectedOrderIds);
+  const selectedIds = new Set(selectedPublicOrderIds);
   const selectedPublicIds = new Set(
     visibleOrders
-      .filter((order) => selectedIds.has(order.id) && order.status !== "cancelled")
+      .filter((order) => selectedIds.has(order.public_order_id) && order.status !== "cancelled")
       .map((order) => order.public_order_id),
   );
   if (!selectedPublicIds.size) return [];

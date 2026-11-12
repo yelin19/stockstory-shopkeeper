@@ -79,7 +79,7 @@ describe("printable orders", () => {
       total: 1000,
     });
 
-    const result = selectedOrdersForPrint([first, second], [second], [second.id]);
+    const result = selectedOrdersForPrint([first, second], [second], [second.public_order_id]);
 
     expect(result).toHaveLength(1);
     expect(result[0]?.public_order_id).toBe("100123");
