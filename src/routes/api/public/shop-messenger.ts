@@ -19,6 +19,11 @@ import { matchProductCode } from "@/lib/product-code-match";
 import { handleProductComment, maskFacebookId, sendPrivateReply, webhookLog } from "@/lib/messenger-comment.server";
 import { extractCustomerDetailsFromImageUrl } from "@/lib/customer-details-image.server";
 import { generateNaturalShopReply, understandOrderMessage } from "@/lib/gemini-order.server";
+import {
+  fetchMessengerProfileName,
+  normalizeMessengerDisplayName,
+  personalizeMessengerReply,
+} from "@/lib/messenger-profile.server";
 
 // Shop Messenger webhook. Secrets (server-only): SHOP_FB_APP_SECRET, SHOP_FB_VERIFY_TOKEN, SHOP_FB_PAGE_ACCESS_TOKEN.
 // The FB_* aliases are also accepted so existing Lovable secrets continue to work.
@@ -210,6 +215,77 @@ async function loadPreviousCustomer(
 function previousCustomerFromDraft(draft: Record<string, unknown>): CustomerDetails | null {
   return readCustomerDetails(draft["previous_customer"]) ?? readCustomerDetails(draft);
 }
+const PROFILE_NAME_RETRY_MS = 24 * 60 * 60 * 1000;
+async function loadMessengerDisplayName(
+  db: Admin,
+  owner: string,
+  psid: string,
+  allowFacebookLookup = true,
+): Promise<string | null> {
+  try {
+    const { data: existingSession } = await db.from("messenger_sessions")
+      .select("owner_id,psid,pin_verified,state,data")
+      .eq("owner_id", owner)
+      .eq("psid", psid)
+      .maybeSingle();
+    const session = existingSession as Session | null;
+    const sessionData = session?.data && typeof session.data === "object" && !Array.isArray(session.data)
+      ? session.data
+      : {};
+    const cachedName = normalizeMessengerDisplayName(sessionData["messenger_display_name"]);
+    if (cachedName) return cachedName;
+
+    let name: string | null = null;
+    const { data: savedProfile, error: profileError } = await db.from("messenger_customer_profiles")
+      .select("customer_name")
+      .eq("owner_id", owner)
+      .eq("psid", psid)
+      .maybeSingle();
+    if (!profileError) name = normalizeMessengerDisplayName(savedProfile?.customer_name);
+
+    if (!name) {
+      const { data: previousOrder, error: orderError } = await db.from("orders")
+        .select("customer_name")
+        .eq("owner_id", owner)
+        .eq("psid", psid)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!orderError) name = normalizeMessengerDisplayName(previousOrder?.customer_name);
+    }
+
+    const pageToken = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
+    const lastProfileLookup = new Date(String(sessionData["messenger_profile_name_checked_at"] ?? "")).getTime();
+    const checkedRecently = Number.isFinite(lastProfileLookup) &&
+      Date.now() - lastProfileLookup >= 0 &&
+      Date.now() - lastProfileLookup < PROFILE_NAME_RETRY_MS;
+    const attemptedProfileLookup = !name && allowFacebookLookup && Boolean(pageToken) && !checkedRecently;
+    if (attemptedProfileLookup && pageToken) name = await fetchMessengerProfileName(psid, pageToken);
+
+    if (name || attemptedProfileLookup) {
+      const nextData = {
+        ...sessionData,
+        ...(name ? { messenger_display_name: name } : {}),
+        ...(attemptedProfileLookup
+          ? { messenger_profile_name_checked_at: new Date().toISOString() }
+          : {}),
+      };
+      const { error } = await db.from("messenger_sessions").upsert({
+        owner_id: owner,
+        psid,
+        pin_verified: Boolean(session?.pin_verified),
+        state: session?.state ?? "idle",
+        data: nextData,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) webhookLog("Messenger display name cache save failed");
+    }
+    return name;
+  } catch {
+    webhookLog("Messenger display name lookup failed");
+    return null;
+  }
+}
 const callShopRpc = (db: Admin, name: string, args: Record<string, unknown>) =>
   (db.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(name, args);
 const retryLowStockAlerts = async (owner: string, productId: string | null = null) => {
@@ -308,13 +384,37 @@ const isDeterministicProductRequest = (message: string) => {
   return parsed.qty !== null || /^[A-Za-z0-9_-]{1,32}$/.test(parsed.code);
 };
 
+const activeMessengerNames = new Map<string, { name: string; count: number }>();
+function activateMessengerName(psid: string, name: string | null): () => void {
+  if (!name) return () => {};
+  const active = activeMessengerNames.get(psid);
+  if (active) {
+    active.count += 1;
+    active.name = name;
+  } else {
+    activeMessengerNames.set(psid, { name, count: 1 });
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const current = activeMessengerNames.get(psid);
+    if (!current) return;
+    current.count -= 1;
+    if (current.count <= 0) activeMessengerNames.delete(psid);
+  };
+}
 async function send(psid: string, message: Record<string, unknown>) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
   if (!token) return;
+  const activeName = activeMessengerNames.get(psid)?.name;
+  const outgoingMessage = activeName && typeof message["text"] === "string"
+    ? { ...message, text: personalizeMessengerReply(message["text"], activeName) }
+    : message;
   const res = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(token)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ recipient: { id: psid }, messaging_type: "RESPONSE", message }),
+    body: JSON.stringify({ recipient: { id: psid }, messaging_type: "RESPONSE", message: outgoingMessage }),
   });
   if (!res.ok) console.error("Messenger send failed", res.status, (await res.text().catch(() => "")).slice(0, 500));
 }
@@ -373,6 +473,10 @@ const customerDetailsRequest = (intro: string) =>
 async function sendUpdate(psid: string, messageText: string, cancellableOrderId?: string) {
   const token = envFirst("SHOP_FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN");
   if (!token) return false;
+  const activeName = activeMessengerNames.get(psid)?.name;
+  const outgoingText = activeName
+    ? personalizeMessengerReply(messageText, activeName)
+    : messageText;
   try {
     const response = await fetch(`https://graph.facebook.com/v21.0/me/messages?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
@@ -381,7 +485,7 @@ async function sendUpdate(psid: string, messageText: string, cancellableOrderId?
         recipient: { id: psid },
         messaging_type: "UPDATE",
         message: {
-          text: messageText,
+          text: outgoingText,
           ...(cancellableOrderId ? {
             quick_replies: [{ content_type: "text", title: "မယူတော့ဘူး", payload: `မယူတော့ဘူး ${cancellableOrderId}` }],
           } : {}),
@@ -616,8 +720,21 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     );
   }
   if (shopCurrency?.low_stock_alert_psid === psid) await retryLowStockAlerts(owner);
+  const identityCache = {
+    ...(normalizeMessengerDisplayName(s.data["messenger_display_name"])
+      ? { messenger_display_name: normalizeMessengerDisplayName(s.data["messenger_display_name"]) }
+      : {}),
+    ...(typeof s.data["messenger_profile_name_checked_at"] === "string"
+      ? { messenger_profile_name_checked_at: s.data["messenger_profile_name_checked_at"] }
+      : {}),
+  };
   const save = (patch: Partial<Session>) =>
-    db.from("messenger_sessions").upsert({ ...s, ...patch, data: (patch.data ?? s.data) as never, updated_at: new Date().toISOString() });
+    db.from("messenger_sessions").upsert({
+      ...s,
+      ...patch,
+      data: { ...(patch.data ?? s.data), ...identityCache } as never,
+      updated_at: new Date().toISOString(),
+    });
   await rememberChatMessage(db, owner, psid, "customer", msg);
   const persistentHistory = await loadChatHistory(db, owner, psid);
   const sessionHistory = Array.isArray((s.data as { chat?: unknown }).chat)
@@ -1561,25 +1678,33 @@ export const messengerHandlers = {
             if (message?.mid && !(await claimMessengerEvent(supabaseAdmin, shop.owner_id, message.mid))) continue;
             const t = message?.is_echo ? undefined : (message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
             const imageUrl = message?.attachments?.find((a) => a.type === "image")?.payload?.url;
-            if (imageUrl) {
-              try {
-                const customerDetailsImageHandled = await handleCustomerDetailsImage(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl, origin, shop.messenger_username);
-                if (!customerDetailsImageHandled) await handlePaymentProof(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl);
-              } catch (error) {
-                webhookLog("image handler failed");
-                await text(ev.sender.id, "ပုံကို လုပ်ဆောင်မရပါ။ နာမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။");
-              }
-              continue;
-            }
-            if (!t) continue;
+            if (!t && !imageUrl) continue;
+            const isCancellation = /^(?:မယူတော့ဘူး|မယူတော့ပါ|ဖျက်|cancel)\s+[0-9]{6}$/i.test(String(t ?? "").trim());
+            const customerName = isCancellation
+              ? null
+              : await loadMessengerDisplayName(supabaseAdmin, shop.owner_id, ev.sender.id);
+            const releaseName = activateMessengerName(ev.sender.id, customerName);
             try {
+              if (imageUrl) {
+                try {
+                  const customerDetailsImageHandled = await handleCustomerDetailsImage(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl, origin, shop.messenger_username);
+                  if (!customerDetailsImageHandled) await handlePaymentProof(supabaseAdmin, shop.owner_id, ev.sender.id, imageUrl);
+                } catch {
+                  webhookLog("image handler failed");
+                  await text(ev.sender.id, "ပုံကို လုပ်ဆောင်မရပါ။ နာမည်၊ ဖုန်းနံပါတ်နဲ့ လိပ်စာကို စာသားဖြင့် ပို့ပါရှင်။");
+                }
+                continue;
+              }
+              if (!t) continue;
               webhookLog("handleText started");
               const resumedCode = await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
               await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, (resumedCode ?? t).slice(0, 1000), origin, shop.messenger_username);
               webhookLog("handleText completed");
-            } catch (e) {
+            } catch {
               webhookLog("handleText failed");
               return new Response("Temporary processing error", { status: 500 });
+            } finally {
+              releaseName();
             }
           }
         }

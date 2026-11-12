@@ -49,6 +49,7 @@ const shop = {
 let session: Row | null;
 let previousOrder: Row | null;
 let customerProfile: Row | null;
+let facebookProfile: Row | null;
 const sentMessages: Row[] = [];
 
 function signedRequest(body: string) {
@@ -77,10 +78,14 @@ beforeEach(() => {
   session = null;
   previousOrder = null;
   customerProfile = null;
+  facebookProfile = null;
   sentMessages.length = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("graph.facebook.com/456?")) {
+        return new Response(JSON.stringify(facebookProfile ?? {}), { status: 200 });
+      }
       if (typeof init?.body === "string") {
         const requestBody = JSON.parse(init.body) as {
           message?: Record<string, unknown>;
@@ -170,6 +175,18 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+describe("Messenger customer-name replies", () => {
+  it("greets a first-time customer using the name returned by Meta's profile API", async () => {
+    facebookProfile = { first_name: "Aye", last_name: "Aye" };
+
+    const response = await message("hello");
+
+    expect(response.status).toBe(200);
+    expect(String(sentMessages.at(-1)?.["text"] ?? "")).toContain("မင်္ဂလာပါ Aye Aye ရေ။");
+    expect(session?.["data"]).toMatchObject({ messenger_display_name: "Aye Aye" });
+  });
 });
 
 const cartWithAddress = [
