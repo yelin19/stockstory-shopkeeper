@@ -11,6 +11,7 @@ import { customerPaymentChoices, getProductPaymentChoices, getProductPaymentFlow
 import { parseCustomerDetailsChoice } from "@/lib/customer-details-choice";
 import {
   decodeCartAddressLines,
+  findThaiProvince,
   thaiProvinceTownship,
   type CartAddress,
 } from "@/lib/thai-provinces";
@@ -94,6 +95,55 @@ function readCustomerDetails(value: unknown): CustomerDetails | null {
   const address = data["address"].trim();
   return name && phone && address ? { name, phone, address } : null;
 }
+function normalizeSavedThaiAddress(value: string): string {
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 5) return value.trim();
+
+  const postalIndex = parts.length - 1;
+  if (!/^\d{5}(?:\s*\([^)]*\))?$/u.test(parts[postalIndex] ?? "")) return value.trim();
+  const provinceIndex = postalIndex - 1;
+  const province = findThaiProvince(parts[provinceIndex]);
+  if (!province || provinceIndex < 3) return value.trim();
+
+  const isBangkok = province.code === "10";
+  const canonicalSubdistrictPart = parts[provinceIndex - 2] ?? "";
+  const canonicalDistrictPart = parts[provinceIndex - 1] ?? "";
+  const isAlreadyCanonical =
+    /^(?:ตำบล|แขวง)/u.test(canonicalSubdistrictPart) &&
+    /^(?:อำเภอ|เขต)/u.test(canonicalDistrictPart);
+  if (isAlreadyCanonical) return parts.join(", ");
+  if (
+    parts.slice(0, provinceIndex).some((part) => /^(?:ตำบล|แขวง|อำเภอ|เขต|จังหวัด)/u.test(part))
+  ) {
+    return value.trim();
+  }
+
+  const subdistrictPart = parts[provinceIndex - 1] ?? "";
+  const districtPart = parts[0] ?? "";
+  const detailParts = parts.slice(1, provinceIndex - 1);
+  if (
+    !detailParts.length ||
+    !/\d/u.test(detailParts[0] ?? "") ||
+    !subdistrictPart ||
+    !districtPart
+  ) {
+    return value.trim();
+  }
+  const subdistrict = subdistrictPart.replace(/^(?:ตำบล|แขวง)\s*/u, "");
+  const district = districtPart.replace(/^(?:อำเภอ|เขต)\s*/u, "");
+  if (!subdistrict || !district) return value.trim();
+
+  return [
+    ...detailParts,
+    `${isBangkok ? "แขวง" : "ตำบล"}${subdistrict}`,
+    `${isBangkok ? "เขต" : "อำเภอ"}${district}`,
+    `${isBangkok ? "" : "จังหวัด"}${province.name}`,
+    parts[postalIndex],
+  ].join(", ");
+}
 async function loadPreviousCustomer(
   db: Admin,
   owner: string,
@@ -112,7 +162,7 @@ async function loadPreviousCustomer(
       profileError.message,
     );
   }
-  const saved = readCustomerDetails(
+  const savedProfile = readCustomerDetails(
     profile
       ? {
           name: profile.customer_name,
@@ -121,6 +171,9 @@ async function loadPreviousCustomer(
         }
       : null,
   );
+  const saved = savedProfile
+    ? { ...savedProfile, address: normalizeSavedThaiAddress(savedProfile.address) }
+    : null;
   if (saved) return saved;
 
   const { data: previousOrder, error: orderError } = await db.from("orders")
@@ -148,7 +201,11 @@ async function loadPreviousCustomer(
         }
       : null,
   );
-  return previous ?? readCustomerDetails(fallback);
+  if (previous) return { ...previous, address: normalizeSavedThaiAddress(previous.address) };
+  const lastCustomer = readCustomerDetails(fallback);
+  return lastCustomer
+    ? { ...lastCustomer, address: normalizeSavedThaiAddress(lastCustomer.address) }
+    : null;
 }
 function previousCustomerFromDraft(draft: Record<string, unknown>): CustomerDetails | null {
   return readCustomerDetails(draft["previous_customer"]) ?? readCustomerDetails(draft);

@@ -360,7 +360,7 @@ describe("Messenger cart order with a website-selected address", () => {
       psid: "456",
       customer_name: "Profile Customer",
       phone: "08987654321",
-      address: "123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
+      address: "เมืองสมุทรสาคร, 116/46หมู่ที 7, ท่าจีน, สมุทรสาคร, 74000",
       updated_at: "2026-11-12T00:00:00.000Z",
     };
     previousOrder = null;
@@ -371,7 +371,9 @@ describe("Messenger cart order with a website-selected address", () => {
     const reuseMessage = String(sentMessages.at(-1)?.["text"] ?? "");
     expect(reuseMessage).toContain("ชื่อผู้รับ: Profile Customer");
     expect(reuseMessage).toContain("เบอร์โทรศัพท์: 08987654321");
-    expect(reuseMessage).toContain("123/4 หมู่ 5");
+    expect(reuseMessage).toContain(
+      "116/46หมู่ที 7, ตำบลท่าจีน, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
+    );
 
     await message("REUSE_CUSTOMER_DETAILS");
     await message("အတည်ပြု");
@@ -380,7 +382,7 @@ describe("Messenger cart order with a website-selected address", () => {
       expect.objectContaining({
         _name: "Profile Customer",
         _phone: "08987654321",
-        _address: "123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
+        _address: "116/46หมู่ที 7, ตำบลท่าจีน, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
       }),
     );
   });
