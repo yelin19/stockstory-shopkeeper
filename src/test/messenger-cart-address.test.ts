@@ -354,6 +354,46 @@ describe("Messenger cart order with a website-selected address", () => {
     );
   });
 
+  it("sends cancellation progress and success before slow low-stock follow-up completes", async () => {
+    previousOrder = {
+      owner_id: "owner-test",
+      psid: "456",
+      public_order_id: "100111",
+      customer_name: "Cancel Customer",
+      phone: "08123456789",
+      address: "123/4 หมู่ 5",
+      status: "confirmed",
+      sent: false,
+      delivery_status: "pending",
+    };
+    let releaseAlerts: ((result: { data: unknown; error: null }) => void) | undefined;
+    database.rpc.mockImplementation(async (name: string) => {
+      if (name === "cancel_order_by_customer") {
+        return { data: { product_id: product.id }, error: null };
+      }
+      if (name === "claim_low_stock_alerts") {
+        return new Promise((resolve) => {
+          releaseAlerts = resolve;
+        });
+      }
+      return { data: null, error: null };
+    });
+
+    const webhook = message("မယူတော့ဘူး 100111");
+    for (let attempt = 0; attempt < 10 && !releaseAlerts; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const replies = sentMessages.map((item) => String(item["text"] ?? ""));
+    expect(releaseAlerts).toBeDefined();
+    expect(replies.some((reply) => reply.includes("ဖျက်သိမ်းနေပါသည်"))).toBe(true);
+    expect(
+      replies.some((reply) => reply.includes("Order ID: 100111 ကို ချက်ချင်းဖျက်ပြီးပါပြီ")),
+    ).toBe(true);
+
+    releaseAlerts?.({ data: [], error: null });
+    await webhook;
+  });
+
   it("reuses the separately saved customer profile when order history has been deleted", async () => {
     customerProfile = {
       owner_id: "owner-test",

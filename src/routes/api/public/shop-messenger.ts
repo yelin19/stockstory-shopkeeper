@@ -829,15 +829,28 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
-      const { data: cancelled, error: cancelError } = await callShopRpc(db, "cancel_order_by_customer", {
+      const cancellation = callShopRpc(db, "cancel_order_by_customer", {
         _owner: owner, _psid: psid, _public_order_id: publicOrderId,
       });
+      await text(psid, `Order ID: ${publicOrderId} ကို ဖျက်သိမ်းနေပါသည်ရှင်။ ခဏစောင့်ပေးပါ။`);
+      const { data: cancelled, error: cancelError } = await cancellation;
       const customer = { name: order.customer_name, phone: order.phone, address: order.address };
-      await save({ state: "idle", data: { last_customer: customer } });
-      if (cancelError || !cancelled) return text(psid, "အော်ဒါကို ချက်ချင်းဖျက်မရပါ။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
+      if (cancelError || !cancelled) {
+        await save({ state: "idle", data: { last_customer: customer } });
+        return text(
+          psid,
+          "အော်ဒါကို ဖျက်မရပါ။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။ အက်ပ်ထဲတွင် စစ်ဆေးပေးပါရှင်။",
+        );
+      }
       const cancelledOrder = cancelled as { product_id?: string | null };
+      const reply = text(
+        psid,
+        `Order ID: ${publicOrderId} ကို ချက်ချင်းဖျက်ပြီးပါပြီရှင်။ Stock ကိုလည်း ပြန်ထည့်ပြီးပါပြီ။`,
+      );
+      await save({ state: "idle", data: { last_customer: customer } });
+      await reply;
       if (cancelledOrder.product_id) await retryLowStockAlerts(owner, cancelledOrder.product_id);
-      return text(psid, `Order ID: ${publicOrderId} ကို ချက်ချင်းဖျက်ပြီးပါပြီရှင်။ Stock ကိုလည်း ပြန်ထည့်ပြီးပါပြီ။`);
+      return;
     }
     await save({ state: "edit_order", data: { public_order_id: publicOrderId, product: order.product_name, unit: order.product_unit, quantity: order.quantity } });
     return text(psid, `Order ID: ${publicOrderId}\nပစ္စည်းအမည်: ${order.product_name}\nလက်ရှိအရေအတွက်: ${formatQuantity(order.quantity, order.product_unit)}\n\nအသစ်ပြောင်းလိုသော အရေအတွက်ကို ဂဏန်းတစ်ခုတည်းဖြင့် ပို့ပါ။ ဥပမာ 5`);
@@ -1063,15 +1076,31 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     }
     case "cancel_order": {
       if (!isYes(msg)) return text(psid, "အော်ဒါမယူတော့ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
-      const { data: cancelled, error } = await callShopRpc(db, "cancel_order_by_customer", {
-        _owner: owner, _psid: psid, _public_order_id: String((d as { public_order_id?: string }).public_order_id),
+      const publicOrderId = String((d as { public_order_id?: string }).public_order_id);
+      const cancellation = callShopRpc(db, "cancel_order_by_customer", {
+        _owner: owner,
+        _psid: psid,
+        _public_order_id: publicOrderId,
       });
+      await text(psid, `Order ID: ${publicOrderId} ကို ဖျက်သိမ်းနေပါသည်ရှင်။ ခဏစောင့်ပေးပါ။`);
+      const { data: cancelled, error } = await cancellation;
       const cancelledCustomer = (d as Draft & { cancel_customer?: CustomerDetails }).cancel_customer;
-      await save({ state: "idle", data: cancelledCustomer ? { last_customer: cancelledCustomer } : {} });
-      if (error) return text(psid, "အော်ဒါဖျက်ရာတွင် အမှားဖြစ်ပါသည်။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
+      if (error) {
+        await save({
+          state: "idle",
+          data: cancelledCustomer ? { last_customer: cancelledCustomer } : {},
+        });
+        return text(psid, "အော်ဒါဖျက်ရာတွင် အမှားဖြစ်ပါသည်။ ပို့ဆောင်ပြီးသားဖြစ်နိုင်ပါသည်။");
+      }
       const cancelledOrder = cancelled as { product_id?: string | null } | null;
+      const reply = text(psid, `Order ID: ${publicOrderId} ကို ဖျက်ပြီးပါပြီ။`);
+      await save({
+        state: "idle",
+        data: cancelledCustomer ? { last_customer: cancelledCustomer } : {},
+      });
+      await reply;
       if (cancelledOrder?.product_id) await retryLowStockAlerts(owner, cancelledOrder.product_id);
-      return text(psid, `Order ID: ${String((d as { public_order_id?: string }).public_order_id)} ကို ဖျက်ပြီးပါပြီ။`);
+      return;
     }
     case "ask_customer_details": {
       const details = parseCustomerDetails(msg);
