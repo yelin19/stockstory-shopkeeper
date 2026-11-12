@@ -1,5 +1,5 @@
 export const LABEL_WIDTH_MM = 100;
-export const LABEL_HEIGHT_MM = 75;
+export const LABEL_HEIGHT_MM = 150;
 
 type LabelPrintPayload = {
   html: string;
@@ -44,14 +44,14 @@ const LABEL_STYLES = `
     height: ${LABEL_HEIGHT_MM}mm;
     min-height: ${LABEL_HEIGHT_MM}mm;
     max-height: ${LABEL_HEIGHT_MM}mm;
-    overflow: hidden;
-    padding: 4mm;
+    overflow: visible;
+    padding: 5mm;
     color: #000;
     background: #fff;
     border: 0.25mm solid #333;
-    font-family: Arial, sans-serif;
-    font-size: 11pt;
-    line-height: 1.2;
+    font-family: Arial, "Noto Sans Myanmar", sans-serif;
+    font-size: 13pt;
+    line-height: 1.25;
     page-break-after: always;
     break-after: page;
   }
@@ -62,32 +62,32 @@ const LABEL_STYLES = `
     justify-content: space-between;
     border-bottom: 0.4mm solid #000;
     padding-bottom: 1mm;
-    font-size: 10pt;
+    font-size: 13pt;
     font-weight: 700;
   }
-  .thermal-label-heading strong { font-size: 16pt; }
+  .thermal-label-heading strong { font-size: 18pt; }
   .thermal-label-sender {
-    min-height: 15mm;
+    min-height: 22mm;
     overflow-wrap: anywhere;
-    font-size: 9pt;
-    line-height: 1.15;
+    font-size: 12pt;
+    line-height: 1.25;
   }
-  .thermal-label-sender strong { display: block; font-size: 11pt; }
-  .thermal-label-section-title { margin-bottom: 0.5mm; font-size: 8pt; font-weight: 700; }
+  .thermal-label-sender strong { display: block; font-size: 14pt; }
+  .thermal-label-section-title { margin-bottom: 1mm; font-size: 11pt; font-weight: 700; }
   .thermal-label-divider { flex: 0 0 0.35mm; width: 100%; background: #000; }
-  .thermal-label-recipient-block { min-height: 31mm; }
-  .thermal-label-recipient { font-size: 15pt; font-weight: 800; }
-  .thermal-label-phone { font-size: 12pt; font-weight: 700; }
-  .thermal-label-address { overflow-wrap: anywhere; font-size: 11pt; }
-  .thermal-label-address strong { display: block; font-size: 9pt; }
+  .thermal-label-recipient-block { min-height: 55mm; }
+  .thermal-label-recipient { font-size: 18pt; font-weight: 800; }
+  .thermal-label-phone { font-size: 15pt; font-weight: 700; }
+  .thermal-label-address { overflow-wrap: anywhere; font-size: 13pt; line-height: 1.3; }
+  .thermal-label-address strong { display: block; font-size: 11pt; }
   .thermal-label-product {
     margin-top: auto;
     border-top: 0.25mm solid #777;
     padding-top: 1mm;
-    font-size: 9pt;
+    font-size: 12pt;
     font-weight: 600;
   }
-  .thermal-label-total { margin-top: 0.5mm; font-size: 10pt; font-weight: 800; }
+  .thermal-label-total { margin-top: 1mm; font-size: 14pt; font-weight: 800; }
 `;
 
 function wrapLabelHtml(content: string) {
