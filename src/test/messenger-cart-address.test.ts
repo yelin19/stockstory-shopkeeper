@@ -48,6 +48,7 @@ const shop = {
 };
 let session: Row | null;
 let previousOrder: Row | null;
+let customerProfile: Row | null;
 const sentMessages: Row[] = [];
 
 function signedRequest(body: string) {
@@ -75,6 +76,7 @@ beforeEach(() => {
   vi.stubEnv("SHOP_FB_PAGE_ACCESS_TOKEN", "test-only-page-access-token");
   session = null;
   previousOrder = null;
+  customerProfile = null;
   sentMessages.length = 0;
   vi.stubGlobal(
     "fetch",
@@ -94,7 +96,11 @@ beforeEach(() => {
     const filters: Record<string, unknown> = {};
     const rows = () => {
       const base: Row[] =
-        table === "messenger_sessions"
+        table === "messenger_customer_profiles"
+          ? customerProfile
+            ? [customerProfile]
+            : []
+          : table === "messenger_sessions"
           ? session
             ? [session]
             : []
@@ -132,6 +138,7 @@ beforeEach(() => {
       maybeSingle: async () => ({ data: rows()[0] ?? null, error: null }),
       upsert: async (value) => {
         if (table === "messenger_sessions") session = { ...value };
+        if (table === "messenger_customer_profiles") customerProfile = { ...value };
         return { error: null };
       },
       insert: async () => ({ error: null }),
@@ -343,6 +350,37 @@ describe("Messenger cart order with a website-selected address", () => {
         _name: "Returning Customer",
         _phone: "08123456789",
         _address: "123/4 หมู่ 5, ตำบลมหาชัย, จังหวัดสมุทรสาคร, 74000",
+      }),
+    );
+  });
+
+  it("reuses the separately saved customer profile when order history has been deleted", async () => {
+    customerProfile = {
+      owner_id: "owner-test",
+      psid: "456",
+      customer_name: "Profile Customer",
+      phone: "08987654321",
+      address: "123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
+      updated_at: "2026-11-12T00:00:00.000Z",
+    };
+    previousOrder = null;
+
+    await message("CART_ORDER\n1. Test item — 2 ခု [111]");
+    await message("အတည်ပြု");
+    expect(session?.["state"]).toBe("reuse_customer_details");
+    const reuseMessage = String(sentMessages.at(-1)?.["text"] ?? "");
+    expect(reuseMessage).toContain("ชื่อผู้รับ: Profile Customer");
+    expect(reuseMessage).toContain("เบอร์โทรศัพท์: 08987654321");
+    expect(reuseMessage).toContain("123/4 หมู่ 5");
+
+    await message("REUSE_CUSTOMER_DETAILS");
+    await message("အတည်ပြု");
+    expect(database.rpc).toHaveBeenCalledWith(
+      "place_cart_orders_from_messenger",
+      expect.objectContaining({
+        _name: "Profile Customer",
+        _phone: "08987654321",
+        _address: "123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
       }),
     );
   });

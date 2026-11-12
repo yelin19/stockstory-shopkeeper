@@ -94,6 +94,62 @@ function readCustomerDetails(value: unknown): CustomerDetails | null {
   const address = data["address"].trim();
   return name && phone && address ? { name, phone, address } : null;
 }
+async function loadPreviousCustomer(
+  db: Admin,
+  owner: string,
+  psid: string,
+  fallback?: unknown,
+): Promise<CustomerDetails | null> {
+  const { data: profile, error: profileError } = await db.from("messenger_customer_profiles")
+    .select("customer_name, phone, address")
+    .eq("owner_id", owner)
+    .eq("psid", psid)
+    .maybeSingle();
+  if (profileError) {
+    console.error(
+      "Could not load saved Messenger customer details",
+      profileError.code,
+      profileError.message,
+    );
+  }
+  const saved = readCustomerDetails(
+    profile
+      ? {
+          name: profile.customer_name,
+          phone: profile.phone,
+          address: profile.address,
+        }
+      : null,
+  );
+  if (saved) return saved;
+
+  const { data: previousOrder, error: orderError } = await db.from("orders")
+    .select("customer_name, phone, township, address")
+    .eq("owner_id", owner)
+    .eq("psid", psid)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (orderError) {
+    console.error(
+      "Could not load previous Messenger order details",
+      orderError.code,
+      orderError.message,
+    );
+  }
+  const previous = readCustomerDetails(
+    previousOrder
+      ? {
+          name: previousOrder.customer_name,
+          phone: previousOrder.phone,
+          address: previousOrder.township
+            ? `${previousOrder.township}, ${previousOrder.address}`
+            : previousOrder.address,
+        }
+      : null,
+  );
+  return previous ?? readCustomerDetails(fallback);
+}
 function previousCustomerFromDraft(draft: Record<string, unknown>): CustomerDetails | null {
   return readCustomerDetails(draft["previous_customer"]) ?? readCustomerDetails(draft);
 }
@@ -545,13 +601,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
       // When the address already came from the website, do not offer an older
       // address again: it would silently replace the province just selected.
       const previousCustomer = address ? null : await (async () => {
-        const { data: previousOrder } = await db.from("orders")
-          .select("customer_name,phone,address")
-          .eq("owner_id", owner).eq("psid", psid)
-          .order("created_at", { ascending: false }).limit(1).maybeSingle();
-        return previousOrder
-          ? readCustomerDetails({ name: previousOrder.customer_name, phone: previousOrder.phone, address: previousOrder.address })
-          : readCustomerDetails(s.data["last_customer"]);
+        return loadPreviousCustomer(db, owner, psid, s.data["last_customer"]);
       })();
       const data: CartDraft = {
         cart,
@@ -1175,9 +1225,7 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   const paymentFlow = getProductPaymentFlow(p);
   const allowedChoices = getProductPaymentChoices(p);
   if (paymentFlow === "unavailable") return text(psid, "ဒီပစ္စည်းအတွက် ငွေပေးချေနည်းလမ်း မသတ်မှတ်ရသေးပါ။ ဆိုင်ရှင်ထံ ဆက်သွယ်ပါရှင်။");
-  const { data: previous } = await db.from("orders").select("customer_name, phone, township, address")
-    .eq("owner_id", owner).eq("psid", psid).order("created_at", { ascending: false }).limit(1).maybeSingle();
-  const customer = readCustomerDetails(previous ? { name: previous.customer_name, phone: previous.phone, address: previous.township ? `${previous.township}, ${previous.address}` : previous.address } : s.data["last_customer"]);
+  const customer = await loadPreviousCustomer(db, owner, psid, s.data["last_customer"]);
   if (paymentFlow === "prepaid") return startPrepaidPayment(p, req.qty, customer);
   if (paymentFlow === "seller_delivery_cash") return startSellerDeliveryCash(p, req.qty, customer);
   const draft = {

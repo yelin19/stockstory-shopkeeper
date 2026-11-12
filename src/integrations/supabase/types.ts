@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      messenger_customer_profiles: {
+        Row: {
+          address: string
+          customer_name: string
+          owner_id: string
+          phone: string
+          psid: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          customer_name: string
+          owner_id: string
+          phone: string
+          psid: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          customer_name?: string
+          owner_id?: string
+          phone?: string
+          psid?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bot_replies: {
         Row: {
           answer: string
