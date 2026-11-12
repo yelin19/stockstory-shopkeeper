@@ -941,10 +941,29 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
   };
   const cartOrderConfirmation = (draft: Draft) =>
     `🧾 အော်ဒါစာရင်း\n${draftItems(draft)}\nစုစုပေါင်း: ${fmt(draftTotal(draft))}\nငွေပေးချေမှု: ${paymentMethodLabel(draft.payment_method)}\n${paymentMethodInstruction(draft.payment_method)}\n\nชื่อผู้รับ: ${draft.name ?? ""}\nเบอร์โทรศัพท์: ${draft.phone ?? ""}\n${draftAddressText(draft)}\n\nအချက်အလက်မှန်ကန်ပါက “အတည်ပြု”၊ ပြင်လိုပါက “ပြင်မည်” ကိုနှိပ်ပါရှင်။`;
-  const persistedAddress = (draft: Draft) =>
-    draft.subdistrict_name && draft.province_name && draft.postal_code
+  const persistedAddress = (draft: Draft) => {
+    if (
+      draft.district_name &&
+      draft.subdistrict_name &&
+      draft.province_name &&
+      draft.postal_code
+    ) {
+      const isBangkok =
+        draft.province_code === "10" || findThaiProvince(draft.province_name)?.code === "10";
+      return [
+        draft.address ?? "",
+        `${isBangkok ? "แขวง" : "ตำบล"}${draft.subdistrict_name}`,
+        `${isBangkok ? "เขต" : "อำเภอ"}${draft.district_name}`,
+        `${isBangkok ? "" : "จังหวัด"}${draft.province_name}`,
+        `${draft.postal_code}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}`,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }
+    return draft.subdistrict_name && draft.province_name && draft.postal_code
       ? `${draft.address ?? ""}, ${draft.subdistrict_name}, ${draft.province_name}, ${draft.postal_code}${draft.postal_code_detail ? ` (${draft.postal_code_detail})` : ""}`
       : String(draft.address ?? "");
+  };
 
   switch (s.state) {
     case "cart_confirm": {

@@ -87,6 +87,7 @@ const LABEL_STYLES = `
     font-size: 9pt;
     font-weight: 600;
   }
+  .thermal-label-total { margin-top: 0.5mm; font-size: 10pt; font-weight: 800; }
 `;
 
 function wrapLabelHtml(content: string) {

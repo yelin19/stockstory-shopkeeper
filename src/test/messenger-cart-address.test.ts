@@ -256,7 +256,7 @@ describe("Messenger cart order with a website-selected address", () => {
         _name: "Test Customer",
         _phone: "09123456789",
         _township: "เมืองสมุทรสาคร",
-        _address: "123/4 หมู่ 5, มหาชัย, สมุทรสาคร, 74000",
+        _address: "123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000",
         _payment_method: "seller_delivery_cash",
       }),
     );
@@ -281,7 +281,7 @@ describe("Messenger cart order with a website-selected address", () => {
       "place_cart_orders_from_messenger",
       expect.objectContaining({
         _township: "เมืองกระบี่",
-        _address: "123/4 หมู่ 7, อ่าวนาง, กระบี่, 81210 (ม.7 - 8)",
+        _address: "123/4 หมู่ 7, ตำบลอ่าวนาง, อำเภอเมืองกระบี่, จังหวัดกระบี่, 81210 (ม.7 - 8)",
       }),
     );
   });

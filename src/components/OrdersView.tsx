@@ -10,6 +10,7 @@ import { sumByCurrency } from "@/lib/currency";
 import { formatQuantity } from "@/lib/product-unit";
 import { paymentMethodLabel } from "@/lib/payment-method";
 import { printLabelsSilently } from "@/lib/label-print";
+import { formatRecipientAddress, selectedOrdersForPrint } from "@/lib/order-print";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -18,7 +19,7 @@ type Mode = "orders" | "addresses";
 const sel = "h-9 rounded-md border bg-card px-2 text-sm";
 type CartItemSummary = { product: string; qty: number; unit: string; price: number };
 const recipientAddressText = (order: Pick<Order, "township" | "address">) =>
-  [order.township, order.address].filter(Boolean).join("၊ ");
+  formatRecipientAddress(order.township, order.address);
 
 function cartItemsFromNote(note: string | null | undefined): CartItemSummary[] {
   const marker = "CART_ITEMS:";
@@ -116,18 +117,20 @@ export function OrdersView({ mode }: { mode: Mode }) {
 
   async function copyAddress(o: Order) {
     const recipientAddress = recipientAddressText(o);
+    const printable = selectedOrdersForPrint(orders, [o], [o.id])[0];
     const text = [
-      "Sender",
-      settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ",
-      `Phone: ${settings?.sender_phone || "ပို့သူဖုန်း မထည့်ရသေးပါ"}`,
-      `Address: ${settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}`,
+      "ผู้ส่ง",
+      `ชื่อผู้ส่ง: ${settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}`,
+      `เบอร์โทรศัพท์: ${settings?.sender_phone || "ပို့သူဖုန်း မထည့်ရသေးပါ"}`,
+      `ที่อยู่: ${settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}`,
       "────────────────────────",
-      `Recipient                         Order #${o.public_order_id}`,
-      o.customer_name,
-      `Phone: ${o.phone}`,
-      `Address: ${recipientAddress}`,
+      `ผู้รับ                         Order #${o.public_order_id}`,
+      `ชื่อผู้รับ: ${o.customer_name}`,
+      `เบอร์โทรศัพท์: ${o.phone}`,
+      `ที่อยู่: ${recipientAddress}`,
       "────────────────────────",
-      ...orderProductsText(o),
+      ...(printable?.print_products ?? orderProductsText(o)),
+      `စုစုပေါင်း: ${money(printable?.print_total ?? o.total, o.currency ?? settings?.currency)}`,
     ].join("\n");
     try {
       await navigator.clipboard.writeText(text);
@@ -261,7 +264,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
     }
     return m;
   }, [visibleOrders]);
-  const selectedAddressOrders = visibleOrders.filter((o) => selectedOrderIds.includes(o.id) && o.status !== "cancelled");
+  const selectedAddressOrders = useMemo(
+    () => selectedOrdersForPrint(orders, visibleOrders, selectedOrderIds),
+    [orders, selectedOrderIds, visibleOrders],
+  );
 
   async function printAddressLabels() {
     if (!selectedAddressOrders.length) return void toast.info("လိပ်စာတံဆိပ် ပုံနှိပ်မည့် အော်ဒါကို အရင်ရွေးပါ");
@@ -308,25 +314,28 @@ export function OrdersView({ mode }: { mode: Mode }) {
         {selectedAddressOrders.map((o) => (
           <article className="thermal-label-page" key={o.id}>
             <div className="thermal-label-sender">
-              <div className="thermal-label-section-title">Sender</div>
-              <strong>{settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}</strong>
-              {settings?.sender_phone && <div className="thermal-label-phone">Phone: {settings.sender_phone}</div>}
+              <div className="thermal-label-section-title">ผู้ส่ง</div>
+              <strong>ชื่อผู้ส่ง: {settings?.sender_name || "ပို့သူအမည် မထည့်ရသေးပါ"}</strong>
+              {settings?.sender_phone && <div className="thermal-label-phone">เบอร์โทรศัพท์: {settings.sender_phone}</div>}
               <div className="thermal-label-address">
-                <strong>Address</strong>
+                <strong>ที่อยู่</strong>
                 <div>{settings?.sender_address || "ပို့သူလိပ်စာ မထည့်ရသေးပါ"}</div>
               </div>
             </div>
             <div className="thermal-label-divider" />
             <div className="thermal-label-recipient-block">
-              <div className="thermal-label-heading"><span>Recipient</span><strong>#{o.public_order_id}</strong></div>
-              <div className="thermal-label-recipient">{o.customer_name}</div>
-              <div className="thermal-label-phone">Phone: {o.phone}</div>
+              <div className="thermal-label-heading"><span>ผู้รับ</span><strong>#{o.public_order_id}</strong></div>
+              <div className="thermal-label-recipient">ชื่อผู้รับ: {o.customer_name}</div>
+              <div className="thermal-label-phone">เบอร์โทรศัพท์: {o.phone}</div>
               <div className="thermal-label-address">
-                <strong>Address</strong>
+                <strong>ที่อยู่</strong>
                 <div>{recipientAddressText(o)}</div>
               </div>
             </div>
-            <div className="thermal-label-product">{orderProductsText(o).map((line) => <div key={line}>{line}</div>)}</div>
+            <div className="thermal-label-product">
+              {o.print_products.map((line) => <div key={line}>{line}</div>)}
+              <div className="thermal-label-total">စုစုပေါင်း: {money(o.print_total, o.currency ?? settings?.currency)}</div>
+            </div>
           </article>
         ))}
       </div>
