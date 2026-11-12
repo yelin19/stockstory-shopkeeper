@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, Minus, Plus, MessageCircle, ExternalLink, MapPin } from "lucide-react";
 import { getPublicCatalog } from "@/lib/public-shop.functions";
@@ -32,6 +32,7 @@ export const Route = createFileRoute("/shop")({
 
 function ShopCatalog() {
   const { products, shop } = Route.useLoaderData();
+  const isProductDetailRoute = useMatches().some((match) => match.routeId === "/shop/$code");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [openCart, setOpenCart] = useState(false);
   const [provinceCode, setProvinceCode] = useState("");
@@ -200,6 +201,8 @@ function ShopCatalog() {
     return `https://m.me/${String(shop.messenger_username ?? "").replace(/^@/, "")}?text=${encodeURIComponent(payload)}`;
   };
   const canStartCheckout = Boolean(shop.messenger_username) && (addressSkipped || addressReady);
+
+  if (isProductDetailRoute) return <Outlet />;
 
   return (
     <div className="min-h-screen bg-background">

@@ -14,4 +14,13 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches a product code URL to the product detail route", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const matches = router.matchRoutes("/shop/PRODUCT123");
+
+    expect(matches.at(-1)?.routeId).toBe("/shop/$code");
+    expect(matches.at(-1)?.params).toMatchObject({ code: "PRODUCT123" });
+  });
 });
