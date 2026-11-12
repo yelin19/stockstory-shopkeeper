@@ -376,151 +376,153 @@ function ShopCatalog() {
                       အဟောင်းကို ပြန်သုံးနိုင်ပြီး၊ မရှိပါက Messenger က လိပ်စာမေးပါမယ်။
                     </p>
                   )}
-                  <label className="block text-sm font-semibold" htmlFor="province-select">
-                    ပြည်နယ် (จังหวัด)
-                  </label>
-                  <select
-                    id="province-select"
-                    className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
-                    value={provinceCode}
-                    disabled={addressSkipped}
-                    onChange={(e) => {
-                      setProvinceCode(e.target.value);
-                      setDistrictCode("");
-                      setSubdistrictCode("");
-                      setPostalCode("");
-                    }}
-                  >
-                    <option value="">— ပြည်နယ်ရွေးပါ —</option>
-                    {THAI_PROVINCES_BY_NAME.map((item) => (
-                      <option key={item.code} value={item.code}>
-                        {thaiProvinceLabel(item)}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="block text-sm font-semibold" htmlFor="district-select">
-                    อำเภอ / เขต (District)
-                  </label>
-                  <select
-                    id="district-select"
-                    className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
-                    value={districtCode}
-                    disabled={addressSkipped || !province || !addressData || addressDataLoading}
-                    onChange={(e) => {
-                      setDistrictCode(e.target.value);
-                      setSubdistrictCode("");
-                      setPostalCode("");
-                    }}
-                  >
-                    <option value="">
-                      {province ? "— อำเภอ / เขต ရွေးပါ —" : "— ပြည်နယ်ကို အရင်ရွေးပါ —"}
-                    </option>
-                    {districts.map((item) => (
-                      <option key={item.code} value={item.code}>
-                        {item.nameTh} · {item.nameEn}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="block text-sm font-semibold" htmlFor="subdistrict-select">
-                    ตำบล / แขวง (Subdistrict)
-                  </label>
-                  <select
-                    id="subdistrict-select"
-                    className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
-                    value={subdistrictCode}
-                    disabled={addressSkipped || !district || !addressData}
-                    onChange={(e) => {
-                      const nextCode = e.target.value;
-                      const next = subdistricts.find((item) => item.code === nextCode);
-                      setSubdistrictCode(nextCode);
-                      setPostalCode(
-                        next?.postalCodes.find((item) => item.isPrimary)?.postalCode ??
-                          next?.postalCode ??
-                          "",
-                      );
-                    }}
-                  >
-                    <option value="">
-                      {district ? "— ตำบล / แขวง ရွေးပါ —" : "— อำเภอ / เขต ကို အရင်ရွေးပါ —"}
-                    </option>
-                    {subdistricts.map((item) => (
-                      <option key={item.code} value={item.code}>
-                        {item.nameTh} · {item.nameEn}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="block text-sm font-semibold" htmlFor="postal-code">
-                    รหัสไปรษณีย์ (Postal code)
-                  </label>
-                  {postalOptions.length > 1 ? (
+                  <div hidden={addressSkipped} className="space-y-3">
+                    <label className="block text-sm font-semibold" htmlFor="province-select">
+                      ပြည်နယ် (จังหวัด)
+                    </label>
                     <select
-                      id="postal-code"
-                      className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
-                      value={postalOption?.postalCode ?? ""}
-                      onChange={(e) => setPostalCode(e.target.value)}
-                      disabled={addressSkipped || !subdistrict}
+                      id="province-select"
+                      className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                      value={provinceCode}
+                      disabled={addressSkipped}
+                      onChange={(e) => {
+                        setProvinceCode(e.target.value);
+                        setDistrictCode("");
+                        setSubdistrictCode("");
+                        setPostalCode("");
+                      }}
                     >
-                      {postalOptions.map((option) => (
-                        <option key={option.postalCode} value={option.postalCode}>
-                          {option.postalCode} · {option.detailTh}
-                          {option.isPrimary ? " (พื้นที่ส่วนใหญ่)" : ""}
+                      <option value="">— ပြည်နယ်ရွေးပါ —</option>
+                      {THAI_PROVINCES_BY_NAME.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {thaiProvinceLabel(item)}
                         </option>
                       ))}
                     </select>
-                  ) : (
-                    <input
-                      id="postal-code"
-                      className="h-11 w-full rounded-xl border border-input bg-muted px-3 text-base"
-                      value={postalOption?.postalCode ?? ""}
-                      readOnly
-                      disabled={addressSkipped || !subdistrict}
-                      placeholder="ตำบล / แขวง ရွေးပြီး အလိုအလျောက်ပြပါမည်"
+                    <label className="block text-sm font-semibold" htmlFor="district-select">
+                      อำเภอ / เขต (District)
+                    </label>
+                    <select
+                      id="district-select"
+                      className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                      value={districtCode}
+                      disabled={addressSkipped || !province || !addressData || addressDataLoading}
+                      onChange={(e) => {
+                        setDistrictCode(e.target.value);
+                        setSubdistrictCode("");
+                        setPostalCode("");
+                      }}
+                    >
+                      <option value="">
+                        {province ? "— อำเภอ / เขต ရွေးပါ —" : "— ပြည်နယ်ကို အရင်ရွေးပါ —"}
+                      </option>
+                      {districts.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.nameTh} · {item.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="block text-sm font-semibold" htmlFor="subdistrict-select">
+                      ตำบล / แขวง (Subdistrict)
+                    </label>
+                    <select
+                      id="subdistrict-select"
+                      className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                      value={subdistrictCode}
+                      disabled={addressSkipped || !district || !addressData}
+                      onChange={(e) => {
+                        const nextCode = e.target.value;
+                        const next = subdistricts.find((item) => item.code === nextCode);
+                        setSubdistrictCode(nextCode);
+                        setPostalCode(
+                          next?.postalCodes.find((item) => item.isPrimary)?.postalCode ??
+                            next?.postalCode ??
+                            "",
+                        );
+                      }}
+                    >
+                      <option value="">
+                        {district ? "— ตำบล / แขวง ရွေးပါ —" : "— อำเภอ / เขต ကို အရင်ရွေးပါ —"}
+                      </option>
+                      {subdistricts.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.nameTh} · {item.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="block text-sm font-semibold" htmlFor="postal-code">
+                      รหัสไปรษณีย์ (Postal code)
+                    </label>
+                    {postalOptions.length > 1 ? (
+                      <select
+                        id="postal-code"
+                        className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                        value={postalOption?.postalCode ?? ""}
+                        onChange={(e) => setPostalCode(e.target.value)}
+                        disabled={addressSkipped || !subdistrict}
+                      >
+                        {postalOptions.map((option) => (
+                          <option key={option.postalCode} value={option.postalCode}>
+                            {option.postalCode} · {option.detailTh}
+                            {option.isPrimary ? " (พื้นที่ส่วนใหญ่)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        id="postal-code"
+                        className="h-11 w-full rounded-xl border border-input bg-muted px-3 text-base"
+                        value={postalOption?.postalCode ?? ""}
+                        readOnly
+                        disabled={addressSkipped || !subdistrict}
+                        placeholder="ตำบล / แขวง ရွေးပြီး အလိုအလျောက်ပြပါမည်"
+                      />
+                    )}
+                    {postalOptions.length > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        လိပ်စာအသေးစိတ်နဲ့ ကိုက်ညီတဲ့ หมู่ / လမ်းအပိုင်း၏ postal code ကိုရွေးပါ။
+                      </p>
+                    )}
+                    <label className="block text-sm font-semibold" htmlFor="address-detail">
+                      လိပ်စာအသေးစိတ် (အိမ်အမှတ် / หมู่ / လမ်း / ซอย)
+                    </label>
+                    <textarea
+                      id="address-detail"
+                      className="min-h-[72px] w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
+                      maxLength={300}
+                      placeholder="ဥပမာ 123/4 หมู่ 5 ถนนสุขุมวิท ซอย 10"
+                      value={addressDetail}
+                      disabled={addressSkipped}
+                      onChange={(e) => setAddressDetail(e.target.value)}
                     />
-                  )}
-                  {postalOptions.length > 1 && (
-                    <p className="text-xs text-muted-foreground">
-                      လိပ်စာအသေးစိတ်နဲ့ ကိုက်ညီတဲ့ หมู่ / လမ်းအပိုင်း၏ postal code ကိုရွေးပါ။
-                    </p>
-                  )}
-                  <label className="block text-sm font-semibold" htmlFor="address-detail">
-                    လိပ်စာအသေးစိတ် (အိမ်အမှတ် / หมู่ / လမ်း / ซอย)
-                  </label>
-                  <textarea
-                    id="address-detail"
-                    className="min-h-[72px] w-full rounded-xl border border-input bg-background px-3 py-2 text-base outline-none focus:ring-2 focus:ring-blue-400"
-                    maxLength={300}
-                    placeholder="ဥပမာ 123/4 หมู่ 5 ถนนสุขุมวิท ซอย 10"
-                    value={addressDetail}
-                    disabled={addressSkipped}
-                    onChange={(e) => setAddressDetail(e.target.value)}
-                  />
-                  {addressDataLoading && (
-                    <p className="text-sm text-muted-foreground">
-                      ထိုင်းနိုင်ငံ၏ လိပ်စာစာရင်းကို ဖွင့်နေပါသည်…
-                    </p>
-                  )}
-                  {addressDataError && (
-                    <p className="text-sm text-destructive">
-                      လိပ်စာစာရင်းကို ဖွင့်မရပါ။ အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ဖွင့်ပါ။
-                    </p>
-                  )}
-                  {addressSkipped ? null : addressReady &&
-                    province &&
-                    district &&
-                    subdistrict &&
-                    postalOption ? (
-                    <p className="text-sm font-medium text-emerald-700">
-                      ✓ {thaiProvinceTownship(province)} · {district.nameTh} · {subdistrict.nameTh}{" "}
-                      · {postalOption.postalCode}
-                      {postalOptions.length > 1 ? ` (${postalOption.detailTh})` : ""} ·{" "}
-                      {cleanAddress}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      ပြည်နယ်၊ อำเภอ/เขต၊ ตำบล/แขวง နဲ့ လိပ်စာအသေးစိတ်ကို ရွေးဖြည့်ပါ။
-                      စာတိုက်ကုဒ်ကို အလိုအလျောက်ဖြည့်ပေးပါမယ်။
-                    </p>
-                  )}
+                    {addressDataLoading && (
+                      <p className="text-sm text-muted-foreground">
+                        ထိုင်းနိုင်ငံ၏ လိပ်စာစာရင်းကို ဖွင့်နေပါသည်…
+                      </p>
+                    )}
+                    {addressDataError && (
+                      <p className="text-sm text-destructive">
+                        လိပ်စာစာရင်းကို ဖွင့်မရပါ။ အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ဖွင့်ပါ။
+                      </p>
+                    )}
+                    {addressSkipped ? null : addressReady &&
+                      province &&
+                      district &&
+                      subdistrict &&
+                      postalOption ? (
+                      <p className="text-sm font-medium text-emerald-700">
+                        ✓ {thaiProvinceTownship(province)} · {district.nameTh} ·{" "}
+                        {subdistrict.nameTh} · {postalOption.postalCode}
+                        {postalOptions.length > 1 ? ` (${postalOption.detailTh})` : ""} ·{" "}
+                        {cleanAddress}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        ပြည်နယ်၊ อำเภอ/เขต၊ ตำบล/แขวง နဲ့ လိပ်စာအသေးစိတ်ကို ရွေးဖြည့်ပါ။
+                        စာတိုက်ကုဒ်ကို အလိုအလျောက်ဖြည့်ပေးပါမယ်။
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <Button
