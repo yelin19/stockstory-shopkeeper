@@ -266,7 +266,7 @@ function ShopCatalog() {
                   )}
                   <p className="mt-2 text-xs font-medium text-primary">
                     <ExternalLink className="mr-1 inline size-3" />
-                    အသေးစိတ်ဖော်ပြချက်ကြည့်ရန်
+                    ပုံကြီးနှင့် အသေးစိတ်ကြည့်ရန်
                   </p>
                 </div>
               </Link>
