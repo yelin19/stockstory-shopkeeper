@@ -1,5 +1,6 @@
 export const LABEL_WIDTH_MM = 100;
 export const LABEL_HEIGHT_MM = 150;
+export const LABEL_PAGE_RULE = `@page { size: ${LABEL_WIDTH_MM}mm ${LABEL_HEIGHT_MM}mm; margin: 0; }`;
 
 type LabelPrintPayload = {
   html: string;
@@ -33,7 +34,7 @@ declare global {
 }
 
 const LABEL_STYLES = `
-  @page { size: ${LABEL_WIDTH_MM}mm ${LABEL_HEIGHT_MM}mm; margin: 0; }
+  ${LABEL_PAGE_RULE}
   html, body { width: ${LABEL_WIDTH_MM}mm; height: ${LABEL_HEIGHT_MM}mm; margin: 0; padding: 0; }
   * { box-sizing: border-box; }
   .thermal-label-page {
@@ -52,6 +53,8 @@ const LABEL_STYLES = `
     font-family: Arial, "Noto Sans Myanmar", sans-serif;
     font-size: 13pt;
     line-height: 1.25;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
     page-break-after: always;
     break-after: page;
   }

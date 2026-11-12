@@ -9,7 +9,7 @@ import { exportXlsx, money, type Row } from "@/lib/export";
 import { sumByCurrency } from "@/lib/currency";
 import { formatQuantity } from "@/lib/product-unit";
 import { paymentMethodLabel } from "@/lib/payment-method";
-import { printLabelsSilently } from "@/lib/label-print";
+import { LABEL_HEIGHT_MM, LABEL_PAGE_RULE, LABEL_WIDTH_MM, printLabelsSilently } from "@/lib/label-print";
 import { formatRecipientAddress, selectedOrdersForPrint } from "@/lib/order-print";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -280,10 +280,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
       }
     } catch (error) {
       console.warn("Silent print agent unavailable; opening browser print dialog", error);
-      toast.info("QZ Tray မချိတ်ထားသေးပါ။ 100×75 mm အရွယ်အစားကို အလိုအလျောက်ရွေးရန် QZ Tray လိုအပ်ပါသည်။ Browser Print ကို ဖွင့်ပါမည်");
+      toast.info(`QZ Tray မချိတ်ထားသေးပါ။ ${LABEL_WIDTH_MM}×${LABEL_HEIGHT_MM} mm အရွယ်အစားကို အလိုအလျောက်ရွေးရန် QZ Tray လိုအပ်ပါသည်။ Browser Print ကို ဖွင့်ပါမည်`);
     }
     const printStyle = document.createElement("style");
-    printStyle.textContent = "@page { size: 100mm 75mm; margin: 0; }";
+    printStyle.textContent = LABEL_PAGE_RULE;
     document.head.appendChild(printStyle);
     const printAncestors: HTMLElement[] = [];
     let ancestor = labelRoot.parentElement;

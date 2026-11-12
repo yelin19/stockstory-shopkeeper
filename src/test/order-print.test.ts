@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Order } from "@/lib/shop-data";
+import { LABEL_HEIGHT_MM, LABEL_PAGE_RULE, LABEL_WIDTH_MM } from "@/lib/label-print";
 import { formatRecipientAddress, selectedOrdersForPrint } from "@/lib/order-print";
 
 function order(overrides: Partial<Order> = {}): Order {
@@ -42,6 +43,12 @@ function order(overrides: Partial<Order> = {}): Order {
 }
 
 describe("printable orders", () => {
+  it("keeps the browser print page rule in sync with the label dimensions", () => {
+    expect(LABEL_WIDTH_MM).toBe(100);
+    expect(LABEL_HEIGHT_MM).toBe(150);
+    expect(LABEL_PAGE_RULE).toBe("@page { size: 100mm 150mm; margin: 0; }");
+  });
+
   it("formats an old district-first address into detail, subdistrict, district, province, postal code", () => {
     expect(
       formatRecipientAddress("เมืองสมุทรสาคร", "116/46หมู่ที 7, ท่าจีน, สมุทรสาคร, 74000"),

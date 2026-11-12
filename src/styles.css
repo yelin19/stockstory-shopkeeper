@@ -159,6 +159,8 @@
     font-family: var(--font-sans), "Noto Sans Myanmar", sans-serif;
     font-size: 13pt;
     line-height: 1.25;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
     page-break-after: always;
     break-after: page;
   }
