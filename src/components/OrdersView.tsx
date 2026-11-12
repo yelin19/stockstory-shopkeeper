@@ -11,6 +11,7 @@ import { formatQuantity } from "@/lib/product-unit";
 import { paymentMethodLabel } from "@/lib/payment-method";
 import { LABEL_HEIGHT_MM, LABEL_PAGE_RULE, LABEL_WIDTH_MM, printLabelsSilently } from "@/lib/label-print";
 import { formatRecipientAddress, selectedOrdersForPrint } from "@/lib/order-print";
+import { matchesOrderStatus, type OrderStatusFilter } from "@/lib/order-status-filter";
 import {
   toggleAllPublicOrders,
   togglePublicOrderSelection,
@@ -54,6 +55,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const { data: settings } = useSuspenseQuery(settingsQuery);
   const [product, setProduct] = useState("");
   const [orderNo, setOrderNo] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatusFilter>("all");
   const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
   const [selectedPublicOrderIds, setSelectedPublicOrderIds] = useState<string[]>([]);
   const [bulkTrackingUrl, setBulkTrackingUrl] = useState("");
@@ -71,11 +73,12 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const filtered = useMemo(
     () =>
       scopedOrders.filter((o) => {
+        if (mode === "orders" && !matchesOrderStatus(o.status, orderStatusFilter)) return false;
         if (product && `${o.product_code}::${o.product_name}` !== product) return false;
         if (orderNo && o.public_order_id !== orderNo.trim().replace(/^#/, "")) return false;
         return true;
       }),
-    [scopedOrders, product, orderNo],
+    [scopedOrders, product, orderNo, orderStatusFilter],
   );
   const selectablePublicOrderIds = useMemo(
     () =>
@@ -99,7 +102,7 @@ export function OrdersView({ mode }: { mode: Mode }) {
   const pendingPaymentOrders = useMemo(() => {
     const seen = new Set<string>();
     return filtered.filter((o) => {
-      if (o.payment_status !== "proof_submitted" || seen.has(o.public_order_id)) return false;
+      if (o.status === "cancelled" || o.payment_status !== "proof_submitted" || seen.has(o.public_order_id)) return false;
       seen.add(o.public_order_id);
       return true;
     });
@@ -395,6 +398,10 @@ export function OrdersView({ mode }: { mode: Mode }) {
         <div className="mb-2 text-sm font-semibold">အော်ဒါရှာဖွေခြင်းနှင့် စစ်ထုတ်ခြင်း</div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs text-muted-foreground">Order ID (၆ လုံး)<Input value={orderNo} onChange={(e) => setOrderNo(e.target.value)} placeholder="ဥပမာ 100001" title="Order ID" /></label>
+        {mode === "orders" && <label className="text-xs text-muted-foreground">အော်ဒါအခြေအနေ<select className={sel} value={orderStatusFilter} onChange={(e) => setOrderStatusFilter(e.target.value as OrderStatusFilter)}>
+          <option value="all">အော်ဒါအားလုံး</option>
+          <option value="cancelled">ပယ်ဖျက်ထားသောအော်ဒါ</option>
+        </select></label>}
         <label className="text-xs text-muted-foreground">ပစ္စည်းနာမည်တစ်ခုချင်းရွေး<select className={sel} value={product} onChange={(e) => setProduct(e.target.value)}>
           <option value="">ပစ္စည်းနာမည်အားလုံး</option>{uniq((o) => `${o.product_code}::${o.product_name}`).map((value) => { const [, name] = value.split("::"); return <option key={value} value={value}>{name ? `${value.split("::")[0]} - ${name}` : value}</option>; })}
         </select></label>
