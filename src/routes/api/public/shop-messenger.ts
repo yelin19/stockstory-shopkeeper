@@ -829,11 +829,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     if (!order) return text(psid, `Order ID ${publicOrderId} ကို မတွေ့ပါ။ မိမိ Messenger အကောင့်နဲ့ ဝယ်ယူထားသော Order ID ကိုသာ အသုံးပြုပါ။`);
     if (orderIsLocked(order)) return text(psid, "ဤအော်ဒါကို ပို့ဆောင်ပြီးဖြစ်သောကြောင့် ပြင်ဆင်ခြင်း သို့မဟုတ် ဖျက်ခြင်း မပြုလုပ်နိုင်တော့ပါ။");
     if (cancelOrderId) {
-      const cancellation = callShopRpc(db, "cancel_order_by_customer", {
-        _owner: owner, _psid: psid, _public_order_id: publicOrderId,
-      });
-      await text(psid, `Order ID: ${publicOrderId} ကို ဖျက်သိမ်းနေပါသည်ရှင်။ ခဏစောင့်ပေးပါ။`);
-      const { data: cancelled, error: cancelError } = await cancellation;
+      const { data: cancelled, error: cancelError } = await callShopRpc(
+        db,
+        "cancel_order_by_customer",
+        { _owner: owner, _psid: psid, _public_order_id: publicOrderId },
+      );
       const customer = { name: order.customer_name, phone: order.phone, address: order.address };
       if (cancelError || !cancelled) {
         await save({ state: "idle", data: { last_customer: customer } });
@@ -1077,13 +1077,11 @@ async function handleText(db: Admin, owner: string, psid: string, msg: string, o
     case "cancel_order": {
       if (!isYes(msg)) return text(psid, "အော်ဒါမယူတော့ရန် YES ကိုနှိပ်ပါ။ မဖျက်လိုပါက NO ကိုနှိပ်ပါ။");
       const publicOrderId = String((d as { public_order_id?: string }).public_order_id);
-      const cancellation = callShopRpc(db, "cancel_order_by_customer", {
+      const { data: cancelled, error } = await callShopRpc(db, "cancel_order_by_customer", {
         _owner: owner,
         _psid: psid,
         _public_order_id: publicOrderId,
       });
-      await text(psid, `Order ID: ${publicOrderId} ကို ဖျက်သိမ်းနေပါသည်ရှင်။ ခဏစောင့်ပေးပါ။`);
-      const { data: cancelled, error } = await cancellation;
       const cancelledCustomer = (d as Draft & { cancel_customer?: CustomerDetails }).cancel_customer;
       if (error) {
         await save({

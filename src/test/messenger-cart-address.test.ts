@@ -354,7 +354,7 @@ describe("Messenger cart order with a website-selected address", () => {
     );
   });
 
-  it("sends cancellation progress and success before slow low-stock follow-up completes", async () => {
+  it("sends only cancellation success before slow low-stock follow-up completes", async () => {
     previousOrder = {
       owner_id: "owner-test",
       psid: "456",
@@ -385,7 +385,7 @@ describe("Messenger cart order with a website-selected address", () => {
     }
     const replies = sentMessages.map((item) => String(item["text"] ?? ""));
     expect(releaseAlerts).toBeDefined();
-    expect(replies.some((reply) => reply.includes("ဖျက်သိမ်းနေပါသည်"))).toBe(true);
+    expect(replies.some((reply) => reply.includes("ဖျက်သိမ်းနေပါသည်"))).toBe(false);
     expect(
       replies.some((reply) => reply.includes("Order ID: 100111 ကို ချက်ချင်းဖျက်ပြီးပါပြီ")),
     ).toBe(true);
