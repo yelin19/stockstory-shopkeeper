@@ -4,6 +4,7 @@ import { ShoppingCart, Minus, Plus, MessageCircle, ExternalLink, MapPin } from "
 import { getPublicCatalog } from "@/lib/public-shop.functions";
 import { productImageUrl } from "@/lib/shop-data";
 import { money } from "@/lib/export";
+import { createMessengerCartReferral } from "@/lib/messenger-cart-referral";
 import {
   THAI_PROVINCES_BY_NAME,
   encodeCartAddressLines,
@@ -176,31 +177,30 @@ function ShopCatalog() {
     });
   };
 
+  const addressLinesForCart =
+    !addressSkipped && addressReady && province && district && subdistrict
+      ? encodeCartAddressLines(
+          province,
+          cleanAddress,
+          district,
+          subdistrict,
+          postalOption?.postalCode,
+          postalOptions.length > 1 ? postalOption?.detailTh : undefined,
+        )
+      : [];
+  const cartReferral = createMessengerCartReferral(
+    selected.map((item) => ({ code: item.code, qty: cart[item.code] ?? 0 })),
+    addressLinesForCart,
+  );
   const messengerUrl = () => {
-    const lines = selected.map(
-      (p, index) => `${index + 1}. ${p.name} — ${cart[p.code]} ${p.unit} [${p.code}]`,
-    );
-    const addressLines =
-      !addressSkipped && addressReady && province && district && subdistrict
-        ? encodeCartAddressLines(
-            province,
-            cleanAddress,
-            district,
-            subdistrict,
-            postalOption?.postalCode,
-            postalOptions.length > 1 ? postalOption?.detailTh : undefined,
-          )
-        : [];
-    const payload = [
-      "CART_ORDER",
-      ...addressLines,
-      ...lines,
-      "",
-      "အော်ဒါတင်ရန် ပို့ပေးပါသည်။",
-    ].join("\n");
-    return `https://m.me/${String(shop.messenger_username ?? "").replace(/^@/, "")}?text=${encodeURIComponent(payload)}`;
+    if (!cartReferral) return "#";
+    const username = String(shop.messenger_username ?? "").replace(/^@/, "");
+    const url = new URL(`https://m.me/${encodeURIComponent(username)}`);
+    url.searchParams.set("ref", cartReferral);
+    return url.toString();
   };
-  const canStartCheckout = Boolean(shop.messenger_username) && (addressSkipped || addressReady);
+  const canStartCheckout =
+    Boolean(shop.messenger_username && cartReferral) && (addressSkipped || addressReady);
 
   if (isProductDetailRoute) return <Outlet />;
 
@@ -546,6 +546,11 @@ function ShopCatalog() {
                 {!shop.messenger_username && (
                   <p className="text-sm text-destructive">
                     ဆိုင်၏ Messenger username မသတ်မှတ်ရသေးပါ။
+                  </p>
+                )}
+                {shop.messenger_username && !cartReferral && (
+                  <p className="text-sm text-destructive" role="alert">
+                    Cart သို့မဟုတ် လိပ်စာအချက်အလက်များလွန်းနေပါသည်။ ပစ္စည်းအရေအတွက် လျှော့ပြီး ထပ်ကြိုးစားပါ။
                   </p>
                 )}
                 {shop.messenger_username && !addressReady && !addressSkipped && (

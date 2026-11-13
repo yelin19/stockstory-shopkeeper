@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { parseProductRequest, isYes, isNo } from "@/lib/messenger-parse";
 import { messengerPayloadSchema, messengerVerificationSchema, verifyMessengerSignature } from "@/lib/messenger-webhook";
 import { formatCurrency } from "@/lib/currency";
+import { decodeMessengerCartReferral } from "@/lib/messenger-cart-referral";
 import { dispatchLowStockAlerts } from "@/lib/low-stock-alert.server";
 import { lowStockPairingConfirmation, parseLowStockPairPin } from "@/lib/low-stock-alert";
 import { productPageUrl } from "@/lib/shop-data";
@@ -422,6 +423,14 @@ const text = (psid: string, t: string) => send(psid, { text: t });
 type CartRequest = { items: Array<{ code: string; qty: number }>; address: CartAddress | null };
 const decodeCartPayload = (message: string): CartRequest | null => {
   const trimmed = message.trim();
+  if (trimmed.startsWith("webcart1_")) {
+    const referral = decodeMessengerCartReferral(trimmed);
+    if (!referral) return null;
+    return {
+      items: referral.items,
+      address: decodeCartAddressLines(referral.addressLines),
+    };
+  }
   if (trimmed.startsWith("CART_ORDER")) {
     const lines = trimmed.split(/\r?\n/).slice(1);
     const items: Array<{ code: string; qty: number }> = [];
@@ -1609,7 +1618,7 @@ export const messengerHandlers = {
           entry: {
             id: string;
             changes?: Array<{ field: string; value?: { item?: string; verb?: string; message?: string; comment_id?: string; post_id?: string; parent_id?: string; from?: { id?: string } } }>;
-            messaging?: { sender: { id: string }; message?: { mid?: string; text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string } }[];
+            messaging?: { sender: { id: string }; message?: { mid?: string; text?: string; is_echo?: boolean; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> }; postback?: { payload?: string; referral?: { ref?: string } }; referral?: { ref?: string } }[];
           }[];
         };
         webhookLog("payload parsed", { entries: payload.entry.length });
@@ -1676,7 +1685,11 @@ export const messengerHandlers = {
           for (const ev of entry.messaging ?? []) {
             const message = ev.message as unknown as { mid?: string; is_echo?: boolean; text?: string; quick_reply?: { payload?: string }; attachments?: Array<{ type?: string; payload?: { url?: string } }> } | undefined;
             if (message?.mid && !(await claimMessengerEvent(supabaseAdmin, shop.owner_id, message.mid))) continue;
-            const t = message?.is_echo ? undefined : (message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
+            const referral = ev.referral?.ref ?? ev.postback?.referral?.ref;
+            const cartReferral = decodeMessengerCartReferral(referral);
+            const t = message?.is_echo
+              ? undefined
+              : (cartReferral ? referral : message?.quick_reply?.payload ?? message?.text ?? ev.postback?.payload);
             const imageUrl = message?.attachments?.find((a) => a.type === "image")?.payload?.url;
             if (!t && !imageUrl) continue;
             const isCancellation = /^(?:မယူတော့ဘူး|မယူတော့ပါ|ဖျက်|cancel)\s+[0-9]{6}$/i.test(String(t ?? "").trim());
@@ -1698,7 +1711,15 @@ export const messengerHandlers = {
               if (!t) continue;
               webhookLog("handleText started");
               const resumedCode = await resumePendingCommentOrder(supabaseAdmin, shop.owner_id, ev.sender.id);
-              await handleText(supabaseAdmin, shop.owner_id, ev.sender.id, (resumedCode ?? t).slice(0, 1000), origin, shop.messenger_username);
+              const incomingText = resumedCode ?? t;
+              await handleText(
+                supabaseAdmin,
+                shop.owner_id,
+                ev.sender.id,
+                cartReferral ? incomingText : incomingText.slice(0, 1000),
+                origin,
+                shop.messenger_username,
+              );
               webhookLog("handleText completed");
             } catch {
               webhookLog("handleText failed");

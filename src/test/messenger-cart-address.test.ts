@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { messengerHandlers } from "@/routes/api/public/shop-messenger";
+import { createMessengerCartReferral } from "@/lib/messenger-cart-referral";
 
 type Row = Record<string, unknown>;
 type Chain = {
@@ -68,6 +69,14 @@ async function message(text: string) {
         entry: [{ id: "123", messaging: [{ sender: { id: "456" }, message: { text } }] }],
       }),
     ),
+  });
+}
+async function referral(ref: string, asPostback = false) {
+  const event = asPostback
+    ? { sender: { id: "456" }, postback: { payload: "GET_STARTED", referral: { ref } } }
+    : { sender: { id: "456" }, referral: { ref } };
+  return messengerHandlers.POST({
+    request: signedRequest(JSON.stringify({ object: "page", entry: [{ id: "123", messaging: [event] }] })),
   });
 }
 
@@ -212,6 +221,38 @@ const cartWithMultiplePostalCode = [
 ].join("\n");
 
 describe("Messenger cart order with a website-selected address", () => {
+  it.each([false, true])(
+    "starts the cart flow from a website referral (Get Started postback: %s)",
+    async (asPostback) => {
+      const ref = createMessengerCartReferral(
+        [{ code: "111", qty: 2 }],
+        [
+          "ADDR_PROVINCE: 74|สค|สมุทรสาคร",
+          "ADDR_DISTRICT: 7401|เมืองสมุทรสาคร",
+          "ADDR_SUBDISTRICT: 740101|มหาชัย|74000",
+          "ADDR_DETAIL: 123/4 หมู่ 5",
+        ],
+      );
+      expect(ref).not.toBeNull();
+
+      const response = await referral(ref!, asPostback);
+
+      expect(response.status).toBe(200);
+      expect(session?.["state"]).toBe("cart_confirm");
+      expect(session?.["data"]).toMatchObject({
+        cart: [expect.objectContaining({ code: "111", qty: 2 })],
+        township: "เมืองสมุทรสาคร",
+        province_code: "74",
+        district_name: "เมืองสมุทรสาคร",
+        subdistrict_name: "มหาชัย",
+        postal_code: "74000",
+      });
+      const cartMessage = String(sentMessages.at(-1)?.["text"] ?? "");
+      expect(cartMessage).toContain("🛒 Cart အော်ဒါစာရင်း");
+      expect(cartMessage).toContain("ที่อยู่: 123/4 หมู่ 5, ตำบลมหาชัย, อำเภอเมืองสมุทรสาคร, จังหวัดสมุทรสาคร, 74000");
+    },
+  );
+
   it("keeps the province and asks only for name and phone before placing the order", async () => {
     await message(cartWithAddress);
     const initialMessage = String(sentMessages.at(-1)?.["text"] ?? "");
